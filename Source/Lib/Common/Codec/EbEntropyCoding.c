@@ -2891,15 +2891,6 @@ static void write_tile_info_max_tile(const PictureParentControlSet_t *const pcsP
     }
 }
 
-#define MAX_TILE_WIDTH (4096)        // Max Tile width in pixels
-#define MAX_TILE_AREA (4096 * 2304)  // Maximum tile area in pixels
-// Find smallest k>=0 such that (blk_size << k) >= target
-static int32_t tile_log2(int32_t blk_size, int32_t target) {
-    int32_t k;
-    for (k = 0; (blk_size << k) < target; k++) {
-    }
-    return k;
-}
 void av1_get_tile_limits(PictureParentControlSet_t * pcsPtr) {
 
     Av1Common * cm = pcsPtr->av1_cm;

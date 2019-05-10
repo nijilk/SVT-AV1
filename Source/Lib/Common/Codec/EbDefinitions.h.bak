@@ -323,8 +323,6 @@ enum {
 // Mask to extract MI offset within max MIB
 #define MAX_MIB_MASK (MAX_MIB_SIZE - 1)
 
-// Maximum size of a loop restoration tile
-#define RESTORATION_TILESIZE_MAX 256
 // Maximum number of tile rows and tile columns
 #define MAX_TILE_ROWS 1024
 #define MAX_TILE_COLS 1024

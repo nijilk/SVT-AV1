@@ -2506,7 +2506,7 @@ void  inject_inter_candidates(
 
 
 
-static INLINE PredictionMode get_uv_mode(UV_PredictionMode mode) {
+ PredictionMode get_uv_mode(UV_PredictionMode mode) {
     assert(mode < UV_INTRA_MODES);
     static const PredictionMode uv2y[] = {
         DC_PRED,        // UV_DC_PRED
