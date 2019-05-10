@@ -73,15 +73,15 @@ typedef struct EbColorConfig {
             matrix_coefficients are not present */
     EbBool                         color_description_present_flag;
 
-    /*!< An integer that is defined by the “Color primaries” section of 
+    /*!< An integer that is defined by the ï¿½Color primariesï¿½ section of 
      * ISO/IEC 23091-4/ITU-T H.273 */
     EbColorPrimaries                   color_primaries;
 
-    /*!< An integer that is defined by the “Transfer characteristics” section 
+    /*!< An integer that is defined by the ï¿½Transfer characteristicsï¿½ section 
      * of ISO/IEC 23091-4/ITU-T H.273 */
     EbTransferCharacteristics  transfer_characteristics;
 
-    /*!< An integer that is defined by the “Matrix coefficients” section of 
+    /*!< An integer that is defined by the ï¿½Matrix coefficientsï¿½ section of 
      * ISO/IEC 23091-4/ITU-T H.273 */
     EbMatrixCoefficients       matrix_coefficients;
 

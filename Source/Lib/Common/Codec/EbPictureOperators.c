@@ -20,7 +20,6 @@
 
 #include "EbPictureOperators.h"
 #include "EbPackUnPack.h"
-#include <immintrin.h>
 
 #define VARIANCE_PRECISION      16
 #define MEAN_PRECISION      (VARIANCE_PRECISION >> 1)
@@ -62,8 +61,8 @@ void pic_copy_kernel(
     EbByte                  dst,
     uint32_t                   dst_stride,
     uint32_t                   area_width,
-    uint32_t                   area_height)
-{
+    uint32_t                   area_height){
+
     uint32_t   j;
 
     for (j = 0; j < area_height; j++)
@@ -74,10 +73,10 @@ void pic_copy_kernel(
  * Picture Copy 8bit Elements
  *********************************/
 EbErrorType picture_copy8_bit(
-    EbPictureBufferDesc_t   *src,
+    EbPictureBufferDesc   *src,
     uint32_t                   src_luma_origin_index,
     uint32_t                   src_chroma_origin_index,
-    EbPictureBufferDesc_t   *dst,
+    EbPictureBufferDesc   *dst,
     uint32_t                   dst_luma_origin_index,
     uint32_t                   dst_chroma_origin_index,
     uint32_t                   area_width,
@@ -105,10 +104,10 @@ EbErrorType picture_copy8_bit(
     if (component_mask & PICTURE_BUFFER_DESC_Cb_FLAG) {
 
         pic_copy_kernel(
-            &(src->bufferCb[src_chroma_origin_index]),
-            src->strideCb,
-            &(dst->bufferCb[dst_chroma_origin_index]),
-            dst->strideCb,
+            &(src->buffer_cb[src_chroma_origin_index]),
+            src->stride_cb,
+            &(dst->buffer_cb[dst_chroma_origin_index]),
+            dst->stride_cb,
             chroma_area_width,
             chroma_area_height);
     }
@@ -116,10 +115,10 @@ EbErrorType picture_copy8_bit(
     if (component_mask & PICTURE_BUFFER_DESC_Cr_FLAG) {
 
         pic_copy_kernel(
-            &(src->bufferCr[src_chroma_origin_index]),
-            src->strideCr,
-            &(dst->bufferCr[dst_chroma_origin_index]),
-            dst->strideCr,
+            &(src->buffer_cr[src_chroma_origin_index]),
+            src->stride_cr,
+            &(dst->buffer_cr[dst_chroma_origin_index]),
+            dst->stride_cr,
             chroma_area_width,
             chroma_area_height);
     }
@@ -203,7 +202,7 @@ uint64_t ComputeNxMSatd8x8Units_U8(
     uint64_t satd = 0;
     uint32_t blockIndexInWidth;
     uint32_t blockIndexInHeight;
-    EB_SATD_U8_TYPE Compute8x8SatdFunction = compute8x8_satd_u8_func_ptr_array[asm_type];
+    EbSatdU8Type Compute8x8SatdFunction = compute8x8_satd_u8_func_ptr_array[asm_type];
 
     for (blockIndexInHeight = 0; blockIndexInHeight < height >> 3; ++blockIndexInHeight) {
         for (blockIndexInWidth = 0; blockIndexInWidth < width >> 3; ++blockIndexInWidth) {
@@ -229,7 +228,7 @@ uint64_t ComputeNxMSatd4x4Units_U8(
 
     for (blockIndexInHeight = 0; blockIndexInHeight < height >> 2; ++blockIndexInHeight) {
         for (blockIndexInWidth = 0; blockIndexInWidth < width >> 2; ++blockIndexInWidth) {
-            satd += Compute4x4Satd_U8(&(src[(blockIndexInWidth << 2) + (blockIndexInHeight << 2) * src_stride]), dc_value, src_stride);
+            satd += compute4x4_satd_u8(&(src[(blockIndexInWidth << 2) + (blockIndexInHeight << 2) * src_stride]), dc_value, src_stride);
 
         }
     }
@@ -237,7 +236,7 @@ uint64_t ComputeNxMSatd4x4Units_U8(
     return satd;
 }
 /*******************************************
- *   returns NxM Sum of Absolute Transformed Differences using Compute4x4Satd
+ *   returns NxM Sum of Absolute Transformed Differences using compute4x4_satd
  *******************************************/
 uint64_t compute_nx_m_satd_sad_lcu(
     uint8_t  *src,        // input parameter, source samples Ptr
@@ -347,10 +346,10 @@ void full_distortion_kernel_cbf_zero32_bits(
 }
 
 EbErrorType picture_full_distortion32_bits(
-    EbPictureBufferDesc_t   *coeff,
+    EbPictureBufferDesc   *coeff,
     uint32_t                   coeff_luma_origin_index,
     uint32_t                   coeff_chroma_origin_index,
-    EbPictureBufferDesc_t   *recon_coeff,
+    EbPictureBufferDesc   *recon_coeff,
     uint32_t                   recon_coeff_luma_origin_index,
     uint32_t                   recon_coeff_chroma_origin_index,
     uint32_t                   bwidth,
@@ -408,9 +407,9 @@ EbErrorType picture_full_distortion32_bits(
         // CB
         if (cb_count_non_zero_coeffs) {
             full_distortion_kernel32_bits_func_ptr_array[asm_type](
-                &(((int32_t*)coeff->bufferCb)[coeff_chroma_origin_index]),
+                &(((int32_t*)coeff->buffer_cb)[coeff_chroma_origin_index]),
                 bwidth_uv,
-                &(((int32_t*)recon_coeff->bufferCb)[recon_coeff_chroma_origin_index]),
+                &(((int32_t*)recon_coeff->buffer_cb)[recon_coeff_chroma_origin_index]),
                 bwidth_uv,
                 cb_distortion,
                 bwidth_uv,
@@ -418,9 +417,9 @@ EbErrorType picture_full_distortion32_bits(
         }
         else {
             full_distortion_kernel_cbf_zero32_bits_func_ptr_array[asm_type](
-                &(((int32_t*)coeff->bufferCb)[coeff_chroma_origin_index]),
+                &(((int32_t*)coeff->buffer_cb)[coeff_chroma_origin_index]),
                 bwidth_uv,
-                &(((int32_t*)recon_coeff->bufferCb)[recon_coeff_chroma_origin_index]),
+                &(((int32_t*)recon_coeff->buffer_cb)[recon_coeff_chroma_origin_index]),
                 bwidth_uv,
                 cb_distortion,
                 bwidth_uv,
@@ -433,9 +432,9 @@ EbErrorType picture_full_distortion32_bits(
         // CR
         if (cr_count_non_zero_coeffs) {
             full_distortion_kernel32_bits_func_ptr_array[asm_type](
-                &(((int32_t*)coeff->bufferCr)[coeff_chroma_origin_index]),
+                &(((int32_t*)coeff->buffer_cr)[coeff_chroma_origin_index]),
                 bwidth_uv,
-                &(((int32_t*)recon_coeff->bufferCr)[recon_coeff_chroma_origin_index]),
+                &(((int32_t*)recon_coeff->buffer_cr)[recon_coeff_chroma_origin_index]),
                 bwidth_uv,
                 cr_distortion,
                 bwidth_uv,
@@ -443,9 +442,9 @@ EbErrorType picture_full_distortion32_bits(
         }
         else {
             full_distortion_kernel_cbf_zero32_bits_func_ptr_array[asm_type](
-                &(((int32_t*)coeff->bufferCr)[coeff_chroma_origin_index]),
+                &(((int32_t*)coeff->buffer_cr)[coeff_chroma_origin_index]),
                 bwidth_uv,
-                &(((int32_t*)recon_coeff->bufferCr)[recon_coeff_chroma_origin_index]),
+                &(((int32_t*)recon_coeff->buffer_cr)[recon_coeff_chroma_origin_index]),
                 bwidth_uv,
                 cr_distortion,
                 bwidth_uv,
@@ -642,34 +641,6 @@ void conv2b_to_c_pack_lcu(
         height);
 
 }
-
-
-/*******************************************
- * memset16bit
- *******************************************/
-void memset16bit(
-    uint16_t                     * in_ptr,
-    uint16_t                       value,
-    uint64_t                       num_of_elements)
-{
-    uint64_t i;
-
-    for (i = 0; i < num_of_elements; i++) {
-        in_ptr[i] = value;
-    }
-}
-void memset32bit(
-    uint32_t                     * in_ptr,
-    uint32_t                       value,
-    uint64_t                       num_of_elements)
-{
-    uint64_t i;
-
-    for (i = 0; i < num_of_elements; i++) {
-        in_ptr[i] = value;
-    }
-}
-
 
 /*******************************************
  * memcpy16bit

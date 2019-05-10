@@ -13,7 +13,6 @@
 #include <math.h>
 #include <stdio.h>
 #include "EbDefinitions.h"
-#if ICOPY
 #include "EbCodingUnit.h"
 #include "av1me.h"
 #include "EbPictureControlSet.h"
@@ -24,7 +23,7 @@
 
 int av1_is_dv_valid(const MV dv,
     const MacroBlockD *xd, int mi_row, int mi_col,
-    block_size bsize, int mib_size_log2);
+    BlockSize bsize, int mib_size_log2);
 
 void clamp_mv(
     MV *mv,
@@ -106,223 +105,6 @@ int av1_refining_search_sad(IntraBcContext  *x, MV *ref_mv, int error_per_bit,
     const aom_variance_fn_ptr_t *fn_ptr,
     const MV *center_mv);
 
-#if !(AOM_SAD_PORTING)
-
-/* Sum the difference between every corresponding element of the buffers. */
-static INLINE unsigned int sad(const uint8_t *a, int a_stride, const uint8_t *b,
-    int b_stride, int width, int height) {
-    int y, x;
-    unsigned int sad = 0;
-
-    for (y = 0; y < height; y++) {
-        for (x = 0; x < width; x++) {
-            sad += abs(a[x] - b[x]);
-        }
-        a += a_stride;
-        b += b_stride;
-
-    }
-    return sad;
-
-}
-#if 1
- #if FIX_SAD
- #define sadMxh(m)                                                          \
-  unsigned int aom_sad##m##xh_c(const uint8_t *a, int a_stride,            \
-                                const uint8_t *b, int b_stride, int width, \
-                                int height) {                              \
-    return NxMSadKernelSubSampled_funcPtrArray[ASM_AVX2][width >> 3]((uint8_t *)a, a_stride, (uint8_t *)b, b_stride, height,width);  \
-  }
-#define sadMxNx4D(m, n)                                                    \
-  void aom_sad##m##x##n##x4d_c(const uint8_t *src, int src_stride,         \
-                               const uint8_t *const ref_array[],           \
-                               int ref_stride, uint32_t *sad_array) {      \
-    int i;                                                                 \
-    for (i = 0; i < 4; ++i) {                                              \
-      sad_array[i] =                                                       \
-          NxMSadKernelSubSampled_funcPtrArray[ASM_AVX2][m >> 3]((uint8_t *)src, src_stride, (uint8_t *)(ref_array[i]), ref_stride, n, m);   \
-    }                                                                      \
-  }
-#define sadMxN(m, n)                                                          \
-  unsigned int aom_sad##m##x##n##_c(const uint8_t *src, int src_stride,       \
-                                    const uint8_t *ref, int ref_stride) {     \
-return NxMSadKernelSubSampled_funcPtrArray[ASM_AVX2][m >> 3]((uint8_t *)src, src_stride, (uint8_t *)ref, ref_stride, n, m);  \
-}
-#else
-#define sadMxh(m)                                                          \
-  unsigned int aom_sad##m##xh_c(const uint8_t *a, int a_stride,            \
-                                const uint8_t *b, int b_stride, int width, \
-                                int height) {                              \
-    return NxMSadKernelSubSampled_funcPtrArray[ASM_AVX2][width >> 3]((uint8_t *)a, a_stride, (uint8_t *)b, b_stride, width, height);  \
-  }
-#define sadMxNx4D(m, n)                                                    \
-  void aom_sad##m##x##n##x4d_c(const uint8_t *src, int src_stride,         \
-                               const uint8_t *const ref_array[],           \
-                               int ref_stride, uint32_t *sad_array) {      \
-    int i;                                                                 \
-    for (i = 0; i < 4; ++i) {                                              \
-      sad_array[i] =                                                       \
-          NxMSadKernelSubSampled_funcPtrArray[ASM_AVX2][m >> 3]((uint8_t *)src, src_stride, (uint8_t *)(ref_array[i]), ref_stride, m, n);   \
-    }                                                                      \
-  }
-#define sadMxN(m, n)                                                          \
-  unsigned int aom_sad##m##x##n##_c(const uint8_t *src, int src_stride,       \
-                                    const uint8_t *ref, int ref_stride) {     \
-return NxMSadKernelSubSampled_funcPtrArray[ASM_AVX2][m >> 3]((uint8_t *)src, src_stride, (uint8_t *)ref, ref_stride, m, n);  \
-}
-#endif
-#else
-#define sadMxh(m)                                                          \
-  unsigned int aom_sad##m##xh_c(const uint8_t *a, int a_stride,            \
-                                const uint8_t *b, int b_stride, int width, \
-                                int height) {                              \
-    return sad(a, a_stride, b, b_stride, width, height);                   \
-  }
-
-#define sadMxN(m, n)                                                          \
-  unsigned int aom_sad##m##x##n##_c(const uint8_t *src, int src_stride,       \
-                                    const uint8_t *ref, int ref_stride) {     \
-   return sad(src, src_stride, ref, ref_stride, m, n);    \
-  }                                                                           \
-
-
-// Calculate sad against 4 reference locations and store each in sad_array
-#define sadMxNx4D(m, n)                                                    \
-  void aom_sad##m##x##n##x4d_c(const uint8_t *src, int src_stride,         \
-                               const uint8_t *const ref_array[],           \
-                               int ref_stride, uint32_t *sad_array) {      \
-    int i;                                                                 \
-    for (i = 0; i < 4; ++i) {                                              \
-      sad_array[i] =                                                       \
-          aom_sad##m##x##n##_c(src, src_stride, ref_array[i], ref_stride); \
-    }                                                                      \
-  }
-#endif
-// 128x128
-sadMxN(128, 128);
-sadMxNx4D(128, 128);
-// 128x64
-sadMxN(128, 64);
-sadMxNx4D(128, 64);
-// 64x128
-sadMxN(64, 128);
-sadMxNx4D(64, 128);
-// 64x64
-sadMxN(64, 64);
-sadMxNx4D(64, 64);
-// 64x32
-sadMxN(64, 32);
-sadMxNx4D(64, 32);
-// 32x64
-sadMxN(32, 64);
-sadMxNx4D(32, 64);
-// 32x32
-sadMxN(32, 32);
-sadMxNx4D(32, 32);
-// 32x16
-sadMxN(32, 16);
-sadMxNx4D(32, 16);
-// 16x32
-sadMxN(16, 32);
-sadMxNx4D(16, 32);
-// 16x16
-sadMxN(16, 16);
-sadMxNx4D(16, 16);
-// 16x8
-sadMxN(16, 8);
-sadMxNx4D(16, 8);
-// 8x16
-sadMxN(8, 16);
-sadMxNx4D(8, 16);
-// 8x8
-sadMxN(8, 8);
-sadMxNx4D(8, 8);
-// 8x4
-sadMxN(8, 4);
-sadMxNx4D(8, 4);
-// 4x8
-sadMxN(4, 8);
-sadMxNx4D(4, 8);
-// 4x4
-sadMxN(4, 4);
-sadMxNx4D(4, 4);
-
-sadMxh(128);
-sadMxh(64);
-sadMxh(32);
-sadMxh(16);
-sadMxh(8);
-sadMxh(4);
-
-sadMxN(4, 16);
-sadMxNx4D(4, 16);
-sadMxN(16, 4);
-sadMxNx4D(16, 4);
-sadMxN(8, 32);
-sadMxNx4D(8, 32);
-sadMxN(32, 8);
-sadMxNx4D(32, 8);
-sadMxN(16, 64);
-sadMxNx4D(16, 64);
-sadMxN(64, 16);
-sadMxNx4D(64, 16);
-
-static void variance(const uint8_t *a, int a_stride, const uint8_t *b,
-    int b_stride, int w, int h, uint32_t *sse, int *sum) {
-    int i, j;
-
-    *sum = 0;
-    *sse = 0;
-
-    for (i = 0; i < h; ++i) {
-        for (j = 0; j < w; ++j) {
-            const int diff = a[j] - b[j];
-            *sum += diff;
-            *sse += diff * diff;
-        }
-
-        a += a_stride;
-        b += b_stride;
-    }
-}
-
-#define VAR(W, H)                                                    \
-  uint32_t aom_variance##W##x##H##_c(const uint8_t *a, int a_stride, \
-                                     const uint8_t *b, int b_stride, \
-                                     uint32_t *sse) {                \
-    int sum;                                                         \
-    variance(a, a_stride, b, b_stride, W, H, sse, &sum);             \
-    return *sse - (uint32_t)(((int64_t)sum * sum) / (W * H));        \
-  }
-
-VAR(128, 128)
-VAR(128, 64)
-VAR(64, 128)
-VAR(64, 64)
-VAR(64, 32)
-VAR(32, 64)
-VAR(32, 32)
-VAR(32, 16)
-VAR(16, 32)
-VAR(16, 16)
-VAR(16, 8)
-VAR(8, 16)
-VAR(8, 8)
-VAR(8, 4)
-VAR(4, 8)
-VAR(4, 4)
-VAR(4, 2)
-VAR(2, 4)
-VAR(2, 2)
-VAR(4, 16)
-VAR(16, 4)
-VAR(8, 32)
-VAR(32, 8)
-VAR(16, 64)
-VAR(64, 16)
-
-#endif //!(AOM_SAD_PORTING)
-
 aom_variance_fn_ptr_t mefn_ptr[BlockSizeS_ALL];
 
 void init_fn_ptr(void)
@@ -332,7 +114,6 @@ void init_fn_ptr(void)
   mefn_ptr[BT].vf = VF;                                      \
   mefn_ptr[BT].sdx4df = SDX4DF;
 
-#if AOM_SAD_PORTING
         BFP0(BLOCK_4X16, aom_sad4x16, aom_variance4x16, aom_sad4x16x4d)
         BFP0(BLOCK_16X4, aom_sad16x4, aom_variance16x4, aom_sad16x4x4d)
         BFP0(BLOCK_8X32, aom_sad8x32, aom_variance8x32, aom_sad8x32x4d)
@@ -355,58 +136,12 @@ void init_fn_ptr(void)
         BFP0(BLOCK_8X4, aom_sad8x4, aom_variance8x4, aom_sad8x4x4d)
         BFP0(BLOCK_4X8, aom_sad4x8, aom_variance4x8, aom_sad4x8x4d)
         BFP0(BLOCK_4X4, aom_sad4x4, aom_variance4x4, aom_sad4x4x4d)
-#else
-       BFP0(BLOCK_4X16, aom_sad4x16_c, aom_variance4x16_c, aom_sad4x16x4d_c)
-
-       BFP0(BLOCK_16X4, aom_sad16x4_c, aom_variance16x4_c, aom_sad16x4x4d_c)
-
-       BFP0(BLOCK_8X32, aom_sad8x32_c, aom_variance8x32_c, aom_sad8x32x4d_c)
-
-       BFP0(BLOCK_32X8, aom_sad32x8_c, aom_variance32x8_c, aom_sad32x8x4d_c)
-
-       BFP0(BLOCK_16X64, aom_sad16x64_c, aom_variance16x64_c, aom_sad16x64x4d_c)
-
-       BFP0(BLOCK_64X16, aom_sad64x16_c, aom_variance64x16_c, aom_sad64x16x4d_c)
-
-       BFP0(BLOCK_128X128, aom_sad128x128_c, aom_variance128x128_c, aom_sad128x128x4d_c)
-
-       BFP0(BLOCK_128X64, aom_sad128x64_c, aom_variance128x64_c, aom_sad128x64x4d_c)
-
-       BFP0(BLOCK_64X128, aom_sad64x128_c, aom_variance64x128_c, aom_sad64x128x4d_c)
-
-       BFP0(BLOCK_32X16, aom_sad32x16_c, aom_variance32x16_c, aom_sad32x16x4d_c)
-
-       BFP0(BLOCK_16X32, aom_sad16x32_c, aom_variance16x32_c, aom_sad16x32x4d_c)
-
-       BFP0(BLOCK_64X32, aom_sad64x32_c, aom_variance64x32_c, aom_sad64x32x4d_c)
-
-       BFP0(BLOCK_32X64, aom_sad32x64_c, aom_variance32x64_c, aom_sad32x64x4d_c)
-
-       BFP0(BLOCK_32X32, aom_sad32x32_c, aom_variance32x32_c, aom_sad32x32x4d_c)
-
-       BFP0(BLOCK_64X64, aom_sad64x64_c, aom_variance64x64_c, aom_sad64x64x4d_c)
-
-       BFP0(BLOCK_16X16, aom_sad16x16_c, aom_variance16x16_c, aom_sad16x16x4d_c)
-
-       BFP0(BLOCK_16X8, aom_sad16x8_c, aom_variance16x8_c, aom_sad16x8x4d_c)
-
-       BFP0(BLOCK_8X16, aom_sad8x16_c, aom_variance8x16_c, aom_sad8x16x4d_c)
-
-       BFP0(BLOCK_8X8, aom_sad8x8_c, aom_variance8x8_c, aom_sad8x8x4d_c)
-
-       BFP0(BLOCK_8X4, aom_sad8x4_c, aom_variance8x4_c, aom_sad8x4x4d_c)
-
-       BFP0(BLOCK_4X8, aom_sad4x8_c, aom_variance4x8_c, aom_sad4x8x4d_c)
-
-       BFP0(BLOCK_4X4, aom_sad4x4_c, aom_variance4x4_c, aom_sad4x4x4d_c)
-
-#endif
 }
 
 
 // #define NEW_DIAMOND_SEARCH
 
-static INLINE const uint8_t *get_buf_from_mv(const struct buf_2d *buf,
+static INLINE const uint8_t *get_buf_from_mv(const struct Buf2D *buf,
                                              const MV *mv) {
   return &buf->buf[mv->row * buf->stride + mv->col];
 }
@@ -432,7 +167,7 @@ void av1_set_mv_search_range(MvLimits *mv_limits, const MV *mv) {
 
 
 
-MV_JOINT_TYPE av1_get_mv_joint(const MV *mv);
+MvJointType av1_get_mv_joint(const MV *mv);
 
 static INLINE int mv_cost(const MV *mv, const int *joint_cost,
                           int *const comp_cost[2]) {
@@ -462,7 +197,7 @@ static int mvsad_err_cost(const IntraBcContext *x, const MV *mv, const MV *ref,
       AV1_PROB_COST_SHIFT);
 }
 
-void av1_init3smotion_compensation(search_site_config *cfg, int stride) {
+void av1_init3smotion_compensation(SearchSiteConfig *cfg, int stride) {
   int len, ss_count = 1;
 
   cfg->ss[0].mv.col = cfg->ss[0].mv.row = 0;
@@ -483,14 +218,6 @@ void av1_init3smotion_compensation(search_site_config *cfg, int stride) {
 
   cfg->ss_count = ss_count;
   cfg->searches_per_step = 8;
-}
-
-static INLINE int check_bounds(const MvLimits *mv_limits, int row, int col,
-                               int range) {
-  return ((row - range) >= mv_limits->row_min) &
-         ((row + range) <= mv_limits->row_max) &
-         ((col - range) >= mv_limits->col_min) &
-         ((col + range) <= mv_limits->col_max);
 }
 
 static INLINE int is_mv_in(const MvLimits *mv_limits, const MV *mv) {
@@ -518,8 +245,8 @@ int av1_get_mvpred_var(const IntraBcContext *x, const MV *best_mv,
                        const MV *center_mv, const aom_variance_fn_ptr_t *vfp,
                        int use_mvcost) {
    
-  const struct buf_2d *const what = &x->plane[0].src;
-  const struct buf_2d *const in_what = &x->xdplane[0].pre[0];
+  const struct Buf2D *const what = &x->plane[0].src;
+  const struct Buf2D *const in_what = &x->xdplane[0].pre[0];
   const MV mv = { best_mv->row * 8, best_mv->col * 8 };
   unsigned int unused;
 
@@ -537,8 +264,8 @@ static int exhuastive_mesh_search(IntraBcContext  *x, MV *ref_mv, MV *best_mv,
                                   const aom_variance_fn_ptr_t *fn_ptr,
                                   const MV *center_mv) {
    
-  const struct buf_2d *const what = &x->plane[0].src;
-  const struct buf_2d *const in_what = &x->xdplane[0].pre[0];
+  const struct Buf2D *const what = &x->plane[0].src;
+  const struct Buf2D *const in_what = &x->xdplane[0].pre[0];
   MV fcenter_mv = { center_mv->row, center_mv->col };
   unsigned int best_sad = INT_MAX;
   int r, c, i;
@@ -622,7 +349,7 @@ static int exhuastive_mesh_search(IntraBcContext  *x, MV *ref_mv, MV *best_mv,
 }
 
 
-int av1_diamond_search_sad_c(IntraBcContext  *x, const search_site_config *cfg,
+int av1_diamond_search_sad_c(IntraBcContext  *x, const SearchSiteConfig *cfg,
                              MV *ref_mv, MV *best_mv, int search_param,
                              int sad_per_bit, int *num00,
                              const aom_variance_fn_ptr_t *fn_ptr,
@@ -770,7 +497,7 @@ int av1_diamond_search_sad_c(IntraBcContext  *x, const search_site_config *cfg,
 /* do_refine: If last step (1-away) of n-step search doesn't pick the center
               point as the best match, we will do a final 1-away diamond
               refining search  */
-static int full_pixel_diamond(PictureControlSet_t *pcs, IntraBcContext /*MACROBLOCK*/ *x,
+static int full_pixel_diamond(PictureControlSet *pcs, IntraBcContext /*MACROBLOCK*/ *x,
                               MV *mvp_full, int step_param, int sadpb,
                               int further_steps, int do_refine, int *cost_list,
                               const aom_variance_fn_ptr_t *fn_ptr,
@@ -843,13 +570,13 @@ static int full_pixel_diamond(PictureControlSet_t *pcs, IntraBcContext /*MACROBL
 #define MIN_INTERVAL 1
 // Runs an limited range exhaustive mesh search using a pattern set
 // according to the encode speed profile.
-static int full_pixel_exhaustive(PictureControlSet_t *pcs, IntraBcContext  *x,
+static int full_pixel_exhaustive(PictureControlSet *pcs, IntraBcContext  *x,
                                  const MV *centre_mv_full, int sadpb,
                                  int *cost_list,
                                  const aom_variance_fn_ptr_t *fn_ptr,
                                  const MV *ref_mv, MV *dst_mv) {
     UNUSED(cost_list);
-    const SPEED_FEATURES *const sf = &pcs->sf;// cpi->sf;
+    const SpeedFeatures *const sf = &pcs->sf;// cpi->sf;
   MV temp_mv = { centre_mv_full->row, centre_mv_full->col };
   MV f_ref_mv = { ref_mv->row >> 3, ref_mv->col >> 3 };
   int bestsme;
@@ -909,8 +636,8 @@ int av1_refining_search_sad(IntraBcContext  *x, MV *ref_mv, int error_per_bit,
                             const MV *center_mv) {
   
   const MV neighbors[4] = { { -1, 0 }, { 0, -1 }, { 0, 1 }, { 1, 0 } };
-  const struct buf_2d *const what = &x->plane[0].src;
-  const struct buf_2d *const in_what = &x->xdplane[0].pre[0];
+  const struct Buf2D *const what = &x->plane[0].src;
+  const struct Buf2D *const in_what = &x->xdplane[0].pre[0];
   const MV fcenter_mv = { center_mv->row >> 3, center_mv->col >> 3 };
   const uint8_t *best_address = get_buf_from_mv(in_what, ref_mv);
   unsigned int best_sad =
@@ -977,7 +704,7 @@ int av1_refining_search_sad(IntraBcContext  *x, MV *ref_mv, int error_per_bit,
   return best_sad;
 }
 
-int av1_full_pixel_search(PictureControlSet_t *pcs, IntraBcContext  *x, block_size bsize,
+int av1_full_pixel_search(PictureControlSet *pcs, IntraBcContext  *x, BlockSize bsize,
                           MV *mvp_full, int step_param, int method,
                           int run_mesh_search, int error_per_bit,
                           int *cost_list, const MV *ref_mv, int var_max, int rd,
@@ -986,18 +713,12 @@ int av1_full_pixel_search(PictureControlSet_t *pcs, IntraBcContext  *x, block_si
     UNUSED (var_max);
     UNUSED (rd);
 
-#if IBC_MODES
     int32_t ibc_shift = 0;
     if (pcs->parent_pcs_ptr->ibc_mode > 0)
         ibc_shift = 1;
-#endif
 
-#if IBC_EARLY_0
-    SPEED_FEATURES * sf = &pcs->sf;
+    SpeedFeatures * sf = &pcs->sf;
     sf->exhaustive_searches_thresh = (1 << 25);
-#else
-  const SPEED_FEATURES *const sf = &pcs->sf;
-#endif
   const aom_variance_fn_ptr_t *fn_ptr = &mefn_ptr[bsize];
   int var = 0;
 
@@ -1038,16 +759,13 @@ int av1_full_pixel_search(PictureControlSet_t *pcs, IntraBcContext  *x, block_si
                                MAX_MVSEARCH_STEPS - 1 - step_param, 1,
                                cost_list, fn_ptr, ref_mv);
 
-#if IBC_EARLY_0
       if (x->is_exhaustive_allowed)
       {
           int exhuastive_thr = sf->exhaustive_searches_thresh;
           exhuastive_thr >>=
               10 - (mi_size_wide_log2[bsize] + mi_size_high_log2[bsize]);
 
-#if IBC_MODES
           exhuastive_thr = exhuastive_thr << ibc_shift;
-#endif
 
           if (var > exhuastive_thr)
           {
@@ -1063,68 +781,10 @@ int av1_full_pixel_search(PictureControlSet_t *pcs, IntraBcContext  *x, block_si
               }
           }
       }
-#else
-
-      // Should we allow a follow on exhaustive search?
-      if(1)// (is_exhaustive_allowed(cpi, x))   
-      {
-        //int exhuastive_thr = sf->exhaustive_searches_thresh;
-        //exhuastive_thr >>=
-        //    10 - (mi_size_wide_log2[bsize] + mi_size_high_log2[bsize]);
-
-        // Threshold variance for an exhaustive full search.
-        //if (var > exhuastive_thr) 
-        {
-          int var_ex;
-          MV tmp_mv_ex;
-          var_ex =
-              full_pixel_exhaustive(pcs, x, &x->best_mv.as_mv, error_per_bit,
-                                    cost_list, fn_ptr, ref_mv, &tmp_mv_ex);
-
-          if (var_ex < var) {
-            var = var_ex;
-            x->best_mv.as_mv = tmp_mv_ex;
-          }
-        }
-      }
-#endif
       break;
     default: assert(0 && "Invalid search method.");
   }
 
-#if !IBC_EARLY_0 
-
-  // Should we allow a follow on exhaustive search?
-  if (!run_mesh_search) {
-    if (method == NSTEP) {
-      //if (is_exhaustive_allowed(cpi, x))
-      {
-        int exhuastive_thr = sf->exhaustive_searches_thresh;
-        exhuastive_thr >>=
-            10 - (mi_size_wide_log2[bsize] + mi_size_high_log2[bsize]);
-        // Threshold variance for an exhaustive full search.
-        if (var > exhuastive_thr) run_mesh_search = 1;
-      }
-    }
-  }
-
-  //if (run_mesh_search)
-  if(1)
-  {
-    int var_ex;
-    MV tmp_mv_ex;
-    var_ex = full_pixel_exhaustive(pcs, x, &x->best_mv.as_mv, error_per_bit,
-                                   cost_list, fn_ptr, ref_mv, &tmp_mv_ex);
-    if (var_ex < var) {
-      var = var_ex;
-      x->best_mv.as_mv = tmp_mv_ex;
-    }
-  }
-
-  if (method != NSTEP && rd && var < var_max)
-    var = av1_get_mvpred_var(x, &x->best_mv.as_mv, ref_mv, fn_ptr, 1);
-
-#endif
 
   do {
     //CHKN if (!intra || !av1_use_hash_me(&cpi->common)) break;
@@ -1143,7 +803,7 @@ int av1_full_pixel_search(PictureControlSet_t *pcs, IntraBcContext  *x, block_si
         int best_hash_cost = INT_MAX;
 
         // for the hashMap
-        hash_table *ref_frame_hash = &pcs->hash_table;
+        HashTable *ref_frame_hash = &pcs->hash_table;
 
         av1_get_block_hash_value(what, what_stride, block_width, &hash_value1,
                                  &hash_value2, 0, pcs, x);
@@ -1197,4 +857,3 @@ int av1_full_pixel_search(PictureControlSet_t *pcs, IntraBcContext  *x, block_si
   return 0;//CHKN  var;
 }
 
-#endif

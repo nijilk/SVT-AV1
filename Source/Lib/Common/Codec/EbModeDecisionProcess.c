@@ -14,16 +14,19 @@
  * Mode Decision Context Constructor
  ******************************************************/
 EbErrorType mode_decision_context_ctor(
-    ModeDecisionContext_t  **context_dbl_ptr,
-    EbFifo_t                *mode_decision_configuration_input_fifo_ptr,
-    EbFifo_t                *mode_decision_output_fifo_ptr){
+    ModeDecisionContext  **context_dbl_ptr,
+    EbColorFormat         color_format,
+    EbFifo                *mode_decision_configuration_input_fifo_ptr,
+    EbFifo                *mode_decision_output_fifo_ptr){
 
     uint32_t bufferIndex;
     uint32_t candidateIndex;
     EbErrorType return_error = EB_ErrorNone;
 
-    ModeDecisionContext_t *context_ptr;
-    EB_MALLOC(ModeDecisionContext_t*, context_ptr, sizeof(ModeDecisionContext_t), EB_N_PTR);
+    (void)color_format;
+
+    ModeDecisionContext *context_ptr;
+    EB_MALLOC(ModeDecisionContext*, context_ptr, sizeof(ModeDecisionContext), EB_N_PTR);
     *context_dbl_ptr = context_ptr;
 
     // Input/Output System Resource Manager FIFOs
@@ -34,12 +37,12 @@ EbErrorType mode_decision_context_ctor(
     EB_MALLOC(int16_t*, context_ptr->transform_inner_array_ptr, 3120, EB_N_PTR); //refer to EbInvTransform_SSE2.as. case 32x32
 
     // MD rate Estimation tables
-    EB_MALLOC(MdRateEstimationContext_t*, context_ptr->md_rate_estimation_ptr, sizeof(MdRateEstimationContext_t), EB_N_PTR);
+    EB_MALLOC(MdRateEstimationContext*, context_ptr->md_rate_estimation_ptr, sizeof(MdRateEstimationContext), EB_N_PTR);
 
     // Fast Candidate Array
-    EB_MALLOC(ModeDecisionCandidate_t*, context_ptr->fast_candidate_array, sizeof(ModeDecisionCandidate_t) * MODE_DECISION_CANDIDATE_MAX_COUNT, EB_N_PTR);
+    EB_MALLOC(ModeDecisionCandidate*, context_ptr->fast_candidate_array, sizeof(ModeDecisionCandidate) * MODE_DECISION_CANDIDATE_MAX_COUNT, EB_N_PTR);
 
-    EB_MALLOC(ModeDecisionCandidate_t**, context_ptr->fast_candidate_ptr_array, sizeof(ModeDecisionCandidate_t*) * MODE_DECISION_CANDIDATE_MAX_COUNT, EB_N_PTR);
+    EB_MALLOC(ModeDecisionCandidate**, context_ptr->fast_candidate_ptr_array, sizeof(ModeDecisionCandidate*) * MODE_DECISION_CANDIDATE_MAX_COUNT, EB_N_PTR);
 
     for (candidateIndex = 0; candidateIndex < MODE_DECISION_CANDIDATE_MAX_COUNT; ++candidateIndex) {
         context_ptr->fast_candidate_ptr_array[candidateIndex] = &context_ptr->fast_candidate_array[candidateIndex];
@@ -47,46 +50,28 @@ EbErrorType mode_decision_context_ctor(
     }
 
     // Transform and Quantization Buffers
-    EB_MALLOC(EbTransQuantBuffers_t*, context_ptr->trans_quant_buffers_ptr, sizeof(EbTransQuantBuffers_t), EB_N_PTR);
+    EB_MALLOC(EbTransQuantBuffers*, context_ptr->trans_quant_buffers_ptr, sizeof(EbTransQuantBuffers), EB_N_PTR);
 
 
-    return_error = EbTransQuantBuffersCtor(
+    return_error = eb_trans_quant_buffers_ctor(
         context_ptr->trans_quant_buffers_ptr);
 
     if (return_error == EB_ErrorInsufficientResources) {
         return EB_ErrorInsufficientResources;
     }
     // Cost Arrays
-#if INTRA_INTER_FAST_LOOP
     // Hsan: MAX_NFL + 1 scratch buffer for intra + 1 scratch buffer for inter
     EB_MALLOC(uint64_t*, context_ptr->fast_cost_array, sizeof(uint64_t) * (MAX_NFL + 1 + 1), EB_N_PTR);
     EB_MALLOC(uint64_t*, context_ptr->full_cost_array, sizeof(uint64_t) * (MAX_NFL + 1 + 1), EB_N_PTR);
     EB_MALLOC(uint64_t*, context_ptr->full_cost_skip_ptr, sizeof(uint64_t) * (MAX_NFL + 1 + 1), EB_N_PTR);
     EB_MALLOC(uint64_t*, context_ptr->full_cost_merge_ptr, sizeof(uint64_t) * (MAX_NFL + 1 + 1), EB_N_PTR);
     // Candidate Buffers
-    EB_MALLOC(ModeDecisionCandidateBuffer_t**, context_ptr->candidate_buffer_ptr_array, sizeof(ModeDecisionCandidateBuffer_t*) * (MAX_NFL + 1 + 1), EB_N_PTR);
+    EB_MALLOC(ModeDecisionCandidateBuffer**, context_ptr->candidate_buffer_ptr_array, sizeof(ModeDecisionCandidateBuffer*) * (MAX_NFL + 1 + 1), EB_N_PTR);
 
     for (bufferIndex = 0; bufferIndex < (MAX_NFL + 1 + 1); ++bufferIndex) {
-#else
-    EB_MALLOC(uint64_t*, context_ptr->fast_cost_array, sizeof(uint64_t) * MODE_DECISION_CANDIDATE_BUFFER_MAX_COUNT, EB_N_PTR);
 
-    EB_MALLOC(uint64_t*, context_ptr->full_cost_array, sizeof(uint64_t) * MODE_DECISION_CANDIDATE_BUFFER_MAX_COUNT, EB_N_PTR);
-
-    EB_MALLOC(uint64_t*, context_ptr->full_cost_skip_ptr, sizeof(uint64_t) * MODE_DECISION_CANDIDATE_BUFFER_MAX_COUNT, EB_N_PTR);
-
-    EB_MALLOC(uint64_t*, context_ptr->full_cost_merge_ptr, sizeof(uint64_t) * MODE_DECISION_CANDIDATE_BUFFER_MAX_COUNT, EB_N_PTR);
-
-    // Candidate Buffers
-    EB_MALLOC(ModeDecisionCandidateBuffer_t**, context_ptr->candidate_buffer_ptr_array, sizeof(ModeDecisionCandidateBuffer_t*) * MODE_DECISION_CANDIDATE_BUFFER_MAX_COUNT, EB_N_PTR);
-
-    for (bufferIndex = 0; bufferIndex < MODE_DECISION_CANDIDATE_BUFFER_MAX_COUNT; ++bufferIndex) {
-#endif
         return_error = mode_decision_candidate_buffer_ctor(
             &(context_ptr->candidate_buffer_ptr_array[bufferIndex]),
-#if !INTRA_INTER_FAST_LOOP
-            SB_STRIDE_Y,
-            EB_8BIT,
-#endif
             &(context_ptr->fast_cost_array[bufferIndex]),
             &(context_ptr->full_cost_array[bufferIndex]),
             &(context_ptr->full_cost_skip_ptr[bufferIndex]),
@@ -96,18 +81,19 @@ EbErrorType mode_decision_context_ctor(
             return EB_ErrorInsufficientResources;
         }
     }
-
+#if !UNPACK_REF_POST_EP 
     // Inter Prediction Context
     return_error = inter_prediction_context_ctor(
         &context_ptr->inter_prediction_context,
+        color_format,
         SB_STRIDE_Y,
         SB_STRIDE_Y);
     if (return_error == EB_ErrorInsufficientResources) {
         return EB_ErrorInsufficientResources;
     }
-
+#endif
     // Intra Reference Samples
-    return_error = IntraReferenceSamplesCtor(&context_ptr->intra_ref_ptr);
+    return_error = intra_reference_samples_ctor(&context_ptr->intra_ref_ptr);
     if (return_error == EB_ErrorInsufficientResources) {
         return EB_ErrorInsufficientResources;
     }
@@ -132,17 +118,18 @@ EbErrorType mode_decision_context_ctor(
 
 #if NO_ENCDEC //SB128_TODO to upgrade
         {
-            EbPictureBufferDescInitData_t initData;
+            EbPictureBufferDescInitData initData;
 
-            initData.bufferEnableMask = PICTURE_BUFFER_DESC_FULL_MASK;
-            initData.maxWidth = SB_STRIDE_Y;
-            initData.maxHeight = SB_STRIDE_Y;
+            initData.buffer_enable_mask = PICTURE_BUFFER_DESC_FULL_MASK;
+            initData.max_width = SB_STRIDE_Y;
+            initData.max_height = SB_STRIDE_Y;
             initData.bit_depth = EB_32BIT;
+            initData.color_format = EB_YUV420;
             initData.left_padding = 0;
             initData.right_padding = 0;
             initData.top_padding = 0;
             initData.bot_padding = 0;
-            initData.splitMode = EB_FALSE;
+            initData.split_mode = EB_FALSE;
 
             return_error = eb_picture_buffer_desc_ctor(
                 (EbPtr*)&context_ptr->md_cu_arr_nsq[codedLeafIndex].coeff_tmp,
@@ -152,15 +139,16 @@ EbErrorType mode_decision_context_ctor(
                 return EB_ErrorInsufficientResources;
             }
 
-            initData.bufferEnableMask = PICTURE_BUFFER_DESC_FULL_MASK;
-            initData.maxWidth = SB_STRIDE_Y;
-            initData.maxHeight = SB_STRIDE_Y;
+            initData.buffer_enable_mask = PICTURE_BUFFER_DESC_FULL_MASK;
+            initData.max_width = SB_STRIDE_Y;
+            initData.max_height = SB_STRIDE_Y;
             initData.bit_depth = EB_8BIT;
+            initData.color_format = EB_YUV420;
             initData.left_padding = 0;
             initData.right_padding = 0;
             initData.top_padding = 0;
             initData.bot_padding = 0;
-            initData.splitMode = EB_FALSE;
+            initData.split_mode = EB_FALSE;
 
             return_error = eb_picture_buffer_desc_ctor(
                 (EbPtr*)&context_ptr->md_cu_arr_nsq[codedLeafIndex].recon_tmp,
@@ -178,7 +166,7 @@ EbErrorType mode_decision_context_ctor(
 /**************************************************
  * Reset Mode Decision Neighbor Arrays
  *************************************************/
-void reset_mode_decision_neighbor_arrays(PictureControlSet_t *picture_control_set_ptr)
+void reset_mode_decision_neighbor_arrays(PictureControlSet *picture_control_set_ptr)
 {
     uint8_t depth;
     for (depth = 0; depth < NEIGHBOR_ARRAY_TOTAL_COUNT; depth++) {
@@ -193,8 +181,9 @@ void reset_mode_decision_neighbor_arrays(PictureControlSet_t *picture_control_se
         neighbor_array_unit_reset(picture_control_set_ptr->md_luma_recon_neighbor_array[depth]);
         neighbor_array_unit_reset(picture_control_set_ptr->md_cb_recon_neighbor_array[depth]);
         neighbor_array_unit_reset(picture_control_set_ptr->md_cr_recon_neighbor_array[depth]);
-
+#if !REMOVE_SKIP_COEFF_NEIGHBOR_ARRAY
         neighbor_array_unit_reset(picture_control_set_ptr->md_skip_coeff_neighbor_array[depth]);
+#endif
         neighbor_array_unit_reset(picture_control_set_ptr->md_luma_dc_sign_level_coeff_neighbor_array[depth]);
         neighbor_array_unit_reset(picture_control_set_ptr->md_cb_dc_sign_level_coeff_neighbor_array[depth]);
         neighbor_array_unit_reset(picture_control_set_ptr->md_cr_dc_sign_level_coeff_neighbor_array[depth]);
@@ -208,8 +197,8 @@ void reset_mode_decision_neighbor_arrays(PictureControlSet_t *picture_control_se
     return;
 }
 
-
-void ResetMdRefinmentNeighborArrays(PictureControlSet_t *picture_control_set_ptr)
+#if !MEMORY_FOOTPRINT_OPT
+void ResetMdRefinmentNeighborArrays(PictureControlSet *picture_control_set_ptr)
 {
     neighbor_array_unit_reset(picture_control_set_ptr->md_refinement_intra_luma_mode_neighbor_array);
     neighbor_array_unit_reset(picture_control_set_ptr->md_refinement_mode_type_neighbor_array);
@@ -217,7 +206,7 @@ void ResetMdRefinmentNeighborArrays(PictureControlSet_t *picture_control_set_ptr
 
     return;
 }
-
+#endif
 
 extern void lambda_assign_low_delay(
     uint32_t                    *fast_lambda,
@@ -232,19 +221,19 @@ extern void lambda_assign_low_delay(
 {
 
     if (qp_hierarchical_position == 0) {
-        *fast_lambda = lambdaModeDecisionLdSad[qp];
-        *fast_chroma_lambda = lambdaModeDecisionLdSad[qp];
-        *full_lambda = lambdaModeDecisionLdSse[qp];
-        *full_chroma_lambda = lambdaModeDecisionLdSse[qp];
-        *full_chroma_lambda_sao = lambdaModeDecisionLdSse[chroma_qp];
+        *fast_lambda = lambda_mode_decision_ld_sad[qp];
+        *fast_chroma_lambda = lambda_mode_decision_ld_sad[qp];
+        *full_lambda = lambda_mode_decision_ld_sse[qp];
+        *full_chroma_lambda = lambda_mode_decision_ld_sse[qp];
+        *full_chroma_lambda_sao = lambda_mode_decision_ld_sse[chroma_qp];
 
     }
     else { // Hierarchical postions 1, 2, 3, 4, 5
-        *fast_lambda = lambdaModeDecisionLdSadQpScaling[qp];
-        *fast_chroma_lambda = lambdaModeDecisionLdSadQpScaling[qp];
-        *full_lambda = lambdaModeDecisionLdSseQpScaling[qp];
-        *full_chroma_lambda = lambdaModeDecisionLdSseQpScaling[qp];
-        *full_chroma_lambda_sao = lambdaModeDecisionLdSseQpScaling[chroma_qp];
+        *fast_lambda = lambda_mode_decision_ld_sad_qp_scaling[qp];
+        *fast_chroma_lambda = lambda_mode_decision_ld_sad_qp_scaling[qp];
+        *full_lambda = lambda_mode_decision_ld_sse_qp_scaling[qp];
+        *full_chroma_lambda = lambda_mode_decision_ld_sse_qp_scaling[qp];
+        *full_chroma_lambda_sao = lambda_mode_decision_ld_sse_qp_scaling[chroma_qp];
     }
 
 }
@@ -262,27 +251,27 @@ void lambda_assign_random_access(
 {
 
     if (qp_hierarchical_position == 0) {
-        *fast_lambda = lambdaModeDecisionRaSad[qp];
-        *fast_chroma_lambda = lambdaModeDecisionRaSad[qp];
-        *full_lambda = lambdaModeDecisionRaSse[qp];
-        *full_chroma_lambda = lambdaModeDecisionRaSse[qp];
-        *full_chroma_lambda_sao = lambdaModeDecisionRaSse[chroma_qp];
+        *fast_lambda = lambda_mode_decision_ra_sad[qp];
+        *fast_chroma_lambda = lambda_mode_decision_ra_sad[qp];
+        *full_lambda = lambda_mode_decision_ra_sse[qp];
+        *full_chroma_lambda = lambda_mode_decision_ra_sse[qp];
+        *full_chroma_lambda_sao = lambda_mode_decision_ra_sse[chroma_qp];
 
     }
     else if (qp_hierarchical_position < 3) { // Hierarchical postions 1, 2
 
-        *fast_lambda = lambdaModeDecisionRaSadQpScalingL1[qp];
-        *fast_chroma_lambda = lambdaModeDecisionRaSadQpScalingL1[qp];
-        *full_lambda = lambdaModeDecisionRaSseQpScalingL1[qp];
-        *full_chroma_lambda = lambdaModeDecisionRaSseQpScalingL1[qp];
-        *full_chroma_lambda_sao = lambdaModeDecisionRaSseQpScalingL1[chroma_qp];
+        *fast_lambda = lambda_mode_decision_ra_sad_qp_scaling_l1[qp];
+        *fast_chroma_lambda = lambda_mode_decision_ra_sad_qp_scaling_l1[qp];
+        *full_lambda = lambda_mode_decision_ra_sse_qp_scaling_l1[qp];
+        *full_chroma_lambda = lambda_mode_decision_ra_sse_qp_scaling_l1[qp];
+        *full_chroma_lambda_sao = lambda_mode_decision_ra_sse_qp_scaling_l1[chroma_qp];
     }
     else { // Hierarchical postions 3, 4, 5
-        *fast_lambda = lambdaModeDecisionRaSadQpScalingL3[qp];
-        *fast_chroma_lambda = lambdaModeDecisionRaSadQpScalingL3[qp];
-        *full_lambda = lambdaModeDecisionRaSseQpScalingL3[qp];
-        *full_chroma_lambda = lambdaModeDecisionRaSseQpScalingL3[qp];
-        *full_chroma_lambda_sao = lambdaModeDecisionRaSseQpScalingL3[chroma_qp];
+        *fast_lambda = lambda_mode_decision_ra_sad_qp_scaling_l3[qp];
+        *fast_chroma_lambda = lambda_mode_decision_ra_sad_qp_scaling_l3[qp];
+        *full_lambda = lambda_mode_decision_ra_sse_qp_scaling_l3[qp];
+        *full_chroma_lambda = lambda_mode_decision_ra_sse_qp_scaling_l3[qp];
+        *full_chroma_lambda_sao = lambda_mode_decision_ra_sse_qp_scaling_l3[chroma_qp];
     }
 
 }
@@ -300,11 +289,11 @@ void lambdaAssignISlice(
 {
 
     if (qp_hierarchical_position == 0) {
-        *fast_lambda = lambdaModeDecisionISliceSad[qp];
-        *fast_chroma_lambda = lambdaModeDecisionISliceSad[qp];
-        *full_lambda = lambdaModeDecisionISliceSse[qp];
-        *full_chroma_lambda = lambdaModeDecisionISliceSse[qp];
-        *full_chroma_lambda_sao = lambdaModeDecisionISliceSse[chroma_qp];
+        *fast_lambda = lambda_mode_decision_i_slice_sad[qp];
+        *fast_chroma_lambda = lambda_mode_decision_i_slice_sad[qp];
+        *full_lambda = lambda_mode_decision_i_slice_sse[qp];
+        *full_chroma_lambda = lambda_mode_decision_i_slice_sse[qp];
+        *full_chroma_lambda_sao = lambda_mode_decision_i_slice_sse[chroma_qp];
 
     }
     else {
@@ -312,7 +301,7 @@ void lambdaAssignISlice(
     }
 
 }
-const EB_LAMBDA_ASSIGN_FUNC lambda_assignment_function_table[4] = {
+const EbLambdaAssignFunc lambda_assignment_function_table[4] = {
     lambda_assign_low_delay, // low delay P
     lambda_assign_low_delay, // low delay B
     lambda_assign_random_access, // Random Access
@@ -331,18 +320,18 @@ void Av1lambdaAssign(
 
     if (bit_depth == 8) {
 
-        *full_lambda = Av1lambdaModeDecision8BitSse[qp_index];
-        *fast_lambda = Av1lambdaModeDecision8BitSad[qp_index];
+        *full_lambda = av1_lambda_mode_decision8_bit_sse[qp_index];
+        *fast_lambda = av1_lambda_mode_decision8_bit_sad[qp_index];
 
     }
     else if (bit_depth == 10) {
-        *full_lambda = Av1lambdaModeDecision10BitSse[qp_index];
-        *fast_lambda = Av1lambdaModeDecision10BitSad[qp_index];
+        *full_lambda = av1lambda_mode_decision10_bit_sse[qp_index];
+        *fast_lambda = av1lambda_mode_decision10_bit_sad[qp_index];
 
     }
     else if (bit_depth == 12) {
-        *full_lambda = Av1lambdaModeDecision12BitSse[qp_index];
-        *fast_lambda = Av1lambdaModeDecision12BitSad[qp_index];
+        *full_lambda = av1lambda_mode_decision12_bit_sse[qp_index];
+        *fast_lambda = av1lambda_mode_decision12_bit_sad[qp_index];
 
     }
     else {
@@ -358,7 +347,7 @@ void Av1lambdaAssign(
     // NM: To be done: tune lambda based on the picture type and layer.
 
 }
-const EB_AV1_LAMBDA_ASSIGN_FUNC av1_lambda_assignment_function_table[4] = {
+const EbAv1LambdaAssignFunc av1_lambda_assignment_function_table[4] = {
     Av1lambdaAssign,
     Av1lambdaAssign,
     Av1lambdaAssign,
@@ -366,14 +355,14 @@ const EB_AV1_LAMBDA_ASSIGN_FUNC av1_lambda_assignment_function_table[4] = {
 };
 
 void reset_mode_decision(
-    ModeDecisionContext_t   *context_ptr,
-    PictureControlSet_t     *picture_control_set_ptr,
-    SequenceControlSet_t    *sequence_control_set_ptr,
+    ModeDecisionContext   *context_ptr,
+    PictureControlSet     *picture_control_set_ptr,
+    SequenceControlSet    *sequence_control_set_ptr,
     uint32_t                   segment_index)
 {
     EB_SLICE                     slice_type;
     uint32_t                       lcuRowIndex;
-    MdRateEstimationContext_t   *md_rate_estimation_array;
+    MdRateEstimationContext   *md_rate_estimation_array;
 
     // QP
 #if ADD_DELTA_QP_SUPPORT
@@ -385,11 +374,7 @@ void reset_mode_decision(
 #endif
     // Asuming cb and cr offset to be the same for chroma QP in both slice and pps for lambda computation
     context_ptr->chroma_qp = context_ptr->qp;
-#if NEW_QPS
     context_ptr->qp_index = (uint8_t)picture_control_set_ptr->parent_pcs_ptr->base_qindex;
-#else
-    context_ptr->qp_index = quantizer_to_qindex[context_ptr->qp];
-#endif
     (*av1_lambda_assignment_function_table[picture_control_set_ptr->parent_pcs_ptr->pred_structure])(
         &context_ptr->fast_lambda,
         &context_ptr->full_lambda,
@@ -397,45 +382,6 @@ void reset_mode_decision(
         &context_ptr->full_chroma_lambda,
         (uint8_t)picture_control_set_ptr->parent_pcs_ptr->enhanced_picture_ptr->bit_depth,
         context_ptr->qp_index);
-#if !INTRA_INTER_FAST_LOOP
-    // Configure the number of candidate buffers to search at each depth
-
-    // 64x64 CU
-    context_ptr->buffer_depth_index_start[0] = 0;
-#if INC_NFL12
-    context_ptr->buffer_depth_index_width[0] = MAX_NFL + 1;
-#else
-    context_ptr->buffer_depth_index_width[0] = 5; // 3 NFL + 1 for temporary data
-#endif
-    // 32x32 CU
-    context_ptr->buffer_depth_index_start[1] = context_ptr->buffer_depth_index_start[0] + context_ptr->buffer_depth_index_width[0];
-#if INC_NFL12
-    context_ptr->buffer_depth_index_width[1] = MAX_NFL + 1;
-#else
-    context_ptr->buffer_depth_index_width[1] = 6;
-#endif
-    // 16x16 CU
-    context_ptr->buffer_depth_index_start[2] = context_ptr->buffer_depth_index_start[1] + context_ptr->buffer_depth_index_width[1];
-#if INC_NFL12
-    context_ptr->buffer_depth_index_width[2] = MAX_NFL + 1;
-#else
-    context_ptr->buffer_depth_index_width[2] = 6;
-#endif
-    // 8x8 CU
-    context_ptr->buffer_depth_index_start[3] = context_ptr->buffer_depth_index_start[2] + context_ptr->buffer_depth_index_width[2];
-#if INC_NFL12
-    context_ptr->buffer_depth_index_width[3] = MAX_NFL + 1;
-#else
-    context_ptr->buffer_depth_index_width[3] = 6;
-#endif
-    // 4x4 CU
-    context_ptr->buffer_depth_index_start[4] = context_ptr->buffer_depth_index_start[3] + context_ptr->buffer_depth_index_width[3];
-#if INC_NFL12
-    context_ptr->buffer_depth_index_width[4] = MAX_NFL + 1;
-#else
-    context_ptr->buffer_depth_index_width[4] = 5;
-#endif
-#endif
     // Slice Type
     slice_type =
         (picture_control_set_ptr->parent_pcs_ptr->idr_flag == EB_TRUE) ? I_SLICE :
@@ -445,7 +391,7 @@ void reset_mode_decision(
 
     /* Note(CHKN) : Rate estimation will use FrameQP even when Qp modulation is ON */
 
-    md_rate_estimation_array = (MdRateEstimationContext_t*)sequence_control_set_ptr->encode_context_ptr->md_rate_estimation_array;
+    md_rate_estimation_array = (MdRateEstimationContext*)sequence_control_set_ptr->encode_context_ptr->md_rate_estimation_array;
 #if ADD_DELTA_QP_SUPPORT
     md_rate_estimation_array += slice_type * TOTAL_NUMBER_OF_QP_VALUES + picture_control_set_ptr->picture_qp;
 #else
@@ -460,29 +406,40 @@ void reset_mode_decision(
         context_ptr->fast_candidate_ptr_array[candidateIndex]->md_rate_estimation_ptr = md_rate_estimation_array;
     }
 
-
+#if !OPT_LOSSLESS_0
     // TMVP Map Writer pointer
     if (picture_control_set_ptr->parent_pcs_ptr->is_used_as_reference_flag == EB_TRUE)
-        context_ptr->reference_object_write_ptr = (EbReferenceObject_t*)picture_control_set_ptr->parent_pcs_ptr->reference_picture_wrapper_ptr->object_ptr;
+        context_ptr->reference_object_write_ptr = (EbReferenceObject*)picture_control_set_ptr->parent_pcs_ptr->reference_picture_wrapper_ptr->object_ptr;
     else
-        context_ptr->reference_object_write_ptr = (EbReferenceObject_t*)EB_NULL;
-
+        context_ptr->reference_object_write_ptr = (EbReferenceObject*)EB_NULL;
+#endif
     // Reset CABAC Contexts
     context_ptr->coeff_est_entropy_coder_ptr = picture_control_set_ptr->coeff_est_entropy_coder_ptr;
 
     // Reset Neighbor Arrays at start of new Segment / Picture
     if (segment_index == 0) {
         reset_mode_decision_neighbor_arrays(picture_control_set_ptr);
+#if !MEMORY_FOOTPRINT_OPT        
         ResetMdRefinmentNeighborArrays(picture_control_set_ptr);
-
         for (lcuRowIndex = 0; lcuRowIndex < ((sequence_control_set_ptr->luma_height + BLOCK_SIZE_64 - 1) / BLOCK_SIZE_64); lcuRowIndex++) {
             picture_control_set_ptr->enc_prev_coded_qp[lcuRowIndex] = (uint8_t)picture_control_set_ptr->picture_qp;
             picture_control_set_ptr->enc_prev_quant_group_coded_qp[lcuRowIndex] = (uint8_t)picture_control_set_ptr->picture_qp;
         }
+#endif
     }
 
+#if ENABLE_WARPED_MV
+#if NEW_PRESETS
+    EbBool enable_wm = (picture_control_set_ptr->parent_pcs_ptr->enc_mode <= ENC_M5) || MR_MODE ? EB_TRUE : EB_FALSE;
+#else
+    EbBool enable_wm = (picture_control_set_ptr->parent_pcs_ptr->enc_mode == ENC_M0) || MR_MODE ? EB_TRUE : EB_FALSE;
+#endif
+    enable_wm = picture_control_set_ptr->parent_pcs_ptr->temporal_layer_index > 0 ? EB_FALSE : enable_wm;
+    picture_control_set_ptr->parent_pcs_ptr->allow_warped_motion = enable_wm
+#else
     picture_control_set_ptr->parent_pcs_ptr->allow_warped_motion = sequence_control_set_ptr->static_config.enable_warped_motion
-        && !(picture_control_set_ptr->parent_pcs_ptr->av1FrameType == KEY_FRAME || picture_control_set_ptr->parent_pcs_ptr->av1FrameType == INTRA_ONLY_FRAME)
+#endif
+        && !(picture_control_set_ptr->parent_pcs_ptr->av1_frame_type == KEY_FRAME || picture_control_set_ptr->parent_pcs_ptr->av1_frame_type == INTRA_ONLY_FRAME)
         && !picture_control_set_ptr->parent_pcs_ptr->error_resilient_mode;
     picture_control_set_ptr->parent_pcs_ptr->switchable_motion_mode = picture_control_set_ptr->parent_pcs_ptr->allow_warped_motion;
 
@@ -494,11 +451,11 @@ void reset_mode_decision(
 /******************************************************
  * Mode Decision Configure LCU
  ******************************************************/
-void ModeDecisionConfigureLcu(
-    ModeDecisionContext_t   *context_ptr,
-    LargestCodingUnit_t     *sb_ptr,
-    PictureControlSet_t     *picture_control_set_ptr,
-    SequenceControlSet_t    *sequence_control_set_ptr,
+void mode_decision_configure_lcu(
+    ModeDecisionContext   *context_ptr,
+    LargestCodingUnit     *sb_ptr,
+    PictureControlSet     *picture_control_set_ptr,
+    SequenceControlSet    *sequence_control_set_ptr,
     uint8_t                    picture_qp,
     uint8_t                    sb_qp){
 
@@ -522,11 +479,7 @@ void ModeDecisionConfigureLcu(
     /* Note(CHKN) : when Qp modulation varies QP on a sub-LCU(CU) basis,  Lamda has to change based on Cu->QP , and then this code has to move inside the CU loop in MD */
 
     // Lambda Assignement
-#if NEW_QPS
     context_ptr->qp_index = (uint8_t)picture_control_set_ptr->parent_pcs_ptr->base_qindex;
-#else
-    context_ptr->qp_index = quantizer_to_qindex[context_ptr->qp];
-#endif
 
     (*av1_lambda_assignment_function_table[picture_control_set_ptr->parent_pcs_ptr->pred_structure])(
         &context_ptr->fast_lambda,

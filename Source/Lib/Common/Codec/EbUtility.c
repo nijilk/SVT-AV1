@@ -136,9 +136,9 @@ static TxSize blocksize_to_txsize[BlockSizeS_ALL] = {
 
 
 };
-EbErrorType ZOrderIncrement(
-    uint32_t *xLoc,   // x location, level agnostic
-    uint32_t *yLoc)   // y location, level agnostic
+EbErrorType z_order_increment(
+    uint32_t *x_loc,   // x location, level agnostic
+    uint32_t *y_loc)   // y location, level agnostic
 {
     EbErrorType return_error = EB_ErrorNone;
     uint32_t mask;
@@ -166,14 +166,14 @@ EbErrorType ZOrderIncrement(
     //
     //  Finally, X and Y are progressed only at the bit-positions in the mask.
 
-    mask = ((*xLoc & *yLoc) << 1) | 0x1;
+    mask = ((*x_loc & *y_loc) << 1) | 0x1;
     mask &= (mask << 1) | 0x01;
     mask &= (mask << 2) | 0x03;
     mask &= (mask << 4) | 0x0F;
     mask &= (mask << 8) | 0xFF;
 
-    *yLoc ^= *xLoc & mask;
-    *xLoc ^= mask;
+    *y_loc ^= *x_loc & mask;
+    *x_loc ^= mask;
 
     return return_error;
 }
@@ -182,15 +182,15 @@ EbErrorType ZOrderIncrement(
  * Z-Order Increment with Level
  *   This is the main function for progressing
  *   through a treeblock's coding units. To get
- *   the true CU size, multiple the xLoc, yLoc
+ *   the true CU size, multiple the x_loc, y_loc
  *   by the smallest CU size.
  *****************************************/
 void ZOrderIncrementWithLevel(
-    uint32_t *xLoc,   // x location, units of smallest block size
-    uint32_t *yLoc,   // y location, units of smallest block size
+    uint32_t *x_loc,   // x location, units of smallest block size
+    uint32_t *y_loc,   // y location, units of smallest block size
     uint32_t *level,  // level, number of block size-steps from the smallest block size
     //   (e.g. if 8x8 = level 0, 16x16 = level 1, 32x32 == level 2, 64x64 == level 3)
-    uint32_t *index)  // The CU index, can be used to index a lookup table (see GetCodedUnitStats)
+    uint32_t *index)  // The CU index, can be used to index a lookup table (see get_coded_unit_stats)
 {
     uint32_t mask;
 
@@ -218,7 +218,7 @@ void ZOrderIncrementWithLevel(
     //  Finally, X and Y are progressed only at the bit-positions in the mask.
 
     // Seed the mask
-    mask = ((*xLoc & *yLoc) << 1) | 0x1;
+    mask = ((*x_loc & *y_loc) << 1) | 0x1;
 
     // This step zero-outs the mask if level is not zero.
     //   The purpose of this is step further down the tree
@@ -247,10 +247,10 @@ void ZOrderIncrementWithLevel(
 
     *level += ((2 ^ (mask >> 1)) & -(mask > 3)) ^ (mask >> 1);
 
-    // Increment the xLoc, yLoc.  Note that this only occurs when
+    // Increment the x_loc, y_loc.  Note that this only occurs when
     //   we are at the bottom of the tree.
-    *yLoc ^= *xLoc & mask;
-    *xLoc ^= mask;
+    *y_loc ^= *x_loc & mask;
+    *x_loc ^= mask;
 
     // Increment the index. Note that the natural progression of this
     //   block aligns with how leafs are stored in the accompanying
@@ -260,9 +260,9 @@ void ZOrderIncrementWithLevel(
     return;
 }
 
-static CodedUnitStats_t CodedUnitStatsArray[] = {
+static CodedUnitStats CodedUnitStatsArray[] = {
 
-    //   Depth       Size      SizeLog2     OriginX    OriginY   cuNumInDepth   Index
+    //   Depth       Size      SizeLog2     OriginX    OriginY   cu_num_in_depth   Index
         {0,           64,         6,           0,         0,        0     ,   0    },   // 0
         {1,           32,         5,           0,         0,        0     ,   1    },   // 1
         {2,           16,         4,           0,         0,        0     ,   1    },   // 2
@@ -353,22 +353,22 @@ static CodedUnitStats_t CodedUnitStatsArray[] = {
 /**************************************************************
  * Get Coded Unit Statistics
  **************************************************************/
-const CodedUnitStats_t* GetCodedUnitStats(const uint32_t cuIdx)
+const CodedUnitStats* get_coded_unit_stats(const uint32_t cuIdx)
 {
-    //ASSERT(cuIdx < CU_MAX_COUNT && "GetCodedUnitStats: Out-of-range CU Idx\n");
+    //ASSERT(cuIdx < CU_MAX_COUNT && "get_coded_unit_stats: Out-of-range CU Idx\n");
     if (cuIdx == 255)
         printf("Invalid CuIndex\n");
 
     return &CodedUnitStatsArray[cuIdx];
 }
 
-static const TransformUnitStats_t TransformUnitStatsArray[] = {
+static const TransformUnitStats TransformUnitStatsArray[] = {
     //
     //        depth
     //       /
-    //      /       offsetX (units of the current depth)
+    //      /       offset_x (units of the current depth)
     //     /       /
-    //    /       /       offsetY (units of the current depth)
+    //    /       /       offset_y (units of the current depth)
     //   /       /       /
     {0,     0,      0},     // 0
     {1,     0,      0},     // 1
@@ -397,7 +397,7 @@ static const TransformUnitStats_t TransformUnitStatsArray[] = {
 /**************************************************************
  * Get Transform Unit Statistics
  **************************************************************/
-const TransformUnitStats_t* GetTransformUnitStats(const uint32_t tuIdx)
+const TransformUnitStats* get_transform_unit_stats(const uint32_t tuIdx)
 {
     return &TransformUnitStatsArray[tuIdx];
 }
@@ -451,7 +451,7 @@ inline uint64_t Log2f64(uint64_t x)
 /*****************************************
  * Endian Swap
  *****************************************/
-uint32_t EndianSwap(uint32_t ui)
+uint32_t endian_swap(uint32_t ui)
 {
     uint32_t ul2;
 
@@ -464,7 +464,7 @@ uint32_t EndianSwap(uint32_t ui)
 
 }
 
-uint64_t Log2fHighPrecision(uint64_t x, uint8_t precision)
+uint64_t log2f_high_precision(uint64_t x, uint8_t precision)
 {
 
     uint64_t sigBitLocation = Log2f64(x);
@@ -479,7 +479,7 @@ uint64_t Log2fHighPrecision(uint64_t x, uint8_t precision)
 
 
 // concatenate two linked list, and return the pointer to the new concatenated list
-EbLinkedListNode* concatEbLinkedList(EbLinkedListNode* a, EbLinkedListNode* b)
+EbLinkedListNode* concat_eb_linked_list(EbLinkedListNode* a, EbLinkedListNode* b)
 {
     if (a)
     {
@@ -497,22 +497,22 @@ EbLinkedListNode* concatEbLinkedList(EbLinkedListNode* a, EbLinkedListNode* b)
 }
 
 // split a linked list
-EbLinkedListNode* splitEbLinkedList(EbLinkedListNode* input, EbLinkedListNode** restLL, EbBool(*predicateFunc)(EbLinkedListNode*))
+EbLinkedListNode* split_eb_linked_list(EbLinkedListNode* input, EbLinkedListNode** restLL, EbBool(*predicate_func)(EbLinkedListNode*))
 {
-    EbLinkedListNode* llTruePtr = (EbLinkedListNode *)EB_NULL;    // list of nodes satifying predicateFunc(node) == TRUE
-    EbLinkedListNode* llRestPtr = (EbLinkedListNode *)EB_NULL;    // list of nodes satifying predicateFunc(node) != TRUE
+    EbLinkedListNode* llTruePtr = (EbLinkedListNode *)EB_NULL;    // list of nodes satifying predicate_func(node) == TRUE
+    EbLinkedListNode* llRestPtr = (EbLinkedListNode *)EB_NULL;    // list of nodes satifying predicate_func(node) != TRUE
 
     while (input)
     {
         EbLinkedListNode* next = input->next;
         input->next = (EbLinkedListNode *)EB_NULL;
-        if (predicateFunc(input))
+        if (predicate_func(input))
         {
-            llTruePtr = concatEbLinkedList(input, llTruePtr);
+            llTruePtr = concat_eb_linked_list(input, llTruePtr);
         }
         else
         {
-            llRestPtr = concatEbLinkedList(input, llRestPtr);
+            llRestPtr = concat_eb_linked_list(input, llRestPtr);
         }
         input = next;
     }
@@ -521,9 +521,9 @@ EbLinkedListNode* splitEbLinkedList(EbLinkedListNode* input, EbLinkedListNode** 
     return llTruePtr;
 }
 
-static const MiniGopStats_t MiniGopStatsArray[] = {
+static const MiniGopStats MiniGopStatsArray[] = {
 
-    //    HierarchicalLevels    StartIndex    EndIndex    Lenght    miniGopIndex
+    //    hierarchical_levels    start_index    end_index    Lenght    mini_gop_index
     { 5,  0, 31, 32 },    // 0
     { 4,  0, 15, 16 },    // 1
     { 3,  0,  7,  8 },    // 2
@@ -544,9 +544,9 @@ static const MiniGopStats_t MiniGopStatsArray[] = {
 /**************************************************************
 * Get Mini GOP Statistics
 **************************************************************/
-const MiniGopStats_t* GetMiniGopStats(const uint32_t miniGopIndex)
+const MiniGopStats* get_mini_gop_stats(const uint32_t mini_gop_index)
 {
-    return &MiniGopStatsArray[miniGopIndex];
+    return &MiniGopStatsArray[mini_gop_index];
 }
 
 
@@ -669,7 +669,7 @@ uint32_t ns_quarter_size_mult[9/*Up to 9 part*/][2/*h+v*/][4/*Up to 4 ns blocks 
 
 };
 
-block_size hvsize_to_bsize[/*H*/6][/*V*/6] =
+BlockSize hvsize_to_bsize[/*H*/6][/*V*/6] =
 {
     {  BLOCK_4X4,       BLOCK_4X8,     BLOCK_4X16,      BLOCK_INVALID,   BLOCK_INVALID,   BLOCK_INVALID      },
     {  BLOCK_8X4,       BLOCK_8X8,     BLOCK_8X16,      BLOCK_8X32,      BLOCK_INVALID,   BLOCK_INVALID      },
@@ -757,16 +757,17 @@ uint32_t search_matching_from_mds(
     return matched;
 
 }
-static INLINE TxSize av1_get_max_uv_txsize(block_size bsize, int32_t subsampling_x,
+static INLINE TxSize av1_get_max_uv_txsize(BlockSize bsize, int32_t subsampling_x,
     int32_t subsampling_y) {
-    const block_size plane_bsize =
+    const BlockSize plane_bsize =
         get_plane_block_size(bsize, subsampling_x, subsampling_y);
-    assert(plane_bsize < BlockSizeS_ALL);
-    const TxSize uv_tx = max_txsize_rect_lookup[plane_bsize];
+    TxSize uv_tx = TX_INVALID;
+    if (plane_bsize < BlockSizeS_ALL)
+        uv_tx = max_txsize_rect_lookup[plane_bsize];
     return av1_get_adjusted_tx_size(uv_tx);
 }
 static INLINE TxSize av1_get_tx_size(
-    block_size  sb_type,
+    BlockSize  sb_type,
     int32_t plane/*, const MacroBlockD *xd*/) {
     //const MbModeInfo *mbmi = xd->mi[0];
     // if (xd->lossless[mbmi->segment_id]) return TX_4X4;
@@ -779,7 +780,11 @@ static INLINE TxSize av1_get_tx_size(
     UNUSED(plane);
 }
 
+#if RED_CU 
+void md_scan_all_blks(uint32_t *idx_mds, uint32_t sq_size, uint32_t x, uint32_t y, int32_t is_last_quadrant, uint8_t quad_it)
+#else
 void md_scan_all_blks(uint32_t *idx_mds, uint32_t sq_size, uint32_t x, uint32_t y, int32_t is_last_quadrant)
+#endif
 {
     //the input block is the parent square block of size sq_size located at pos (x,y)
 
@@ -813,6 +818,9 @@ void md_scan_all_blks(uint32_t *idx_mds, uint32_t sq_size, uint32_t x, uint32_t 
 
             blk_geom_mds[*idx_mds].sq_size = sq_size;
             blk_geom_mds[*idx_mds].is_last_quadrant = is_last_quadrant;
+#if RED_CU 
+            blk_geom_mds[*idx_mds].quadi = quad_it;
+#endif
 
             blk_geom_mds[*idx_mds].shape = (PART)part_it;
             blk_geom_mds[*idx_mds].origin_x = x + quartsize * ns_quarter_off_mult[part_it][0][nsq_it];
@@ -908,10 +916,17 @@ void md_scan_all_blks(uint32_t *idx_mds, uint32_t sq_size, uint32_t x, uint32_t 
     uint32_t min_size = max_sb >> (max_depth - 1);
     if (halfsize >= min_size)
     {
+#if RED_CU 
+        md_scan_all_blks(idx_mds, halfsize, x, y, 0,0);
+        md_scan_all_blks(idx_mds, halfsize, x + halfsize, y, 0,1);
+        md_scan_all_blks(idx_mds, halfsize, x, y + halfsize, 0,2);
+        md_scan_all_blks(idx_mds, halfsize, x + halfsize, y + halfsize, 1,3);
+#else
         md_scan_all_blks(idx_mds, halfsize, x, y, 0);
         md_scan_all_blks(idx_mds, halfsize, x + halfsize, y, 0);
         md_scan_all_blks(idx_mds, halfsize, x, y + halfsize, 0);
         md_scan_all_blks(idx_mds, halfsize, x + halfsize, y + halfsize, 1);
+#endif
     }
 
 }
@@ -1089,6 +1104,49 @@ uint32_t count_total_num_of_active_blks()
     return depth_scan_idx;
 
 }
+#if RED_CU
+void log_redundancy_similarity(uint32_t  max_block_count)
+{
+    uint32_t blk_it, s_it;
+
+    for (blk_it = 0; blk_it < max_block_count; blk_it++)
+    {
+        BlockGeom * cur_geom = &blk_geom_mds[blk_it];
+        cur_geom->similar = 0;
+        cur_geom->redund = 0;
+        cur_geom->redund_list.list_size = 0;
+        cur_geom->similar_list.list_size = 0;
+
+        for (s_it = 0; s_it < max_block_count; s_it++)
+        {
+            BlockGeom * search_geom = &blk_geom_mds[s_it];
+
+            if (cur_geom->bsize == search_geom->bsize  && cur_geom->origin_x == search_geom->origin_x &&
+                cur_geom->origin_y == search_geom->origin_y && s_it != blk_it)
+            {
+                //one block could have similar and redundant blocks
+                cur_geom->similar = 1;
+                cur_geom->similar_list.blk_mds_table[cur_geom->similar_list.list_size] = search_geom->blkidx_mds;
+                cur_geom->similar_list.list_size++;
+#if 0
+                // exclude the first split
+                if (cur_geom->nsi == 0 && search_geom->nsi == 0 && cur_geom->depth == search_geom->depth) 
+#else
+                if (cur_geom->nsi == 0 && search_geom->nsi==0)
+#endif
+                {
+                    cur_geom->redund = 1;
+                    cur_geom->redund_list.blk_mds_table[cur_geom->redund_list.list_size] = search_geom->blkidx_mds;
+                    cur_geom->redund_list.list_size++;
+                }
+
+
+            }
+        }
+    }    
+    
+}
+#endif
 void build_blk_geom(int32_t use_128x128)
 {
     max_sb = use_128x128 ? 128 : 64;
@@ -1105,12 +1163,18 @@ void build_blk_geom(int32_t use_128x128)
 
     //(2) Construct md scan blk_geom_mds:  use info from dps
     uint32_t idx_mds = 0;
+#if RED_CU  
+    md_scan_all_blks(&idx_mds, max_sb, 0, 0, 0,0);
+#else
     md_scan_all_blks(&idx_mds, max_sb, 0, 0, 0);
-
+#endif
 
     //(3) Fill more info from mds to dps - print using dps
     finish_depth_scan_all_blks();
 
+#if RED_CU 
+    log_redundancy_similarity(max_block_count);
+#endif
 
 }
 

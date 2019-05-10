@@ -14,40 +14,50 @@
 /************************************************
  * Initial Rate Control Reorder Queue Entry
  ************************************************/
-typedef struct InitialRateControlReorderEntry_s {
+typedef struct InitialRateControlReorderEntry 
+{
     uint64_t                          picture_number;
-    EbObjectWrapper_t              *parentPcsWrapperPtr;
-} InitialRateControlReorderEntry_t;
+    EbObjectWrapper              *parent_pcs_wrapper_ptr;
+} InitialRateControlReorderEntry;
 
-extern EbErrorType InitialRateControlReorderEntryCtor(
-    InitialRateControlReorderEntry_t   **entry_dbl_ptr,
+extern EbErrorType initial_rate_control_reorder_entry_ctor(
+    InitialRateControlReorderEntry   **entry_dbl_ptr,
     uint32_t                               picture_number);
 
 
 /************************************************
  * High Level Rate Control Histogram Queue Entry
  ************************************************/
-typedef struct HlRateControlHistogramEntry_s {
+typedef struct HlRateControlHistogramEntry 
+{
     uint64_t                          picture_number;
-    int16_t                          lifeCount;
-    EbBool                         passedToHlrc;
-    EbBool                         isCoded;
-    uint64_t                          totalNumBitsCoded;
-    EbObjectWrapper_t              *parentPcsWrapperPtr;
+#if RC
+    int16_t                          life_count;
+    EbBool                         passed_to_hlrc;
+    EbBool                         is_coded;
+    uint64_t                       total_num_bits_coded;
+#else
+    int16_t                          life_count;
+    EbBool                         passed_to_hlrc;
+    EbBool                         is_coded;
+    uint64_t                          total_num_bits_coded;
+#endif
+    EbObjectWrapper              *parent_pcs_wrapper_ptr;
     EbBool                         end_of_sequence_flag;
     uint64_t                          pred_bits_ref_qp[MAX_REF_QP_NUM];
     EB_SLICE                        slice_type;
     uint32_t                          temporal_layer_index;
+    uint32_t                        frames_in_sw;
 
 
     // Motion Estimation Distortion and OIS Historgram
     uint16_t                         *me_distortion_histogram;
     uint16_t                         *ois_distortion_histogram;
     uint32_t                          full_sb_count;
-} HlRateControlHistogramEntry_t;
+} HlRateControlHistogramEntry;
 
-extern EbErrorType HlRateControlHistogramEntryCtor(
-    HlRateControlHistogramEntry_t   **entry_dbl_ptr,
+extern EbErrorType hl_rate_control_histogram_entry_ctor(
+    HlRateControlHistogramEntry   **entry_dbl_ptr,
     uint32_t                            picture_number);
 
 #endif //EbInitialRateControlReorderQueue_h

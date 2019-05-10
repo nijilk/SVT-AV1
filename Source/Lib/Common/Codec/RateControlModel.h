@@ -12,7 +12,7 @@
 /*
  * @struct Holds a prediction model for a sequence
  */
-typedef struct    RateControlModel_s {
+typedef struct    RateControlModel {
     /*
      * @variable uint32_t[64]. Predicted intra frame size for a given QP.
      * Indexed by QP. intraSizePrediction[15] references the estimated size of an
@@ -97,30 +97,30 @@ EbErrorType rate_control_model_ctor(EbRateControlModel **object_double_ptr);
  * @function rate_control_model_init. Initialize a model with data specific to a sequence.
  * Must be called before RateControlUpdateModel and RateControlGetQuantizer
  * @param {EbRateControlModel*} model_ptr.
- * @param {SequenceControlSet_t*} sequence_control_set_ptr. First frame used to initialize the model
+ * @param {SequenceControlSet*} sequence_control_set_ptr. First frame used to initialize the model
  * @return {EbErrorType}.
  */
 EbErrorType    rate_control_model_init(EbRateControlModel *model_ptr,
-                                    SequenceControlSet_t *sequence_control_set_ptr);
+                                    SequenceControlSet *sequence_control_set_ptr);
 
 /*
  * @function rate_control_update_model. Update a model with information from an encoded frame.
  * @param {EbRateControlModel*} model_ptr.
- * @param {PictureParentControlSet_t*} picture_ptr. Encoded frame.
+ * @param {PictureParentControlSet*} picture_ptr. Encoded frame.
  * @return {EbErrorType}.
  */
 EbErrorType    rate_control_update_model(EbRateControlModel *model_ptr,
-                                      PictureParentControlSet_t *picture_ptr);
+                                      PictureParentControlSet *picture_ptr);
 
 /*
  * @function rate_control_get_quantizer. Return a QP for the given frame to be encoded.
  * Uses data from the model and information from the given frame to make a decision
  * @param {EbRateControlModel*} model_ptr.
- * @param {PictureParentControlSet_t*} picture_ptr. Frame to be encoded.
+ * @param {PictureParentControlSet*} picture_ptr. Frame to be encoded.
  * @return {uint8_t}. Suggested QP for the given frame
  */
 uint8_t    rate_control_get_quantizer(EbRateControlModel *model_ptr,
-                                   PictureParentControlSet_t *picture_ptr);
+                                   PictureParentControlSet *picture_ptr);
 
 /*
  * @function get_gop_size_in_bytes. Return the size in bytes a new gop should take

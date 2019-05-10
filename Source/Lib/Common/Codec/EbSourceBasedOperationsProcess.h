@@ -24,10 +24,10 @@
  * Context
  **************************************/
 
-typedef struct SourceBasedOperationsContext_s
+typedef struct SourceBasedOperationsContext
 {
-    EbFifo_t  *initial_rate_control_results_input_fifo_ptr;
-    EbFifo_t  *picture_demux_results_output_fifo_ptr;
+    EbFifo  *initial_rate_control_results_input_fifo_ptr;
+    EbFifo  *picture_demux_results_output_fifo_ptr;
 
     // Delta QP Map
     int8_t      min_delta_qp;
@@ -38,10 +38,10 @@ typedef struct SourceBasedOperationsContext_s
                 
     // Skin     
     uint8_t     grass_percentage_in_picture;
-
+#if !MEMORY_FOOTPRINT_OPT
     // Variance
     uint8_t    *sb_high_contrast_array;
-
+#endif
     // local zz cost array
     uint32_t    picture_num_grass_sb;
     uint32_t    sb_high_contrast_count;
@@ -50,26 +50,28 @@ typedef struct SourceBasedOperationsContext_s
     uint32_t    high_contrast_num;
     uint32_t    high_contrast_num_ii;
     EbBool      high_dist;
+#if !DISABLE_OIS_USE
     uint32_t    count_of_moving_sbs;
     uint32_t    countOfNonMovingLcus;
     uint64_t    y_non_moving_mean;
     uint64_t    y_moving_mean;
     uint32_t    to_be_intra_coded_probability;
     uint32_t    depth1_block_num;
+#endif
     uint8_t    *y_mean_ptr;
     uint8_t    *cr_mean_ptr;
     uint8_t    *cb_mean_ptr;
 
-} SourceBasedOperationsContext_t;
+} SourceBasedOperationsContext;
 
 /***************************************
  * Extern Function Declaration
  ***************************************/
 extern EbErrorType source_based_operations_context_ctor(
-    SourceBasedOperationsContext_t **context_dbl_ptr,
-    EbFifo_t                        *initial_rate_control_results_input_fifo_ptr,
-    EbFifo_t                        *picture_demux_results_output_fifo_ptr,
-    SequenceControlSet_t            *sequence_control_set_ptr);
+    SourceBasedOperationsContext **context_dbl_ptr,
+    EbFifo                        *initial_rate_control_results_input_fifo_ptr,
+    EbFifo                        *picture_demux_results_output_fifo_ptr,
+    SequenceControlSet            *sequence_control_set_ptr);
 
 extern void* source_based_operations_kernel(void *input_ptr);
 

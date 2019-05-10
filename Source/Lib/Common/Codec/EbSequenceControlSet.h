@@ -31,12 +31,12 @@ extern "C" {
     /************************************
      * Sequence Control Set
      ************************************/
-    typedef struct SequenceControlSet_s
+    typedef struct SequenceControlSet
     {
         EbSvtAv1EncConfiguration                static_config;
 
         // Encoding Context
-        EncodeContext_t                        *encode_context_ptr;
+        EncodeContext                        *encode_context_ptr;
 
         // Profile & ID
         uint32_t                                sps_id;
@@ -48,8 +48,8 @@ extern "C" {
         uint32_t                                chroma_format_idc;
         uint32_t                                max_temporal_layers;
         uint32_t                                bits_for_picture_order_count;
-        int32_t                                 subsampling_x;            // add chroma subsampling parameters
-        int32_t                                 subsampling_y;
+        uint16_t                                subsampling_x;            // add chroma subsampling parameters
+        uint16_t                                subsampling_y;
 
         // Picture deminsions
         uint16_t                                max_input_luma_width;
@@ -77,18 +77,14 @@ extern "C" {
         int32_t                                 cropping_right_offset;
         int32_t                                 cropping_top_offset;
         int32_t                                 cropping_bottom_offset;
-
+ 
         // Conformance Window flag
         uint32_t                                conformance_window_flag;
-
-        // Bitdepth
-        EB_BITDEPTH                             input_bitdepth;
-        EB_BITDEPTH                             output_bitdepth;
 
         // Group of Pictures (GOP) Structure
         uint32_t                                max_ref_count;            // Maximum number of reference pictures, however each pred
                                                             //   entry can be less.
-        PredictionStructure_t                  *pred_struct_ptr;
+        PredictionStructure                  *pred_struct_ptr;
         int32_t                                 intra_period_length;      // The frequency of intra pictures
         uint32_t                                intra_refresh_type;       // 1: CRA, 2: IDR
 
@@ -129,14 +125,12 @@ extern "C" {
         uint32_t                                me_segment_row_count_array[MAX_TEMPORAL_LAYERS];
         uint32_t                                enc_dec_segment_col_count_array[MAX_TEMPORAL_LAYERS];
         uint32_t                                enc_dec_segment_row_count_array[MAX_TEMPORAL_LAYERS];
-#if CDEF_M
         uint32_t                                cdef_segment_column_count;
         uint32_t                                cdef_segment_row_count;
-#endif
-#if REST_M
+
         uint32_t                                rest_segment_column_count;
         uint32_t                                rest_segment_row_count;
-#endif
+
         // Buffers
         uint32_t                                picture_control_set_pool_init_count;
         uint32_t                                picture_control_set_pool_init_count_child;
@@ -156,33 +150,30 @@ extern "C" {
         uint32_t                                mode_decision_configuration_fifo_init_count;
         uint32_t                                enc_dec_fifo_init_count;
         uint32_t                                entropy_coding_fifo_init_count;
-#if FILT_PROC
         uint32_t                                dlf_fifo_init_count;
         uint32_t                                cdef_fifo_init_count;
         uint32_t                                rest_fifo_init_count;
-#endif
+
         uint32_t                                picture_analysis_process_init_count;
         uint32_t                                motion_estimation_process_init_count;
         uint32_t                                source_based_operations_process_init_count;
         uint32_t                                mode_decision_configuration_process_init_count;
         uint32_t                                enc_dec_process_init_count;
         uint32_t                                entropy_coding_process_init_count;
-#if FILT_PROC
         uint32_t                                dlf_process_init_count;
         uint32_t                                cdef_process_init_count;
         uint32_t                                rest_process_init_count;
-#endif
         uint32_t                                total_process_init_count;
         
         uint16_t                                film_grain_random_seed;
-        SbParams_t                             *sb_params_array;
+        SbParams                               *sb_params_array;
         uint8_t                                 picture_width_in_sb;
         uint8_t                                 picture_height_in_sb;
         uint16_t                                sb_total_count;
         uint16_t                                sb_size_pix;  //sb size in pixels 64/128
         uint16_t                                sb_tot_cnt;   // sb total number
         uint16_t                                max_block_cnt;
-        SbGeom_t                               *sb_geom;
+        SbGeom                               *sb_geom;
 
         EbInputResolution                       input_resolution;
         EbScdMode                               scd_mode;
@@ -195,7 +186,7 @@ extern "C" {
         int32_t                                 frame_id_numbers_present_flag;
         int32_t                                 frame_id_length;
         int32_t                                 delta_frame_id_length;
-        block_size                               sb_size;                            // Size of the superblock used for this frame
+        BlockSize                               sb_size;                            // Size of the superblock used for this frame
         int32_t                                 mib_size;                           // Size of the superblock in units of MI blocks
         int32_t                                 mib_size_log2;                      // Log 2 of above.
         int32_t                                 order_hint_bits_minus1;
@@ -235,16 +226,16 @@ extern "C" {
         int32_t                                 timing_info_present;
         int32_t                                 operating_points_decoder_model_cnt;
 
-#if AV1_UPGRADE
         int32_t                                 decoder_model_info_present_flag;
         int32_t                                 display_model_info_present_flag;
-#endif
         int32_t                                 film_grain_denoise_strength;
         int32_t                                 film_grain_params_present;  // To turn on/off film grain (on a sequence basis)
-
 #if BASE_LAYER_REF
         int32_t                                 extra_frames_to_ref_islice;
         int32_t                                 max_frame_window_to_ref_islice;
+#endif
+#if MRP_ME
+        uint32_t                                reference_count;
 #endif
 
 #if ADP_STATS_PER_LAYER
@@ -255,21 +246,22 @@ extern "C" {
         uint64_t                                pred_count[5];
         uint64_t                                pred1_nfl_count[5];
 #endif
-    } SequenceControlSet_t;
 
-    typedef struct EbSequenceControlSetInitData_s
+    } SequenceControlSet;
+
+    typedef struct EbSequenceControlSetInitData
     {
-        EncodeContext_t            *encode_context_ptr;
+        EncodeContext            *encode_context_ptr;
         int32_t                     sb_size;
-    } EbSequenceControlSetInitData_t;
+    } EbSequenceControlSetInitData;
 
-    typedef struct EbSequenceControlSetInstance_s
+    typedef struct EbSequenceControlSetInstance
     {
-        EncodeContext_t            *encode_context_ptr;
-        SequenceControlSet_t       *sequence_control_set_ptr;
+        EncodeContext            *encode_context_ptr;
+        SequenceControlSet       *sequence_control_set_ptr;
         EbHandle                    config_mutex;
 
-    } EbSequenceControlSetInstance_t;
+    } EbSequenceControlSetInstance;
 
     /**************************************
      * Extern Function Declarations
@@ -279,23 +271,23 @@ extern "C" {
         EbPtr  object_init_data_ptr);
 
     extern EbErrorType copy_sequence_control_set(
-        SequenceControlSet_t *dst,
-        SequenceControlSet_t *src);
+        SequenceControlSet *dst,
+        SequenceControlSet *src);
 
     extern EbErrorType eb_sequence_control_set_instance_ctor(
-        EbSequenceControlSetInstance_t **object_dbl_ptr);
+        EbSequenceControlSetInstance **object_dbl_ptr);
 
     extern EbErrorType sb_params_ctor(
-        SequenceControlSet_t *sequence_control_set_ptr);
+        SequenceControlSet *sequence_control_set_ptr);
 
     extern EbErrorType sb_params_init(
-        SequenceControlSet_t *sequence_control_set_ptr);
+        SequenceControlSet *sequence_control_set_ptr);
 
     extern EbErrorType derive_input_resolution(
-        SequenceControlSet_t *sequence_control_set_ptr,
+        SequenceControlSet *sequence_control_set_ptr,
         uint32_t              input_size);
 
-    EbErrorType sb_geom_init(SequenceControlSet_t *sequence_control_set_ptr);
+    EbErrorType sb_geom_init(SequenceControlSet *sequence_control_set_ptr);
 
 #ifdef __cplusplus
 }

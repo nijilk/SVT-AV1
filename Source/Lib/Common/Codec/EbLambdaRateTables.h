@@ -51,7 +51,7 @@ extern "C" {
 // GOP structure: IPPPP...
 // lambda values are << 16
 // From JCTVC-F802
-    static const uint32_t lambdaModeDecisionLdSad[QP_NUM] = {
+    static const uint32_t lambda_mode_decision_ld_sad[QP_NUM] = {
         12456,   13982,   15694,   17616,
         19773,   22194,   24912,   27963,
         31388,   35231,   39546,   44389,
@@ -66,7 +66,7 @@ extern "C" {
         2008802, 2254804, 2530932, 2840875,
         3188775, 3579278, 4017604, 4509608
     };
-    static const uint32_t lambdaModeDecisionLdSadQpScaling[QP_NUM] = {
+    static const uint32_t lambda_mode_decision_ld_sad_qp_scaling[QP_NUM] = {
         15756,    17685,     19851,      22282,
         25011,    28074,     31512,      35371,
         39702,    44564,     50022,      56148,
@@ -81,7 +81,7 @@ extern "C" {
         3593454,  4033516,   4527469,    5081912,
         5704253,  6402808,   7186909,    8067033
     };
-    static const uint32_t lambdaModeDecisionLdSse[QP_NUM] = {
+    static const uint32_t lambda_mode_decision_ld_sse[QP_NUM] = {
         2367,      2983,      3758,       4735,
         5966,      7516,      9470,      11931,
         15033,     18940,     23863,      30065,
@@ -96,7 +96,7 @@ extern "C" {
         61573578, 77577847,  97741962,  123147156,
         155155694,195483924, 246294311,  310311387
     };
-    static const uint32_t lambdaModeDecisionLdSseQpScaling[QP_NUM] = {
+    static const uint32_t lambda_mode_decision_ld_sse_qp_scaling[QP_NUM] = {
         3788,       4773,       6013,       7576,
         9545,      12026,      15152,      19090,
         24052,      30304,      38180,      48104,
@@ -172,11 +172,10 @@ extern "C" {
         62062277,62062277,62062277,62062277
 
     };
-
     // Chroma weight table for mode decision -
     // weight values are << 16
     // From JCTVC-G1102
-    static const uint32_t ChromaWeightFactorLd[QP_NUM] = {
+    static const uint32_t chroma_weight_factor_ld[QP_NUM] = {
         65536,  65536,  65536,   65536, //QP 0-3
         65536,  65536,  65536,   65536, //QP 4-7
         65536,  65536,  65536,   65536, //QP 8-11
@@ -191,7 +190,7 @@ extern "C" {
         330281, 330281, 416128,  524288, //QP 44-47
         524288, 660561, 832255, 1048576  //QP 48-51
     };
-    static const uint32_t ChromaWeightFactorLdQpScaling[QP_NUM] = {
+    static const uint32_t chroma_weight_factor_ld_qp_scaling[QP_NUM] = {
         65536, 65536, 65536, 65536, //QP 0-3
         65536, 65536, 65536, 65536, //QP 4-7
         65536, 65536, 65536, 65536, //QP 8-11
@@ -208,7 +207,7 @@ extern "C" {
     };
 
     // For I_SLICE in the base layer
-    static const uint32_t lambdaModeDecisionISliceSad[QP_NUM] = {
+    static const uint32_t lambda_mode_decision_i_slice_sad[QP_NUM] = {
         9973   ,    11194  ,    12565  ,    14104  ,
         15831  ,    17769  ,    19945  ,    22388  ,
         25130  ,    28207  ,    31661  ,    35539  ,
@@ -223,7 +222,7 @@ extern "C" {
         1608301,    1805257,    2026332,    2274481,
         2553019,    2865667,    3216602,    3610514
     };
-    static const uint32_t lambdaModeDecisionISliceSse[QP_NUM] = {
+    static const uint32_t lambda_mode_decision_i_slice_sse[QP_NUM] = {
         1518,     1912,       2409,      3035,
         3824,     4818,       6070,      7648,
         9636,     12141,      15296,     19272,
@@ -240,7 +239,7 @@ extern "C" {
     };
 
     // For Random Access
-    static const uint32_t lambdaModeDecisionRaSad[QP_NUM] = {
+    static const uint32_t lambda_mode_decision_ra_sad[QP_NUM] = {
         10893,   12227,   13724,   15404,
         17291,   19408,   21785,   24453,
         27448,   30809,   34582,   38817,
@@ -255,7 +254,7 @@ extern "C" {
         1756647, 1971769, 2213236, 2484273,
         2788503, 3129988, 3513293, 3943538
     };
-    static const uint32_t lambdaModeDecisionRaSse[QP_NUM] = {
+    static const uint32_t lambda_mode_decision_ra_sse[QP_NUM] = {
         1810,      2281,      2874,      3621,
         4562,      5748,      7242,      9124,
         11496,     14483,     18248,     22991,
@@ -272,7 +271,7 @@ extern "C" {
 
     };
 
-    static const uint32_t lambdaModeDecisionRaSadQpScalingL1[QP_NUM] = {
+    static const uint32_t lambda_mode_decision_ra_sad_qp_scaling_l1[QP_NUM] = {
         13778,   15465,   17359,   19485,
         21871,   24550,   27556,   30931,
         34719,   38971,   43743,   49100,
@@ -288,7 +287,7 @@ extern "C" {
         4988225, 5599093, 6284770, 7054415
 
     };
-    static const uint32_t lambdaModeDecisionRaSseQpScalingL1[QP_NUM] = {
+    static const uint32_t lambda_mode_decision_ra_sse_qp_scaling_l1[QP_NUM] = {
         2897,      3650,      4598,      5793,
         7299,      9196,      11587,     14598,
         18393,     23174,     29197,     36786,
@@ -304,7 +303,7 @@ extern "C" {
         379675109, 478360662, 602696667, 759350218
 
     };
-    static const uint32_t lambdaModeDecisionRaSadQpScalingL3[QP_NUM] = {
+    static const uint32_t lambda_mode_decision_ra_sad_qp_scaling_l3[QP_NUM] = {
         19107,   21447,   24073,   27021,
         30330,   34045,   38214,   42893,
         48146,   54042,   60661,   68089,
@@ -320,7 +319,7 @@ extern "C" {
         6917423, 7764545, 8715407, 9782714
 
     };
-    static const uint32_t lambdaModeDecisionRaSseQpScalingL3[QP_NUM] = {
+    static const uint32_t lambda_mode_decision_ra_sse_qp_scaling_l3[QP_NUM] = {
         5571,       7018,       8843,       11141,
         14037,      17685,      22282,      28074,
         35371,      44564,      56148,      70742,
@@ -336,7 +335,7 @@ extern "C" {
         730144440,  919924350,  1159032053, 1460288881
 
     };
-    static const uint32_t ChromaWeightFactorRa[QP_NUM] = {
+    static const uint32_t chroma_weight_factor_ra[QP_NUM] = {
 
         65536,  65536,  65536,  65536,
         65536,  65536,  65536,  65536,
@@ -353,7 +352,7 @@ extern "C" {
         524288, 660561, 832255, 1048576
 
     };
-    static const uint32_t ChromaWeightFactorRaQpScalingL1[QP_NUM] = {
+    static const uint32_t chroma_weight_factor_ra_qp_scaling_l1[QP_NUM] = {
 
         65536,  65536,  65536,  65536,
         65536,  65536,  65536,  65536,
@@ -370,7 +369,7 @@ extern "C" {
         524288, 660561, 832255, 1048576
 
     };
-    static const uint32_t ChromaWeightFactorRaQpScalingL3[QP_NUM] = {
+    static const uint32_t chroma_weight_factor_ra_qp_scaling_l3[QP_NUM] = {
 
         65536,  65536,  65536,  65536,
         65536,  65536,  65536,  65536,
@@ -392,9 +391,8 @@ extern "C" {
         3,  4,  4,  3,  5,  5,  5,  3,  1,  1,  1,  3,  6,  6,  6,  3,  7,  7,  4,  3,  8,  8,  8,  3,  2,  2,  2,  3,  9,  9,  9,  3,  3,  3,        // conversion to 9 modes
         3,  3,  3,  3,  3,  3,  3,  1,  1,  1,  1,  1,  1,  1,  3,  3,  3,  3,  3,  3,  3,  2,  2,  2,  2,  2,  2,  2,  2,  2,  3,  3,  3,  3         // conversion to 3 modes
     };
-
     // Lambda Table for bit-depth 8
-    static const uint32_t Av1lambdaModeDecision8BitSse[QINDEX_RANGE /*256*/] = {
+    static const uint32_t av1_lambda_mode_decision8_bit_sse[QINDEX_RANGE /*256*/] = {
         58, 234, 234, 297, 366, 443, 528, 528,
         619, 718, 825, 938, 1059, 1188, 1323, 1323,
         1466, 1617, 1774, 1939, 2112, 2291, 2478, 2478,
@@ -429,7 +427,7 @@ extern "C" {
         3829774, 4104334, 4420548, 4756843, 5140138, 5565354, 6026254, 6544618
     };
     // Lambda Table for bit-depth 10
-    static const uint32_t Av1lambdaModeDecision10BitSse[QINDEX_RANGE /*256*/] = {
+    static const uint32_t av1lambda_mode_decision10_bit_sse[QINDEX_RANGE /*256*/] = {
         4, 19, 23, 39, 52, 66, 92, 111,
         143, 180, 220, 265, 314, 367, 424, 506,
         573, 644, 745, 825, 939, 1060, 1155, 1289,
@@ -464,7 +462,7 @@ extern "C" {
         3831649, 4112097, 4424575, 4763110, 5142310, 5567614, 6030956, 6551969
     };
     // Lambda Table for bit-depth 12
-    static const uint32_t Av1lambdaModeDecision12BitSse[QINDEX_RANGE /*256*/] = {
+    static const uint32_t av1lambda_mode_decision12_bit_sse[QINDEX_RANGE /*256*/] = {
         1, 2, 5, 9, 16, 24, 36, 52,
         70, 92, 119, 152, 189, 231, 281, 335,
         395, 464, 539, 620, 706, 805, 902, 1013,
@@ -499,7 +497,7 @@ extern "C" {
         3831649, 4111612, 4424071, 4763633, 5142852, 5568743, 6031544, 6551356
     };
 
-    static const uint32_t Av1lambdaModeDecision8BitSad[QINDEX_RANGE /*256*/] = {
+    static const uint32_t av1_lambda_mode_decision8_bit_sad[QINDEX_RANGE /*256*/] = {
         86, 173, 173, 194, 216, 238, 259, 259,
         281, 303, 324, 346, 368, 389, 411, 411,
         433, 454, 476, 498, 519, 541, 563, 563,
@@ -534,7 +532,7 @@ extern "C" {
         22140, 22920, 23787, 24675, 25650, 26690, 27773, 28943
     };
     // Lambda Table for bit-depth 10
-    static const uint32_t Av1lambdaModeDecision10BitSad[QINDEX_RANGE /*256*/] = {
+    static const uint32_t av1lambda_mode_decision10_bit_sad[QINDEX_RANGE /*256*/] = {
         22, 49, 54, 70, 81, 91, 108, 119,
         135, 151, 167, 184, 200, 216, 232, 254,
         270, 287, 308, 324, 346, 368, 384, 406,
@@ -569,7 +567,7 @@ extern "C" {
         22146, 22942, 23798, 24691, 25655, 26695, 27784, 28959
     };
     // Lambda Table for bit-depth 12
-    static const uint32_t Av1lambdaModeDecision12BitSad[QINDEX_RANGE /*256*/] = {
+    static const uint32_t av1lambda_mode_decision12_bit_sad[QINDEX_RANGE /*256*/] = {
         11, 16, 25, 33, 45, 55, 67, 81,
         94, 108, 123, 139, 155, 171, 189, 207,
         224, 243, 262, 281, 300, 320, 339, 360,

@@ -40,30 +40,30 @@
 #define RC_GROUP_IN_GOP_MAX_NUMBER                          512
 #define PICTURE_IN_RC_GROUP_MAX_NUMBER                      64
 
-typedef struct EncodeContext_s
+typedef struct EncodeContext
 {
     // Callback Functions
-    EbCallback_t                                    *app_callback_ptr;
+    EbCallback                                    *app_callback_ptr;
 
     EbBool                                           statistics_port_active;
     EbHandle                                         total_number_of_recon_frame_mutex;
     uint64_t                                         total_number_of_recon_frames;
 
     // Output Buffer Fifos
-    EbFifo_t                                        *stream_output_fifo_ptr;
-    EbFifo_t                                        *recon_output_fifo_ptr;
-    EbFifo_t                                        *statistics_output_fifo_ptr;
+    EbFifo                                        *stream_output_fifo_ptr;
+    EbFifo                                        *recon_output_fifo_ptr;
+    EbFifo                                        *statistics_output_fifo_ptr;
 
     // Picture Buffer Fifos
-    EbFifo_t                                        *reference_picture_pool_fifo_ptr;
-    EbFifo_t                                        *pa_reference_picture_pool_fifo_ptr;
+    EbFifo                                        *reference_picture_pool_fifo_ptr;
+    EbFifo                                        *pa_reference_picture_pool_fifo_ptr;
 
     // Picture Decision Reorder Queue
-    PictureDecisionReorderEntry_t                  **picture_decision_reorder_queue;
+    PictureDecisionReorderEntry                  **picture_decision_reorder_queue;
     uint32_t                                         picture_decision_reorder_queue_head_index;
 
     // Picture Manager Reorder Queue
-    PictureManagerReorderEntry_t                   **picture_manager_reorder_queue;
+    PictureManagerReorderEntry                   **picture_manager_reorder_queue;
     uint32_t                                         picture_manager_reorder_queue_head_index;
 
     // Picture Manager Pre-Assignment Buffer
@@ -73,33 +73,33 @@ typedef struct EncodeContext_s
     uint32_t                                         pre_assignment_buffer_scene_change_index;
     uint32_t                                         pre_assignment_buffer_eos_flag;
     uint64_t                                         decode_base_number;
-    EbObjectWrapper_t                              **pre_assignment_buffer;
+    EbObjectWrapper                              **pre_assignment_buffer;
     uint32_t                                         pre_assignment_buffer_count;
 
     // Picture Decision Circular Queues
-    PaReferenceQueueEntry_t                        **picture_decision_pa_reference_queue;
+    PaReferenceQueueEntry                        **picture_decision_pa_reference_queue;
     uint32_t                                         picture_decision_pa_reference_queue_head_index;
     uint32_t                                         picture_decision_pa_reference_queue_tail_index;
 
     // Picture Manager Circular Queues
-    InputQueueEntry_t                              **input_picture_queue;
+    InputQueueEntry                              **input_picture_queue;
     uint32_t                                         input_picture_queue_head_index;
     uint32_t                                         input_picture_queue_tail_index;
-    ReferenceQueueEntry_t                          **reference_picture_queue;
+    ReferenceQueueEntry                          **reference_picture_queue;
     uint32_t                                         reference_picture_queue_head_index;
     uint32_t                                         reference_picture_queue_tail_index;
 
     // Initial Rate Control Reorder Queue
-    InitialRateControlReorderEntry_t               **initial_rate_control_reorder_queue;
+    InitialRateControlReorderEntry               **initial_rate_control_reorder_queue;
     uint32_t                                         initial_rate_control_reorder_queue_head_index;
 
     // High Level Rate Control Histogram Queue
-    HlRateControlHistogramEntry_t                  **hl_rate_control_historgram_queue;
+    HlRateControlHistogramEntry                  **hl_rate_control_historgram_queue;
     uint32_t                                         hl_rate_control_historgram_queue_head_index;
     EbHandle                                         hl_rate_control_historgram_queue_mutex;
 
     // Packetization Reorder Queue
-    PacketizationReorderEntry_t                    **packetization_reorder_queue;
+    PacketizationReorderEntry                    **packetization_reorder_queue;
     uint32_t                                         packetization_reorder_queue_head_index;
 
     // GOP Counters
@@ -119,13 +119,13 @@ typedef struct EncodeContext_s
     EbBool                                           td_needed;
 
     // Prediction Structure
-    PredictionStructureGroup_t                       *prediction_structure_group_ptr;
+    PredictionStructureGroup                       *prediction_structure_group_ptr;
                                                      
     // MD Rate Estimation Table                      
-    MdRateEstimationContext_t                        *md_rate_estimation_array;
+    MdRateEstimationContext                        *md_rate_estimation_array;
 
     // Rate Control Bit Tables
-    RateControlTables_t                              *rate_control_tables_array;
+    RateControlTables                              *rate_control_tables_array;
     EbBool                                            rate_control_tables_array_updated;
     EbHandle                                          rate_table_update_mutex;
                                                      
@@ -144,14 +144,14 @@ typedef struct EncodeContext_s
     // Dynamic GOP                                   
     uint32_t                                          previous_mini_gop_hierarchical_levels;
     EbAsm                                             asm_type;
-    EbObjectWrapper_t                                *previous_picture_control_set_wrapper_ptr;
+    EbObjectWrapper                                *previous_picture_control_set_wrapper_ptr;
     EbHandle                                          shared_reference_mutex;
 
-} EncodeContext_t;
+} EncodeContext;
 
-typedef struct EncodeContextInitData_s {
+typedef struct EncodeContextInitData {
     int32_t junk;
-} EncodeContextInitData_t;
+} EncodeContextInitData;
 
 /**************************************
  * Extern Function Declarations

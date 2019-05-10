@@ -14,7 +14,7 @@ extern "C" {
 #endif
 
     // Max Search Area
-#if SCENE_CONTENT_SETTINGS
+#if SCREEN_CONTENT_SETTINGS
 #define MAX_SEARCH_AREA_WIDTH       MAX_PICTURE_WIDTH_SIZE  + (PAD_VALUE << 1)
 #define MAX_SEARCH_AREA_HEIGHT      MAX_PICTURE_HEIGHT_SIZE + (PAD_VALUE << 1)
 
@@ -32,19 +32,24 @@ extern "C" {
 #define HME_DECIM_FILTER_TAP        9
 
 // Quater pel refinement methods
-    typedef enum EbQuarterPelRefinementMethod {
+    typedef enum EbQuarterPelRefinementMethod 
+    {
         EB_QUARTER_IN_FULL,
         EB_QUARTER_IN_HALF_HORIZONTAL,
         EB_QUARTER_IN_HALF_VERTICAL,
         EB_QUARTER_IN_HALF_DIAGONAL
     } EbQuarterPelInterpolationMethod;
-    typedef struct MePredictionUnit_s {
+
+    typedef struct MePredictionUnit 
+    {
         uint64_t  distortion;
         int16_t   x_mv;
         int16_t   y_mv;
         uint32_t  sub_pel_direction;
-    } MePredictionUnit_t;
-    typedef enum EbMeTierZeroPu {
+    } MePredictionUnit;
+
+    typedef enum EbMeTierZeroPu 
+    {
 
         // 2Nx2N [85 partitions]
         ME_TIER_ZERO_PU_64x64 = 0,
@@ -268,10 +273,13 @@ extern "C" {
         ME_TIER_ZERO_PU_16x64_2 = 207,
         ME_TIER_ZERO_PU_16x64_3 = 208
     } EbMeTierZeroPu;
-    typedef struct MeTierZero_s {
-        MePredictionUnit_t  pu[MAX_ME_PU_COUNT];
-    } MeTierZero_t;
-    typedef struct IntraReferenceSamplesOpenLoop_s {
+
+    typedef struct MeTierZero {
+        MePredictionUnit  pu[MAX_ME_PU_COUNT];
+    } MeTierZero;
+
+    typedef struct IntraReferenceSamplesOpenLoop 
+    {
         uint8_t                  *y_intra_reference_array;
         uint8_t                  *y_intra_reference_array_reverse;
 
@@ -280,22 +288,33 @@ extern "C" {
         uint8_t                   reference_left_line_y[MAX_INTRA_REFERENCE_SAMPLES];
         EbBool                    above_ready_flag_y;
         EbBool                    left_ready_flag_y;
-    }IntraReferenceSamplesOpenLoop_t;
-    typedef struct MePredUnit_s {
+    }IntraReferenceSamplesOpenLoop;
+
+    typedef struct MePredUnit 
+    {
+#if MRP_ME
+        uint8_t          ref_index[MAX_NUM_OF_REF_PIC_LIST];
+#endif
+#if MRP_MD_UNI_DIR_BIPRED
+        uint8_t          ref0_list;
+        uint8_t          ref1_list;
+#endif
         uint32_t         distortion;
         EbPredDirection  prediction_direction;
         uint32_t         mv[MAX_NUM_OF_REF_PIC_LIST];
-    } MePredUnit_t;
-    typedef struct MotionEstimationTierZero_s {
-        MePredUnit_t  pu[MAX_ME_PU_COUNT];
-    } MotionEstimationTierZero_t;
-    typedef struct MeContext_s {
+    } MePredUnit;
 
+    typedef struct MotionEstimationTierZero {
+        MePredUnit  pu[MAX_ME_PU_COUNT];
+    } MotionEstimationTierZero;
+
+    typedef struct MeContext 
+    {
         // Search region stride
         uint32_t                      interpolated_stride;
         uint32_t                      interpolated_full_stride[MAX_NUM_OF_REF_PIC_LIST][MAX_REF_IDX];
 
-        MotionEstimationTierZero_t    me_candidate[MAX_ME_CANDIDATE_PER_PU];
+        MotionEstimationTierZero    me_candidate[MAX_ME_CANDIDATE_PER_PU];
 
         // Intermediate LCU-sized buffer to retain the input samples
         uint8_t                      *sb_buffer;
@@ -348,9 +367,7 @@ extern "C" {
         uint32_t                      p_sad16x16[16];
         uint32_t                      p_sad8x8[64];
 
-#if M0_64x64_32x32_HALF_QUARTER_PEL
         uint8_t                       psub_pel_direction64x64;
-#endif                                
         uint8_t                       psub_pel_direction32x32[4];
         uint8_t                       psub_pel_direction16x16[16];
         uint8_t                       psub_pel_direction8x8[64];
@@ -369,7 +386,6 @@ extern "C" {
         uint32_t                      p_sb_best_mv[MAX_NUM_OF_REF_PIC_LIST][MAX_REF_IDX][MAX_ME_PU_COUNT];
         uint32_t                      p_sb_bipred_sad[MAX_ME_PU_COUNT];//needs to be upgraded to 209 pus
 
-#if M0_SSD_HALF_QUARTER_PEL_BIPRED_SEARCH //--
         uint32_t                      p_sb_best_ssd[MAX_NUM_OF_REF_PIC_LIST][MAX_REF_IDX][MAX_ME_PU_COUNT];
         uint32_t                     *p_best_ssd8x8;
         uint32_t                     *p_best_ssd16x16;
@@ -385,30 +401,31 @@ extern "C" {
         uint32_t                     *p_best_ssd8x32;
         uint32_t                     *p_best_ssd64x16;
         uint32_t                     *p_best_ssd16x64;
-#endif
-#if NSQ_OPTIMASATION
+
         uint8_t                      p_sb_best_nsq[MAX_NUM_OF_REF_PIC_LIST][MAX_REF_IDX][MAX_ME_PU_COUNT];
         uint8_t                     *p_best_nsq8x8;
         uint8_t                     *p_best_nsq16x16;
         uint8_t                     *p_best_nsq32x32;
         uint8_t                     *p_best_nsq64x64;
-#endif
         uint16_t                     *p_eight_pos_sad16x16;
-        EB_BitFraction               *mvd_bits_array;
+#if NSQ_ME_OPT
+        uint32_t                      p_eight_sad32x32[4][8];
+        uint32_t                      p_eight_sad16x16[16][8];
+        uint32_t                      p_eight_sad8x8[64][8];
+#endif
+        EbBitFraction               *mvd_bits_array;
         uint64_t                      lambda;
         uint8_t                       hme_search_type;
 
-#if M0_SAD_HALF_QUARTER_PEL_BIPRED_SEARCH || M0_SSD_HALF_QUARTER_PEL_BIPRED_SEARCH
-#if M0_SSD_HALF_QUARTER_PEL_BIPRED_SEARCH
-        uint8_t   fractionalSearchMethod;
-#else
-        EbBool useSubSadFracBipredSearch;
-#endif
-#endif
-#if M0_64x64_32x32_HALF_QUARTER_PEL
+        uint8_t   fractional_search_method;
         EbBool                        fractional_search64x64;
-#endif
 
+
+#if M9_SUBPEL_SELECTION
+        uint8_t                       fractional_search_model;
+#endif
+        uint8_t                       hme_search_method;
+        uint8_t                       me_search_method;
         // ME
 #if QUICK_ME_CLEANUP
         uint16_t                      search_area_width;
@@ -430,13 +447,14 @@ extern "C" {
         uint16_t                      hme_level2_search_area_in_height_array[EB_HME_SEARCH_AREA_ROW_MAX_COUNT];
         uint8_t                       update_hme_search_center_flag;
 
-    } MeContext_t;
-    typedef struct SsMeContext_s {
+    } MeContext;
 
+    typedef struct SsMeContext 
+    {
         // Search region stride
         uint32_t                      interpolated_stride;
         uint32_t                      interpolated_full_stride[MAX_NUM_OF_REF_PIC_LIST][MAX_REF_IDX];
-        MotionEstimationTierZero_t    me_candidate[MAX_ME_CANDIDATE_PER_PU];
+        MotionEstimationTierZero    me_candidate[MAX_ME_CANDIDATE_PER_PU];
 
         // Intermediate LCU-sized buffer to retain the input samples
         uint8_t                      *sb_buffer;
@@ -569,19 +587,19 @@ extern "C" {
         int16_t                       inloop_me_sad[MAX_NUM_OF_REF_PIC_LIST][MAX_REF_IDX][MAX_SS_ME_PU_COUNT];
         int16_t                       inloop_me_mv[MAX_NUM_OF_REF_PIC_LIST][MAX_REF_IDX][MAX_SS_ME_PU_COUNT][2];
 
-        EB_BitFraction               *mvd_bits_array;
+        EbBitFraction               *mvd_bits_array;
         uint64_t                      lambda;
         uint8_t                       hme_search_type;
-        uint8_t                       fractionalSearchMethod;
+        uint8_t                       fractional_search_method;
 
         // ME
         uint8_t                       search_area_width;
         uint8_t                       search_area_height;
                                       
-        block_size                     sb_size;
+        BlockSize                     sb_size;
         uint32_t                      sb_side;
 
-    } SsMeContext_t;
+    } SsMeContext;
 
     typedef uint64_t(*EB_ME_DISTORTION_FUNC)(
         uint8_t                     *src,
@@ -590,9 +608,8 @@ extern "C" {
         uint32_t                     ref_stride,
         uint32_t                     width,
         uint32_t                     height);
-
-    extern EbErrorType MeContextCtor(
-        MeContext_t     **object_dbl_ptr);
+    extern EbErrorType me_context_ctor(
+        MeContext     **object_dbl_ptr);
 
 #ifdef __cplusplus
 }
