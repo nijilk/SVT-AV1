@@ -119,7 +119,6 @@ extern "C" {
 #define SMOOTHING_THRESHOLD                 8
 #define SMOOTHING_THRESHOLD_10BIT          32
 
-
 /////####.... For recursive intra prediction.....#####///
 
 #define FILTER_INTRA_SCALE_BITS 4
@@ -127,20 +126,17 @@ extern const int8_t av1_filter_intra_taps[FILTER_INTRA_MODES][8][8];
 
 
 /////####.... To make functions common between EbIntraPrediction.c & 
-
-#if INTRA_10BIT_SUPPORT
 void *aom_memset16(void *dest, int32_t val, size_t length);
-#endif
 
-PartitionType from_shape_to_part[];
+extern PartitionType from_shape_to_part[];
 
 int32_t use_intra_edge_upsample(int32_t bs0, int32_t bs1, int32_t delta,
                                        int32_t type);
 
-block_size scale_chroma_bsize(block_size bsize, int32_t subsampling_x,
+BlockSize scale_chroma_bsize(BlockSize bsize, int32_t subsampling_x,
                               int32_t subsampling_y);
 
-PredictionMode get_uv_mode(UV_PredictionMode mode);
+PredictionMode get_uv_mode(UvPredictionMode mode);
 
 int32_t intra_edge_filter_strength(int32_t bs0, int32_t bs1, int32_t delta, int32_t type);
 
@@ -151,17 +147,18 @@ int32_t intra_edge_filter_strength(int32_t bs0, int32_t bs1, int32_t delta, int3
     NEED_ABOVELEFT = 1 << 4,
     NEED_BOTTOMLEFT = 1 << 5,
 };
-const uint8_t extend_modes[INTRA_MODES];
 
-const uint8_t *const has_tr_tables[BlockSizeS_ALL];
+extern const uint8_t extend_modes[INTRA_MODES];
 
-const uint8_t *const has_tr_vert_tables[BlockSizeS]; 
+extern const uint8_t *const has_tr_tables[BlockSizeS_ALL];
+
+extern const uint8_t *const has_tr_vert_tables[BlockSizeS];
 
 extern const uint8_t *get_has_tr_table(PartitionType partition,
-    block_size bsize);
+    BlockSize bsize);
 
 /* TODO: Need to harmonize with fun from EbAdaptiveMotionVectorPrediction.c */
-int32_t intra_has_top_right(block_size   sb_size, block_size bsize, int32_t mi_row,
+int32_t intra_has_top_right(BlockSize   sb_size, BlockSize bsize, int32_t mi_row,
     int32_t mi_col, int32_t top_available, int32_t right_available,
     PartitionType partition, TxSize txsz, int32_t row_off,
     int32_t col_off, int32_t ss_x, int32_t ss_y);
@@ -171,20 +168,18 @@ const uint8_t *const has_bl_tables[BlockSizeS_ALL];
 const uint8_t *const has_bl_vert_tables[BlockSizeS];
 
 extern const uint8_t *get_has_bl_table(PartitionType partition,
-    block_size bsize);
+    BlockSize bsize);
 
-extern int32_t intra_has_bottom_left(block_size sb_size, block_size bsize, int32_t mi_row,
+extern int32_t intra_has_bottom_left(BlockSize sb_size, BlockSize bsize, int32_t mi_row,
     int32_t mi_col, int32_t bottom_available, int32_t left_available,
     PartitionType partition, TxSize txsz, int32_t row_off,
     int32_t col_off, int32_t ss_x, int32_t ss_y);
 
-intra_pred_fn pred[INTRA_MODES][TX_SIZES_ALL];
-intra_pred_fn dc_pred[2][2][TX_SIZES_ALL];
+extern IntraPredFn pred[INTRA_MODES][TX_SIZES_ALL];
+extern IntraPredFn dc_pred[2][2][TX_SIZES_ALL];
 
-#if INTRA_10BIT_SUPPORT
-intra_high_pred_fn pred_high[INTRA_MODES][TX_SIZES_ALL];
-intra_high_pred_fn dc_pred_high[2][2][TX_SIZES_ALL];
-#endif
+extern IntraHighPredFn pred_high[INTRA_MODES][TX_SIZES_ALL];
+extern IntraHighPredFn dc_pred_high[2][2][TX_SIZES_ALL];
 
 void dr_predictor(uint8_t *dst, ptrdiff_t stride, TxSize tx_size,
     const uint8_t *above, const uint8_t *left,
@@ -207,168 +202,6 @@ void highbd_filter_intra_predictor(uint16_t *dst, ptrdiff_t stride,
 
 /////////..............................................//////////////////////////
 
-#if !QT_10BIT_SUPPORT
-
-    extern EbErrorType GenerateIntraReferenceSamplesEncodePass(
-
-        EbBool                         *is_left_availble,
-        EbBool                         *is_above_availble,
-
-        EbBool                     constrained_intra_flag,   //input parameter, indicates if constrained intra is switched on/off
-        EbBool                     strongIntraSmoothingFlag,
-        uint32_t                      origin_x,
-        uint32_t                      origin_y,
-        uint32_t                      size,
-        uint32_t                      cu_depth,
-        NeighborArrayUnit_t        *mode_type_neighbor_array,
-        NeighborArrayUnit_t        *luma_recon_neighbor_array,
-        NeighborArrayUnit_t        *cb_recon_neighbor_array,
-        NeighborArrayUnit_t        *cr_recon_neighbor_array,
-        void                       *refWrapperPtr,
-        EbBool                     pictureLeftBoundary,
-        EbBool                     pictureTopBoundary,
-        EbBool                     pictureRightBoundary);
-#endif
-
-
-
-
-#if !QT_10BIT_SUPPORT
-
-    extern EbErrorType GenerateIntraReference16bitSamplesEncodePass(
-        EbBool                         *is_left_availble,
-        EbBool                         *is_above_availble,
-        EbBool                     constrained_intra_flag,   //input parameter, indicates if constrained intra is switched on/off
-        EbBool                     strongIntraSmoothingFlag,
-        uint32_t                      origin_x,
-        uint32_t                      origin_y,
-        uint32_t                      size,
-        uint32_t                      cu_depth,
-        NeighborArrayUnit_t        *mode_type_neighbor_array,
-        NeighborArrayUnit_t        *luma_recon_neighbor_array,
-        NeighborArrayUnit_t        *cb_recon_neighbor_array,
-        NeighborArrayUnit_t        *cr_recon_neighbor_array,
-        void                       *refWrapperPtr,
-        EbBool                     pictureLeftBoundary,
-        EbBool                     pictureTopBoundary,
-        EbBool                     pictureRightBoundary);
-
-
-    extern EbErrorType GenerateLumaIntraReference16bitSamplesEncodePass(
-        EbBool                     *is_left_availble,
-        EbBool                     *is_above_availble,
-        EbBool                     constrained_intra_flag,   //input parameter, indicates if constrained intra is switched on/off
-        EbBool                     strongIntraSmoothingFlag,
-        uint32_t                      origin_x,
-        uint32_t                      origin_y,
-        uint32_t                      size,
-        uint32_t                      sb_sz,
-        uint32_t                      cu_depth,
-        NeighborArrayUnit_t        *mode_type_neighbor_array,
-        NeighborArrayUnit_t        *luma_recon_neighbor_array,
-        NeighborArrayUnit_t        *cb_recon_neighbor_array,
-        NeighborArrayUnit_t        *cr_recon_neighbor_array,
-        void                       *refWrapperPtr,
-        EbBool                     pictureLeftBoundary,
-        EbBool                     pictureTopBoundary,
-        EbBool                     pictureRightBoundary);
-
-
-    extern EbErrorType GenerateChromaIntraReference16bitSamplesEncodePass(
-        EbBool                     *is_left_availble,
-        EbBool                     *is_above_availble,
-        EbBool                     constrained_intra_flag,   //input parameter, indicates if constrained intra is switched on/off
-        EbBool                     strongIntraSmoothingFlag,
-        uint32_t                      origin_x,
-        uint32_t                      origin_y,
-        uint32_t                      size,
-        uint32_t                      sb_sz,
-        uint32_t                      cu_depth,
-        NeighborArrayUnit_t        *mode_type_neighbor_array,
-        NeighborArrayUnit_t        *luma_recon_neighbor_array,
-        NeighborArrayUnit_t        *cb_recon_neighbor_array,
-        NeighborArrayUnit_t        *cr_recon_neighbor_array,
-        void                       *refWrapperPtr,
-        EbBool                     pictureLeftBoundary,
-        EbBool                     pictureTopBoundary,
-        EbBool                     pictureRightBoundary);
-
-
-    extern EbErrorType IntraPredictionCL(
-        struct ModeDecisionContext_s           *context_ptr,
-        uint32_t                                  component_mask,
-        PictureControlSet_t                    *picture_control_set_ptr,
-        ModeDecisionCandidateBuffer_t           *candidate_buffer_ptr,
-        EbAsm                                  asm_type);
-#endif
-
-    extern EbErrorType AV1IntraPredictionCL(
-        struct ModeDecisionContext_s           *context_ptr,
- #if !CHROMA_BLIND
-        uint32_t                                  component_mask,
-#endif
-        PictureControlSet_t                    *picture_control_set_ptr,
-        ModeDecisionCandidateBuffer_t           *candidate_buffer_ptr,
-        EbAsm                                  asm_type);
-
-#if !QT_10BIT_SUPPORT
-    extern EbErrorType EncodePassIntraPrediction(
-
-        uint8_t                         upsample_left,
-        uint8_t                         upsample_above,
-        uint8_t                          upsample_left_chroma,
-        uint8_t                          upsample_above_chroma,
-
-        EbBool                         is_left_availble,
-        EbBool                         is_above_availble,
-        void                                   *ref_samples,
-        uint32_t                                  origin_x,
-        uint32_t                                  origin_y,
-        uint32_t                                  puSize,
-        EbPictureBufferDesc_t                  *prediction_ptr,
-        uint32_t                                  luma_mode,
-        uint32_t                                  chroma_mode,
-        int32_t                                  angle_delta,
-        uint16_t                                  bitdepth,
-        EbAsm                                  asm_type);
-    extern EbErrorType EncodePassIntraPrediction16bit(
-
-        uint8_t                         upsample_left,
-        uint8_t                         upsample_above,
-        uint8_t                          upsample_left_chroma,
-        uint8_t                          upsample_above_chroma,
-
-        EbBool                         is_left_availble,
-        EbBool                         is_above_availble,
-        void                                   *ref_samples,
-        uint32_t                                  origin_x,
-        uint32_t                                  origin_y,
-        uint32_t                                  puSize,
-        EbPictureBufferDesc_t                  *prediction_ptr,
-        uint32_t                                  luma_mode,
-        uint32_t                                  chroma_mode,
-        int32_t                                  angle_delta,
-        uint16_t                                  bitdepth,
-        EbAsm                                  asm_type);
-
-    extern EbErrorType EncodePassIntra4x4Prediction(
-        uint8_t                         upsample_left,
-        uint8_t                         upsample_above,
-        uint8_t                          upsample_left_chroma,
-        uint8_t                          upsample_above_chroma,
-
-        EbBool                         is_left_availble,
-        EbBool                         is_above_availble,
-        IntraReferenceSamples_t                *referenceSamples,
-        uint32_t                                  origin_x,
-        uint32_t                                  origin_y,
-        uint32_t                                  puSize,
-        uint32_t                                  chromaPuSize,
-        EbPictureBufferDesc_t                  *prediction_ptr,
-        uint32_t                                  luma_mode,
-        uint32_t                                  chroma_mode,
-        uint32_t                                  component_mask,
-        EbAsm                                  asm_type);
 
     extern EbErrorType av1_intra_prediction_cl(
         struct ModeDecisionContext           *context_ptr,
@@ -734,36 +567,13 @@ typedef struct CflCtx {
 } CflCtx;
 
     extern void cfl_luma_subsampling_420_lbd_c(
-        const uint8_t *input, // AMIR-> Changed to 8 bit
+        uint8_t *input, // AMIR-> Changed to 8 bit
         int32_t input_stride, int16_t *output_q3,
         int32_t width, int32_t height);
-
-    extern void cfl_luma_subsampling_422_lbd_c(
-        const uint8_t *input,
-        int32_t input_stride, int16_t *output_q3,
-        int32_t width, int32_t height);
-        
-    extern void cfl_luma_subsampling_444_lbd_c(
-        const uint8_t *input,
-        int32_t input_stride, int16_t *output_q3,
-        int32_t width, int32_t height);
-        
     extern void cfl_luma_subsampling_420_hbd_c(
         const uint16_t *input,
         int32_t input_stride, int16_t *output_q3,
         int32_t width, int32_t height);
-
-    extern void cfl_luma_subsampling_422_hbd_c(
-        const uint16_t *input,
-        int32_t input_stride, int16_t *output_q3,
-        int32_t width, int32_t height);
-        
-    extern void cfl_luma_subsampling_444_hbd_c(
-        const uint16_t *input,
-        int32_t input_stride, int16_t *output_q3,
-        int32_t width, int32_t height);
-        
-
     extern void subtract_average_c(
         int16_t *pred_buf_q3,
         int32_t width,
@@ -771,63 +581,6 @@ typedef struct CflCtx {
         int32_t round_offset,
         int32_t num_pel_log2);
 
-
-    // Declare a size-specific wrapper for the size-generic function. The compiler
-    // will inline the size generic function in here, the advantage is that the size
-    // will be constant allowing for loop unrolling and other constant propagated
-    // goodness.
-    //#define CFL_SUB_AVG_X(arch, width, height, round_offset, num_pel_log2)
-    //  void subtract_average_##width##x##height##_##arch(int16_t *pred_buf_q3) {
-    //    subtract_average_##arch(pred_buf_q3, width, height, round_offset,
-    //                            num_pel_log2);
-    //  }
-    //
-    //// Declare size-specific wrappers for all valid CfL sizes.
-    //#define CFL_SUB_AVG_FN(arch)
-    //  CFL_SUB_AVG_X(arch, 4, 4, 8, 4)
-    //  CFL_SUB_AVG_X(arch, 4, 8, 16, 5)
-    //  CFL_SUB_AVG_X(arch, 4, 16, 32, 6)
-    //  CFL_SUB_AVG_X(arch, 8, 4, 16, 5)
-    //  CFL_SUB_AVG_X(arch, 8, 8, 32, 6)
-    //  CFL_SUB_AVG_X(arch, 8, 16, 64, 7)
-    //  CFL_SUB_AVG_X(arch, 8, 32, 128, 8)
-    //  CFL_SUB_AVG_X(arch, 16, 4, 32, 6)
-    //  CFL_SUB_AVG_X(arch, 16, 8, 64, 7)
-    //  CFL_SUB_AVG_X(arch, 16, 16, 128, 8)
-    //  CFL_SUB_AVG_X(arch, 16, 32, 256, 9)
-    //  CFL_SUB_AVG_X(arch, 32, 8, 128, 8)
-    //  CFL_SUB_AVG_X(arch, 32, 16, 256, 9)
-    //  CFL_SUB_AVG_X(arch, 32, 32, 512, 10)
-    //  cfl_subtract_average_fn get_subtract_average_fn_c(TxSize tx_size) {
-    //    static const cfl_subtract_average_fn sub_avg[TX_SIZES_ALL] = {
-    //      subtract_average_4x4_##arch,   /* 4x4 */
-    //      subtract_average_8x8_##arch,   /* 8x8 */
-    //      subtract_average_16x16_##arch, /* 16x16 */
-    //      subtract_average_32x32_##arch, /* 32x32 */
-    //      cfl_subtract_average_null,     /* 64x64 (invalid CFL size) */
-    //      subtract_average_4x8_##arch,   /* 4x8 */
-    //      subtract_average_8x4_##arch,   /* 8x4 */
-    //      subtract_average_8x16_##arch,  /* 8x16 */
-    //      subtract_average_16x8_##arch,  /* 16x8 */
-    //      subtract_average_16x32_##arch, /* 16x32 */
-    //      subtract_average_32x16_##arch, /* 32x16 */
-    //      cfl_subtract_average_null,     /* 32x64 (invalid CFL size) */
-    //      cfl_subtract_average_null,     /* 64x32 (invalid CFL size) */
-    //      subtract_average_4x16_##arch,  /* 4x16 (invalid CFL size) */
-    //      subtract_average_16x4_##arch,  /* 16x4 (invalid CFL size) */
-    //      subtract_average_8x32_##arch,  /* 8x32 (invalid CFL size) */
-    //      subtract_average_32x8_##arch,  /* 32x8 (invalid CFL size) */
-    //      cfl_subtract_average_null,     /* 16x64 (invalid CFL size) */
-    //      cfl_subtract_average_null,     /* 64x16 (invalid CFL size) */
-    //    };
-    //    /* Modulo TX_SIZES_ALL to ensure that an attacker won't be able to */
-    //    /* index the function pointer array out of bounds. */
-    //    return sub_avg[tx_size % TX_SIZES_ALL];
-    //  }
-    //
-    //#define get_subtract_average_fn get_subtract_average_fn_c
-
-    /* Shift down with rounding for signed integers, for use when n >= 0 */
 
 #define ROUND_POWER_OF_TWO_SIGNED(value, n)           \
   (((value) < 0) ? -ROUND_POWER_OF_TWO(-(value), (n)) \
@@ -838,10 +591,9 @@ typedef struct CflCtx {
         return ROUND_POWER_OF_TWO_SIGNED(scaled_luma_q6, 6);
     }
 
-static INLINE CFL_PRED_TYPE get_cfl_pred_type(PLANE_TYPE plane) {
-    assert(plane > 0);
-    return (CFL_PRED_TYPE)(plane - 1);
-}
+    //CFL_PREDICT_FN(c, lbd)
+
+
 
     void cfl_predict_lbd_c(
         const int16_t *pred_buf_q3,
@@ -875,6 +627,7 @@ static INLINE CFL_PRED_TYPE get_cfl_pred_type(PLANE_TYPE plane) {
             (pred_type == CFL_PRED_U) ? CFL_IDX_U(alpha_idx) : CFL_IDX_V(alpha_idx);
         return (alpha_sign == CFL_SIGN_POS) ? abs_alpha_q3 + 1 : -abs_alpha_q3 - 1;
     }
+
 
 /* Function pointers return by CfL functions */
 
@@ -1039,11 +792,6 @@ cfl_subtract_average_fn get_subtract_average_fn_c(TxSize tx_size);
         return sub_avg[tx_size % TX_SIZES_ALL];                                 \
       }
 
-    // For VSX SIMD optimization, the C versions of width == 4 subtract are
-    // faster than the VSX. As such, the VSX code calls the C versions.
-        void subtract_average_4x4_c(int16_t *buf);
-        void subtract_average_4x8_c(int16_t *buf);
-        void subtract_average_4x16_c(int16_t *buf);
 
 #ifdef __cplusplus
 }

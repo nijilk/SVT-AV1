@@ -67,7 +67,7 @@ int aom_read_literal_(SvtReader *r, int bits ACCT_STR_PARAM) {
 }
 
 int aom_read_cdf_(SvtReader *r,
-                        const aom_cdf_prob *cdf,
+                        const AomCdfProb *cdf,
                         int                 nsymbs ACCT_STR_PARAM)
 {
   int ret;
@@ -77,7 +77,7 @@ int aom_read_cdf_(SvtReader *r,
 }
 
 int aom_read_symbol_(SvtReader   *r,
-                                   aom_cdf_prob *cdf,
+                                   AomCdfProb *cdf,
                                    int          nsymbs ACCT_STR_PARAM)
 {
   int ret;

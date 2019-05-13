@@ -17,6 +17,8 @@
 #ifndef EbDecBitstreamUnit_h
 #define EbDecBitstreamUnit_h
 
+#include "EbCabacContextModel.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -46,7 +48,7 @@ typedef uint32_t od_ec_window;
 /********************************************************************************************************************************/
 /********************************************************************************************************************************/
 // prob.h from AOM
-typedef uint16_t aom_cdf_prob;
+//typedef uint16_t aom_cdf_prob;
 #define ENABLE_ENTROPY_TRACE 0
 #if ENABLE_ENTROPY_TRACE
 #define ENTROPY_TRACE_FILE_BASED 1
@@ -64,7 +66,7 @@ extern FILE *temp_fp;
   inverse).*/
 #define AOM_ICDF(x) (CDF_PROB_TOP - (x))
 
-static INLINE void dec_update_cdf(aom_cdf_prob *cdf, int8_t val, int nsymbs) {
+static INLINE void dec_update_cdf(AomCdfProb *cdf, int8_t val, int nsymbs) {
   int rate;
   int i, tmp;
 
@@ -155,7 +157,7 @@ static INLINE int aom_daala_read(DaalaReader_t *r, int prob) {
   {
   int i;
   int ref_bit, ref_nsymbs;
-  aom_cdf_prob ref_cdf[16];
+  AomCdfProb ref_cdf[16];
   const int queue_r = bitstream_queue_get_read();
   const int frame_idx = bitstream_queue_get_frame_read();
   bitstream_queue_pop(&ref_bit, ref_cdf, &ref_nsymbs);
@@ -166,7 +168,7 @@ static INLINE int aom_daala_read(DaalaReader_t *r, int prob) {
           frame_idx, 2, ref_nsymbs, queue_r);
       assert(0);
       }
-  if ((ref_nsymbs != 2) || (ref_cdf[0] != (aom_cdf_prob)p) ||
+  if ((ref_nsymbs != 2) || (ref_cdf[0] != (AomCdfProb)p) ||
       (ref_cdf[1] != 32767)) {
       fprintf(stderr,
           "\n *** [bit] cdf error, frame_idx_r %d cdf {%d, %d} ref_cdf {%d",
@@ -198,7 +200,7 @@ static INLINE int aom_daala_read(DaalaReader_t *r, int prob) {
   return bit;
 }
 
-static INLINE int daala_read_symbol(DaalaReader_t *r, const aom_cdf_prob *cdf,
+static INLINE int daala_read_symbol(DaalaReader_t *r, const AomCdfProb *cdf,
                                     int nsymbs) {
   int symb;
   assert(cdf != NULL);
@@ -208,7 +210,7 @@ static INLINE int daala_read_symbol(DaalaReader_t *r, const aom_cdf_prob *cdf,
   int i;
   int cdf_error = 0;
   int ref_symb, ref_nsymbs;
-  aom_cdf_prob ref_cdf[16];
+  AomCdfProb ref_cdf[16];
   const int queue_r = bitstream_queue_get_read();
   const int frame_idx = bitstream_queue_get_frame_read();
   bitstream_queue_pop(&ref_symb, ref_cdf, &ref_nsymbs);

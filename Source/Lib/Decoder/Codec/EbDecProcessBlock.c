@@ -26,14 +26,14 @@
  /* decode partition */
 PartitionType get_partition(DecModCtxt *dec_mod_ctxt, FrameHeader *frame_header,
                             int32_t mi_row, int32_t mi_col, SBInfo *sb_info,
-                            block_size bsize)
+                            BlockSize bsize)
 {
     if (mi_row >= frame_header->mi_rows || mi_col >= frame_header->mi_cols)
         return PARTITION_INVALID;
 
     ModeInfo_t *mode_info = get_cur_mode_info(dec_mod_ctxt->dec_handle_ptr, mi_row, mi_col, sb_info);
 
-    const block_size subsize = mode_info->sb_type;
+    const BlockSize subsize = mode_info->sb_type;
 
     if (subsize == bsize) return PARTITION_NONE;
 
@@ -105,7 +105,7 @@ PartitionType get_partition(DecModCtxt *dec_mod_ctxt, FrameHeader *frame_header,
     return base_partitions[split_idx];
 }
 
-static void derive_blk_pointers(EbPictureBufferDesc_t *recon_picture_buf, int32_t plane,
+static void derive_blk_pointers(EbPictureBufferDesc *recon_picture_buf, int32_t plane,
     int32_t blk_col, int32_t blk_row,uint8_t **pp_blk_recon_buf, int32_t *recon_strd,
                                 int32_t sub_x, int32_t sub_y)
 {
@@ -126,26 +126,26 @@ static void derive_blk_pointers(EbPictureBufferDesc_t *recon_picture_buf, int32_
     }
     else if (plane == 1) {
         block_offset = ((recon_picture_buf->origin_y >> sub_y) + 
-            blk_row * MI_SIZE) * recon_picture_buf->strideCb +
+            blk_row * MI_SIZE) * recon_picture_buf->stride_cb +
             ((recon_picture_buf->origin_x >> sub_x) + blk_col * MI_SIZE);
-        *pp_blk_recon_buf = recon_picture_buf->bufferCb + block_offset;
-        *recon_strd = recon_picture_buf->strideCb;
+        *pp_blk_recon_buf = recon_picture_buf->buffer_cb + block_offset;
+        *recon_strd = recon_picture_buf->stride_cb;
     }
     else {
         block_offset = ((recon_picture_buf->origin_y >> sub_y) + 
-              blk_row * MI_SIZE) * recon_picture_buf->strideCr +
+              blk_row * MI_SIZE) * recon_picture_buf->stride_cr +
             ((recon_picture_buf->origin_x >> sub_x) + blk_col * MI_SIZE);
-        *pp_blk_recon_buf = recon_picture_buf->bufferCr + block_offset;
-        *recon_strd = recon_picture_buf->strideCr;
+        *pp_blk_recon_buf = recon_picture_buf->buffer_cr + block_offset;
+        *recon_strd = recon_picture_buf->stride_cr;
     }
 }
 
 void decode_block(DecModCtxt *dec_mod_ctxt, int32_t mi_row, int32_t mi_col,
-    block_size bsize, TileInfo *tile, SBInfo *sb_info)
+    BlockSize bsize, TileInfo *tile, SBInfo *sb_info)
 {
     EbDecHandle *dec_handle   = (EbDecHandle *)dec_mod_ctxt->dec_handle_ptr;
     EbColorConfig *color_config = &dec_handle->seq_header.color_config;
-    EbPictureBufferDesc_t *recon_picture_buf = dec_handle->recon_picture_buf[0];
+    EbPictureBufferDesc *recon_picture_buf = dec_handle->recon_picture_buf[0];
     uint32_t mi_cols = (&dec_handle->frame_header)->mi_cols;
     uint32_t mi_rows = (&dec_handle->frame_header)->mi_rows;
 
@@ -248,7 +248,7 @@ void decode_block(DecModCtxt *dec_mod_ctxt, int32_t mi_row, int32_t mi_col,
         int blk_row, blk_col;
         const int max_blocks_wide = max_block_wide(bsize);
         const int max_blocks_high = max_block_high(bsize);
-        const block_size max_unit_bsize = BLOCK_64X64;
+        const BlockSize max_unit_bsize = BLOCK_64X64;
         int mu_blocks_wide =
             block_size_wide[max_unit_bsize] >> tx_size_wide_log2[0];
         int mu_blocks_high =

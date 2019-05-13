@@ -35,9 +35,9 @@ EbMemoryMapEntry                 *memory_map;
 uint32_t                         *memory_map_index;
 uint64_t                         *total_lib_memory;
 
-uint32_t                         libMallocCount = 0;
-uint32_t                         libSemaphoreCount = 0;
-uint32_t                         libMutexCount = 0;
+uint32_t                         lib_malloc_count = 0;
+uint32_t                         lib_semaphore_count = 0;
+uint32_t                         lib_mutex_count = 0;
 #endif
 
 void SwitchToRealTime(){
@@ -87,8 +87,8 @@ int svt_dec_out_buf(
     EbDecHandle         *dec_handle_ptr,
     EbBufferHeaderType  *p_buffer)
 {
-    EbPictureBufferDesc_t *recon_picture_buf = dec_handle_ptr->recon_picture_buf[0];
-    EbSvtIOFormat         *out_img = (EbSvtIOFormat*)p_buffer->p_buffer;
+    EbPictureBufferDesc *recon_picture_buf = dec_handle_ptr->recon_picture_buf[0];
+    EbSvtIOFormat       *out_img = (EbSvtIOFormat*)p_buffer->p_buffer;
 
     int wd = dec_handle_ptr->frame_header.frame_size.frame_width;
     int ht = dec_handle_ptr->frame_header.frame_size.frame_height;
@@ -99,38 +99,38 @@ int svt_dec_out_buf(
 
     /* Luma */
     dst = out_img->luma + out_img->origin_x + 
-            (out_img->origin_y * out_img->yStride);
+            (out_img->origin_y * out_img->y_stride);
     src = recon_picture_buf->buffer_y + recon_picture_buf->origin_x +
         (recon_picture_buf->origin_y * recon_picture_buf->stride_y);
 
     for (i = 0; i < ht; i++) {
         memcpy(dst, src, wd);
-        dst += out_img->yStride;
+        dst += out_img->y_stride;
         src += recon_picture_buf->stride_y;
     }
 
     /* Cb */
     dst = out_img->cb + (out_img->origin_x >> 1) +
-            ((out_img->origin_y >> 1) * out_img->cbStride);
-    src = recon_picture_buf->bufferCb + (recon_picture_buf->origin_x >> 1) +
-        ((recon_picture_buf->origin_y >> 1) * recon_picture_buf->strideCb);
+            ((out_img->origin_y >> 1) * out_img->cb_stride);
+    src = recon_picture_buf->buffer_cb + (recon_picture_buf->origin_x >> 1) +
+        ((recon_picture_buf->origin_y >> 1) * recon_picture_buf->stride_cb);
 
     for (i = 0; i < ht>>1; i++) {
         memcpy(dst, src, wd>>1);
-        dst += out_img->cbStride;
-        src += recon_picture_buf->strideCb;
+        dst += out_img->cb_stride;
+        src += recon_picture_buf->stride_cb;
     }
 
     /* Cr */
     dst = out_img->cr + (out_img->origin_x >> 1) +
-            ((out_img->origin_y >> 1) * out_img->crStride);
-    src = recon_picture_buf->bufferCr + (recon_picture_buf->origin_x >> 1) +
-        ((recon_picture_buf->origin_y >> 1)* recon_picture_buf->strideCr);
+            ((out_img->origin_y >> 1) * out_img->cr_stride);
+    src = recon_picture_buf->buffer_cr + (recon_picture_buf->origin_x >> 1) +
+        ((recon_picture_buf->origin_y >> 1)* recon_picture_buf->stride_cr);
 
     for (i = 0; i < ht>>1; i++) {
         memcpy(dst, src, wd>>1);
-        dst += out_img->crStride;
-        src += recon_picture_buf->strideCr;
+        dst += out_img->cr_stride;
+        src += recon_picture_buf->stride_cr;
     }
 
     return 1;
@@ -160,7 +160,7 @@ EB_API EbErrorType eb_dec_init_handle(
         return_error = init_svt_av1_decoder_handle(*p_handle);
 
         if (return_error == EB_ErrorNone) {
-            ((EbComponentType*)(*p_handle))->pApplicationPrivate = p_app_data;
+            ((EbComponentType*)(*p_handle))->p_application_private = p_app_data;
 
         }
         else if (return_error == EB_ErrorInsufficientResources) {
@@ -192,7 +192,7 @@ EB_API EbErrorType eb_svt_dec_set_parameter(
     if (svt_dec_component == NULL || pComponentParameterStructure == NULL)
         return EB_ErrorBadParameter;
 
-    EbDecHandle     *dec_handle_ptr = (EbDecHandle   *)svt_dec_component->pComponentPrivate;
+    EbDecHandle     *dec_handle_ptr = (EbDecHandle   *)svt_dec_component->p_component_private;
 
     dec_handle_ptr->dec_config = *pComponentParameterStructure;
 
@@ -210,7 +210,7 @@ EB_API EbErrorType eb_init_decoder(
     if (svt_dec_component == NULL)
         return EB_ErrorBadParameter;
 
-    EbDecHandle     *dec_handle_ptr = (EbDecHandle   *)svt_dec_component->pComponentPrivate;
+    EbDecHandle     *dec_handle_ptr = (EbDecHandle   *)svt_dec_component->p_component_private;
     
     dec_handle_ptr->dec_cnt = -1;
     dec_handle_ptr->num_frms_prll   = 1;
@@ -222,16 +222,13 @@ EB_API EbErrorType eb_init_decoder(
     dec_handle_ptr->seen_frame_header = 0;
     dec_handle_ptr->show_existing_frame = 0;
 
-#if !INTRA_ASM
-    init_intra_predictors_internal();
-#endif
     assert(0 == dec_handle_ptr->dec_config.asm_type);
     setup_rtcd_internal(dec_handle_ptr->dec_config.asm_type);
 
     init_intra_dc_predictors_c_internal();
-#if  INTRA_ASM
+
     init_intra_predictors_internal();
-#endif
+
     /************************************
     * Decoder Memory Init
     ************************************/
@@ -255,7 +252,7 @@ EB_API EbErrorType eb_svt_decode_frame(
     if (svt_dec_component == NULL)
         return EB_ErrorBadParameter;
 
-    EbDecHandle     *dec_handle_ptr = (EbDecHandle   *)svt_dec_component->pComponentPrivate;
+    EbDecHandle     *dec_handle_ptr = (EbDecHandle   *)svt_dec_component->p_component_private;
     /*TODO : Remove or move. For Test purpose only */
     dec_handle_ptr->dec_cnt++;
     printf("\n SVT-AV1 Dec : Decoding Pic #%d", dec_handle_ptr->dec_cnt);
@@ -279,7 +276,7 @@ EB_API EbErrorType eb_svt_dec_get_picture(
     if (svt_dec_component == NULL)
         return EB_ErrorBadParameter;
 
-    EbDecHandle     *dec_handle_ptr = (EbDecHandle   *)svt_dec_component->pComponentPrivate;
+    EbDecHandle     *dec_handle_ptr = (EbDecHandle   *)svt_dec_component->p_component_private;
     /* Copy from recon pointer and return! TODO: Should remove the memcpy! */
     if (0 == svt_dec_out_buf(dec_handle_ptr, p_buffer)) {
         return_error = EB_DecNoOutputPicture;
@@ -298,7 +295,7 @@ EB_API EbErrorType eb_deinit_decoder(
     if (svt_dec_component == NULL)
         return EB_ErrorBadParameter;
 
-    EbDecHandle *dec_handle_ptr = (EbDecHandle*)svt_dec_component->pComponentPrivate;
+    EbDecHandle *dec_handle_ptr = (EbDecHandle*)svt_dec_component->p_component_private;
     EbErrorType return_error = EB_ErrorNone;
     int32_t              ptrIndex = 0;
     EbMemoryMapEntry*   memoryEntry = (EbMemoryMapEntry*)EB_NULL;
@@ -308,7 +305,7 @@ EB_API EbErrorType eb_deinit_decoder(
             // Loop through the ptr table and free all malloc'd pointers per channel
             for (ptrIndex = (dec_handle_ptr->memory_map_index) - 1; ptrIndex >= 0; --ptrIndex) {
                 memoryEntry = &dec_handle_ptr->memory_map[ptrIndex];
-                switch (memoryEntry->ptrType) {
+                switch (memoryEntry->ptr_type) {
                 case EB_N_PTR:
                     free(memoryEntry->ptr);
                     break;
@@ -350,8 +347,8 @@ EbErrorType eb_dec_component_de_init(EbComponentType  *svt_dec_component)
 {
     EbErrorType       return_error = EB_ErrorNone;
 
-    if (svt_dec_component->pComponentPrivate) {
-        free((EbDecHandle *)svt_dec_component->pComponentPrivate);
+    if (svt_dec_component->p_component_private) {
+        free((EbDecHandle *)svt_dec_component->p_component_private);
     }
     else {
         return_error = EB_ErrorUndefined;
@@ -423,7 +420,7 @@ static EbErrorType init_svt_av1_decoder_handle(
 
     // Decoder Private Handle Ctor
     return_error = (EbErrorType)eb_dec_handle_ctor(
-        (EbDecHandle  **) &(svt_dec_component->pComponentPrivate),
+        (EbDecHandle  **) &(svt_dec_component->p_component_private),
         svt_dec_component);
 
     return return_error;
@@ -443,7 +440,7 @@ EbErrorType eb_svt_dec_set_default_parameter(
     config_ptr->operating_point = -1;
     config_ptr->output_all_layers = 0;
     config_ptr->skip_film_grain = 0;
-    config_ptr->skipFrames = 0;
+    config_ptr->skip_frames = 0;
     config_ptr->framesToBeDecoded = 0;
     config_ptr->compressed_ten_bit_format = 0;
     config_ptr->eight_bit_output = 0;

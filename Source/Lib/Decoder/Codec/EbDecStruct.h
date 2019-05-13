@@ -126,7 +126,7 @@ typedef struct SeqHeader {
     uint8_t             use_128x128_superblock;
 
     /*!< superblock size */
-    block_size          sb_size;
+    BlockSize          sb_size;
 
     /*!< superblock size in 4x4 MI unit */
     uint8_t             sb_mi_size;
@@ -612,7 +612,7 @@ typedef struct FrameHeader {
     uint8_t     show_existing_frame;
 
     /*!< Specifies the type of the frame */
-    FRAME_TYPE  frame_type;
+    FrameType  frame_type;
 
     /*!< 1: Specifies that this frame should be immediately output once decoded 
          0: Specifies that this frame should not be immediately output */
@@ -761,7 +761,7 @@ typedef struct FrameHeader {
     LRParams                LR_params[MAX_MB_PLANE];
 
     /*!< Specifies how the transform size is determined */
-    TX_MODE                 tx_mode;
+    TxMode                 tx_mode;
 
     /*!< Reference Mode structure */
     ReferenceMode           reference_mode;
@@ -790,7 +790,7 @@ typedef struct FrameHeader {
     Dequants                *dequants_delta_q;
 
     /* Inverse Quantization Matrix */
-    const qm_val_t          *giqmatrix[NUM_QM_LEVELS][3][TX_SIZES_ALL];
+    const QmVal          *giqmatrix[NUM_QM_LEVELS][3][TX_SIZES_ALL];
 
 } FrameHeader;
 

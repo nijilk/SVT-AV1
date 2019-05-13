@@ -113,7 +113,7 @@ typedef struct EbDecHandle {
     MasterFrameBuf master_frame_buf;
 
     /* TODO: Move to buffer pool. */
-    EbPictureBufferDesc_t   *recon_picture_buf[DEC_MAX_NUM_FRM_PRLL];
+    EbPictureBufferDesc   *recon_picture_buf[DEC_MAX_NUM_FRM_PRLL];
 
     // Memory Map
     EbMemoryMapEntry            *memory_map;

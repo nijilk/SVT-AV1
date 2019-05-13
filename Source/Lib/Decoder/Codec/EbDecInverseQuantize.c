@@ -20,12 +20,12 @@ int av1_num_planes(EbColorConfig   *color_info) {
 }
 
 // Same wrapper(av1_ac/dc_quant_QTX) available in .c file of encoder
-int16_t get_dc_quant(int32_t qindex, int32_t delta, aom_bit_depth_t bit_depth)
+int16_t get_dc_quant(int32_t qindex, int32_t delta, AomBitDepth bit_depth)
 {
     return av1_dc_quant_Q3(qindex, delta, bit_depth);
 }
 
-int16_t get_ac_quant(int32_t qindex, int32_t delta, aom_bit_depth_t bit_depth)
+int16_t get_ac_quant(int32_t qindex, int32_t delta, AomBitDepth bit_depth)
 {
     return av1_ac_quant_Q3(qindex, delta, bit_depth);
 }
@@ -145,7 +145,7 @@ void update_dequant(EbDecHandle *dec_handle, PartitionInfo_t *part)
     }
 }
 
-int get_dqv(const int16_t *dequant, int coeff_idx, const qm_val_t *iqmatrix) {
+int get_dqv(const int16_t *dequant, int coeff_idx, const QmVal *iqmatrix) {
     int dqv = dequant[!!coeff_idx];
     if (iqmatrix != NULL)
         dqv =
@@ -158,13 +158,13 @@ int32_t inverse_quantize(EbDecHandle * dec_handle, PartitionInfo_t *part, ModeIn
 {
     SeqHeader *seq = &dec_handle->seq_header;
     FrameHeader *frame = &dec_handle->frame_header;
-    const SCAN_ORDER *const scan_order = &av1_scan_orders[tx_size][tx_type]; //get_scan(tx_size, tx_type);
+    const ScanOrder *const scan_order = &av1_scan_orders[tx_size][tx_type]; //get_scan(tx_size, tx_type);
     const int16_t *scan = scan_order->scan;
     const int32_t max_value = (1 << (7 + seq->color_config.bit_depth)) - 1;
     const int32_t min_value = -(1 << (7 + seq->color_config.bit_depth));
     int n_coeffs, i, pos, qmlevel;
     int16_t *dequant;
-    const qm_val_t *iqmatrix;
+    const QmVal *iqmatrix;
     const TxSize qm_tx_size = av1_get_adjusted_tx_size(tx_size);
 
 
@@ -212,7 +212,7 @@ int32_t inverse_quantize(EbDecHandle * dec_handle, PartitionInfo_t *part, ModeIn
 
     for (i = 0; i < n_coeffs; i++) {
         pos = scan[i];
-        qcoeffs[pos] = (tran_low_t)((int64_t)abs(level[i]) *
+        qcoeffs[pos] = (TranLow)((int64_t)abs(level[i]) *
             get_dqv(dequant, pos, iqmatrix) & 0xffffff);
         qcoeffs[pos] = qcoeffs[pos] >> shift;
 

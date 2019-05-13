@@ -22,7 +22,7 @@ if (pointer == (type)EB_NULL) { \
     return EB_ErrorInsufficientResources; \
     } \
     else { \
-    svt_dec_memory_map[*(svt_dec_memory_map_index)].ptrType = pointer_class; \
+    svt_dec_memory_map[*(svt_dec_memory_map_index)].ptr_type = pointer_class; \
     svt_dec_memory_map[(*(svt_dec_memory_map_index))++].ptr = pointer; \
     if (n_elements % 8 == 0) { \
         *svt_dec_total_lib_memory += (n_elements); \
@@ -43,7 +43,7 @@ if (posix_memalign((void**)(&(pointer)), ALVALUE, n_elements) != 0) { \
         } \
             else { \
     pointer = (type) pointer;  \
-    svt_dec_memory_map[*(svt_dec_memory_map_index)].ptrType = pointer_class; \
+    svt_dec_memory_map[*(svt_dec_memory_map_index)].ptr_type = pointer_class; \
     svt_dec_memory_map[(*(svt_dec_memory_map_index))++].ptr = pointer; \
     if (n_elements % 8 == 0) { \
         *svt_dec_total_lib_memory += (n_elements); \
@@ -64,7 +64,7 @@ if (pointer == (type)EB_NULL) { \
     return EB_ErrorInsufficientResources; \
     } \
     else { \
-    svt_dec_memory_map[*(svt_dec_memory_map_index)].ptrType = pointer_class; \
+    svt_dec_memory_map[*(svt_dec_memory_map_index)].ptr_type = pointer_class; \
     svt_dec_memory_map[(*(svt_dec_memory_map_index))++].ptr = pointer; \
     if (n_elements % 8 == 0) { \
         *svt_dec_total_lib_memory += (n_elements); \

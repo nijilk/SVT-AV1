@@ -3322,7 +3322,7 @@ static void write_tile_info_max_tile(const PictureParentControlSet *const pcs_pt
     }
 }
 
-void av1_get_tile_limits(PictureParentControlSet_t * pcsPtr) {
+void av1_get_tile_limits(PictureParentControlSet * pcs_ptr) {
 
     Av1Common * cm = pcs_ptr->av1_cm;
 

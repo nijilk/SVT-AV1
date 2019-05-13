@@ -55,7 +55,7 @@ typedef struct EbAV1OperatingPoint {
 typedef struct EbColorConfig {
 
     /*!< bit depth */
-    aom_bit_depth_t                 bit_depth;
+    AomBitDepth                     bit_depth;
 
     /*!< 1: Indicates that the video does not contain U and V color planes.
      *   0: Indicates that the video contains Y, U, and V color planes. */
@@ -186,14 +186,14 @@ typedef struct EbSvtAv1DecConfiguration
      * 0 = decodes from the start of the bitstream.
      *
      * Default is 0. */
-    uint64_t                 skipFrames;
+    uint64_t                 skip_frames;
 
     /* Maximum number of frames in the sequence to be decoded.
      *
      * 0 = decodes the full bitstream.
      *
      * Default is 0. */
-    uint64_t                 framesToBeDecoded;
+    uint64_t                 frames_to_be_decoded;
 
 
     /* Offline packing of the 2bits: requires two bits packed input.
@@ -215,8 +215,6 @@ typedef struct EbSvtAv1DecConfiguration
     EbBitDepth              max_bit_depth;
 
     EbColorFormat           max_color_format;
-
-    
 
     /* Assembly instruction set used by encoder.
     *

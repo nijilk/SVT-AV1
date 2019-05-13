@@ -51,7 +51,7 @@ static int dec_is_smooth(const ModeInfo_t *mbmi, int32_t plane) {
         // detect that case.
         if (dec_is_inter_block(mbmi)) return 0;
 
-        const UV_PredictionMode uv_mode = mbmi->uv_mode;
+        const UvPredictionMode uv_mode = mbmi->uv_mode;
         return (uv_mode == UV_SMOOTH_PRED || uv_mode == UV_SMOOTH_V_PRED ||
             uv_mode == UV_SMOOTH_H_PRED);
     }
@@ -213,13 +213,13 @@ static INLINE cfl_subsample_lbd_fn cfl_subsampling_lbd(TxSize tx_size,
 //######...........Ending for CFL.................#####//
 
 //####...Wrapper funtion calling CFL leaf level functions...####//
-static INLINE CFL_ALLOWED_TYPE is_cfl_allowed(const PartitionInfo_t *xd,
+static INLINE CflAllowedType is_cfl_allowed(const PartitionInfo_t *xd,
                                               EbColorConfig *cc,
                                               FrameHeader *fh )
 
 {
     const ModeInfo_t *mbmi = xd->mi;
-    const block_size bsize = mbmi->sb_type;
+    const BlockSize bsize = mbmi->sb_type;
     assert(bsize < BlockSizeS_ALL);
     if (fh->lossless_array[mbmi->segment_id]) {
         // In lossless, CfL is available when the partition size is equal to the
@@ -227,10 +227,10 @@ static INLINE CFL_ALLOWED_TYPE is_cfl_allowed(const PartitionInfo_t *xd,
         const int ssx = cc->subsampling_x;
         const int ssy = cc->subsampling_y;
         const int plane_bsize = get_plane_block_size(bsize, ssx, ssy);
-        return (CFL_ALLOWED_TYPE)(plane_bsize == BLOCK_4X4);
+        return (CflAllowedType)(plane_bsize == BLOCK_4X4);
     }
     // Spec: CfL is available to luma partitions lesser than or equal to 32x32
-    return (CFL_ALLOWED_TYPE)(block_size_wide[bsize] <= 32 &&
+    return (CflAllowedType)(block_size_wide[bsize] <= 32 &&
         block_size_high[bsize] <= 32);
 }
 
@@ -338,7 +338,7 @@ static INLINE void sub8x8_adjust_offset(PartitionInfo_t *xd, const CflCtx *cfl_c
 
 
 void cfl_store_tx(PartitionInfo_t *xd, CflCtx *cfl_ctx, int row, int col, TxSize tx_size,
-                  block_size  bsize, EbColorConfig *cc, uint8_t *dst_buff,
+                  BlockSize  bsize, EbColorConfig *cc, uint8_t *dst_buff,
                   uint32_t dst_stride)
 {
     if (block_size_high[bsize] == 4 || block_size_wide[bsize] == 4) {
@@ -359,7 +359,7 @@ static void decode_build_intra_predictors(
     uint8_t*   leftNeighArray,
     uint8_t   *dst, int32_t  dst_stride,
     PredictionMode mode, int32_t angle_delta,
-    FILTER_INTRA_MODE filter_intra_mode,
+    FilterIntraMode filter_intra_mode,
     TxSize tx_size, int32_t disable_edge_filter,
     int32_t n_top_px, int32_t n_topright_px,
     int32_t n_left_px, int32_t n_bottomleft_px,
@@ -599,14 +599,14 @@ void svtav1_predict_intra_block(PartitionInfo_t *xd, int32_t plane,
         assert(0);
     }
 
-    const FILTER_INTRA_MODE filter_intra_mode =
+    const FilterIntraMode filter_intra_mode =
         (plane == AOM_PLANE_Y && mbmi->filter_intra_mode_info.use_filter_intra)
             ? mbmi->filter_intra_mode_info.filter_intra_mode
             : FILTER_INTRA_MODES;
 
     const int angle_delta = mbmi->angle_delta[plane != AOM_PLANE_Y];
 
-    block_size bsize = mbmi->sb_type;
+    BlockSize bsize = mbmi->sb_type;
     //const struct macroblockd_plane *const pd = &xd->plane[plane];
     const int txw = tx_size_wide_unit[tx_size];
     const int txh = tx_size_high_unit[tx_size];
@@ -668,7 +668,7 @@ void svt_av1_predict_intra(DecModCtxt *dec_mod_ctxt, PartitionInfo_t *part_info,
     int32_t plane, int32_t blk_mi_col, int32_t blk_mi_row,
     TxSize tx_size, TileInfo *td,
     uint8_t *blk_recon_buf, int32_t recon_strd,
-    EB_BITDEPTH bit_depth, int32_t blk_mi_col_off, int32_t blk_mi_row_off )
+    EbBitDepthEnum bit_depth, int32_t blk_mi_col_off, int32_t blk_mi_row_off )
 {
 
     EbDecHandle *dec_handle = (EbDecHandle *)dec_mod_ctxt->dec_handle_ptr;

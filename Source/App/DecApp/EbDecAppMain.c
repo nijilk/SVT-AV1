@@ -26,9 +26,9 @@
 int init_pic_buffer(EbSvtIOFormat *pic_buffer, CLInput *cli) {
     switch (cli->fmt) {
     case EB_YUV420: 
-        pic_buffer->cbStride = cli->width / 2;
-        pic_buffer->crStride = cli->width / 2;
-        pic_buffer->yStride = cli->width;
+        pic_buffer->cb_stride = cli->width / 2;
+        pic_buffer->cr_stride = cli->width / 2;
+        pic_buffer->y_stride = cli->width;
         break;
     default: 
         printf("Unsupported colour format. \n");
@@ -36,9 +36,9 @@ int init_pic_buffer(EbSvtIOFormat *pic_buffer, CLInput *cli) {
     }
     pic_buffer->width = cli->width;
     pic_buffer->height = cli->width;
-    pic_buffer->lumaExt = NULL;
-    pic_buffer->cbExt = NULL;
-    pic_buffer->crExt = NULL;
+    pic_buffer->luma_ext = NULL;
+    pic_buffer->cb_ext = NULL;
+    pic_buffer->cr_ext = NULL;
     pic_buffer->origin_x = 0;
     pic_buffer->origin_y = 0;
     return 0;
@@ -68,7 +68,7 @@ void write_frame(EbBufferHeaderType *recon_buffer, CLInput *cli) {
 
     // Write luma plane
     unsigned char *buf = img->luma;
-    int stride = img->yStride;
+    int stride = img->y_stride;
     int w = cli->width;
     int h = cli->height;
     int y = 0;
@@ -79,7 +79,7 @@ void write_frame(EbBufferHeaderType *recon_buffer, CLInput *cli) {
 
     //Write chroma planes
     buf = img->cb;
-    stride = img->cbStride;
+    stride = img->cb_stride;
     w /= 2;
     h /= 2;
     for (y = 0; y < h; ++y) {
@@ -88,7 +88,7 @@ void write_frame(EbBufferHeaderType *recon_buffer, CLInput *cli) {
     }
 
     buf = img->cr;
-    stride = img->crStride;
+    stride = img->cr_stride;
     for (y = 0; y < h; ++y) {
         fwrite(buf, 1, w, cli->outFile);
         buf += stride;
@@ -182,13 +182,13 @@ int32_t main(int32_t argc, char* argv[])
             EbAV1StreamInfo *stream_info = (EbAV1StreamInfo*)malloc(sizeof(EbAV1StreamInfo));
             EbAV1FrameInfo *frame_info = (EbAV1FrameInfo*)malloc(sizeof(EbAV1FrameInfo));
 
-            if (config_ptr->skipFrames) fprintf(stderr, "Skipping first %I64d frames.\n", config_ptr->skipFrames);
-            uint64_t skip_frame = config_ptr->skipFrames;
+            if (config_ptr->skip_frames) fprintf(stderr, "Skipping first %I64d frames.\n", config_ptr->skip_frames);
+            uint64_t skip_frame = config_ptr->skip_frames;
             while (skip_frame) {
                 if (!read_input_frame(&cli, &buf, &bytes_in_buffer, &buffer_size, NULL)) break;
                 skip_frame--;
             }
-            stop_after = config_ptr->framesToBeDecoded;
+            stop_after = config_ptr->frames_to_be_decoded;
             if (enable_md5) {
                 md5_init(&md5_ctx);
             }
@@ -197,7 +197,6 @@ int32_t main(int32_t argc, char* argv[])
                 if (!stop_after || in_frame < stop_after) {
                     return_error |= eb_svt_decode_frame(p_handle, buf,
                         (uint32_t)bytes_in_buffer);
-
 
                     in_frame++;
 

@@ -21,8 +21,8 @@ static int parse_name(const char* value, const char* const* names) {
     return -1;
 }
 
-static void set_skip_frame(const char *value, EbSvtAv1DecConfiguration *cfg) { cfg->skipFrames = strtoul(value, NULL, 0); };
-static void set_limit_frame(const char *value, EbSvtAv1DecConfiguration *cfg) { cfg->framesToBeDecoded = strtoul(value, NULL, 0); };
+static void set_skip_frame(const char *value, EbSvtAv1DecConfiguration *cfg) { cfg->skip_frames = strtoul(value, NULL, 0); };
+static void set_limit_frame(const char *value, EbSvtAv1DecConfiguration *cfg) { cfg->frames_to_be_decoded = strtoul(value, NULL, 0); };
 static void set_bit_depth(const char *value, EbSvtAv1DecConfiguration *cfg) { cfg->max_bit_depth = strtoul(value, NULL, 0); };
 static void set_pic_width(const char *value, EbSvtAv1DecConfiguration *cfg) { cfg->max_picture_width = strtoul(value, NULL, 0); };
 static void set_pic_height(const char *value, EbSvtAv1DecConfiguration *cfg) { cfg->max_picture_height = strtoul(value, NULL, 0); };

@@ -963,15 +963,15 @@ extern "C" {
     } ScanOrder;
 
     struct segmentation_probs {
-        aom_cdf_prob tree_cdf[CDF_SIZE(MAX_SEGMENTS)];
-        aom_cdf_prob pred_cdf[SEG_TEMPORAL_PRED_CTXS][CDF_SIZE(2)];
-        aom_cdf_prob spatial_pred_seg_cdf[SPATIAL_PREDICTION_PROBS]
+        AomCdfProb tree_cdf[CDF_SIZE(MAX_SEGMENTS)];
+        AomCdfProb pred_cdf[SEG_TEMPORAL_PRED_CTXS][CDF_SIZE(2)];
+        AomCdfProb spatial_pred_seg_cdf[SPATIAL_PREDICTION_PROBS]
             [CDF_SIZE(MAX_SEGMENTS)];
     };
 
-    typedef struct frame_contexts {
-        aom_cdf_prob txb_skip_cdf[TX_SIZES][TXB_SKIP_CONTEXTS][CDF_SIZE(2)];
-        aom_cdf_prob eob_extra_cdf[TX_SIZES][PLANE_TYPES][EOB_COEF_CONTEXTS]
+    typedef struct FrameContexts {
+        AomCdfProb txb_skip_cdf[TX_SIZES][TXB_SKIP_CONTEXTS][CDF_SIZE(2)];
+        AomCdfProb eob_extra_cdf[TX_SIZES][PLANE_TYPES][EOB_COEF_CONTEXTS]
             [CDF_SIZE(2)];
         AomCdfProb dc_sign_cdf[PLANE_TYPES][DC_SIGN_CONTEXTS][CDF_SIZE(2)];
         AomCdfProb eob_flag_cdf16[PLANE_TYPES][2][CDF_SIZE(5)];
@@ -1019,25 +1019,25 @@ extern "C" {
         AomCdfProb comp_ref_type_cdf[COMP_REF_TYPE_CONTEXTS][CDF_SIZE(2)];
         AomCdfProb uni_comp_ref_cdf[UNI_COMP_REF_CONTEXTS][UNIDIR_COMP_REFS - 1]
             [CDF_SIZE(2)];
-        aom_cdf_prob comp_ref_cdf[REF_CONTEXTS][FWD_REFS - 1][CDF_SIZE(2)];
-        aom_cdf_prob comp_bwdref_cdf[REF_CONTEXTS][BWD_REFS - 1][CDF_SIZE(2)];
-        aom_cdf_prob txfm_partition_cdf[TXFM_PARTITION_CONTEXTS][CDF_SIZE(2)];
-        aom_cdf_prob compound_index_cdf[COMP_INDEX_CONTEXTS][CDF_SIZE(2)];
-        aom_cdf_prob comp_group_idx_cdf[COMP_GROUP_IDX_CONTEXTS][CDF_SIZE(2)];
-        aom_cdf_prob skip_mode_cdfs[SKIP_CONTEXTS][CDF_SIZE(2)];
-        aom_cdf_prob skip_cdfs[SKIP_CONTEXTS][CDF_SIZE(2)];
-        aom_cdf_prob intra_inter_cdf[INTRA_INTER_CONTEXTS][CDF_SIZE(2)];
-        nmv_context nmvc;
-        nmv_context ndvc;
-        aom_cdf_prob intrabc_cdf[CDF_SIZE(2)];
+        AomCdfProb comp_ref_cdf[REF_CONTEXTS][FWD_REFS - 1][CDF_SIZE(2)];
+        AomCdfProb comp_bwdref_cdf[REF_CONTEXTS][BWD_REFS - 1][CDF_SIZE(2)];
+        AomCdfProb txfm_partition_cdf[TXFM_PARTITION_CONTEXTS][CDF_SIZE(2)];
+        AomCdfProb compound_index_cdf[COMP_INDEX_CONTEXTS][CDF_SIZE(2)];
+        AomCdfProb comp_group_idx_cdf[COMP_GROUP_IDX_CONTEXTS][CDF_SIZE(2)];
+        AomCdfProb skip_mode_cdfs[SKIP_CONTEXTS][CDF_SIZE(2)];
+        AomCdfProb skip_cdfs[SKIP_CONTEXTS][CDF_SIZE(2)];
+        AomCdfProb intra_inter_cdf[INTRA_INTER_CONTEXTS][CDF_SIZE(2)];
+        NmvContext nmvc;
+        NmvContext ndvc;
+        AomCdfProb intrabc_cdf[CDF_SIZE(2)];
         struct segmentation_probs seg;
-        aom_cdf_prob filter_intra_cdfs[BlockSizeS_ALL][CDF_SIZE(2)];
-        aom_cdf_prob filter_intra_mode_cdf[CDF_SIZE(FILTER_INTRA_MODES)];
-        aom_cdf_prob switchable_restore_cdf[CDF_SIZE(RESTORE_SWITCHABLE_TYPES)];
-        aom_cdf_prob wiener_restore_cdf[CDF_SIZE(2)];
-        aom_cdf_prob sgrproj_restore_cdf[CDF_SIZE(2)];
-        aom_cdf_prob y_mode_cdf[BlockSize_GROUPS][CDF_SIZE(INTRA_MODES)];
-        aom_cdf_prob uv_mode_cdf[CFL_ALLOWED_TYPES][INTRA_MODES]
+        AomCdfProb filter_intra_cdfs[BlockSizeS_ALL][CDF_SIZE(2)];
+        AomCdfProb filter_intra_mode_cdf[CDF_SIZE(FILTER_INTRA_MODES)];
+        AomCdfProb switchable_restore_cdf[CDF_SIZE(RESTORE_SWITCHABLE_TYPES)];
+        AomCdfProb wiener_restore_cdf[CDF_SIZE(2)];
+        AomCdfProb sgrproj_restore_cdf[CDF_SIZE(2)];
+        AomCdfProb y_mode_cdf[BlockSize_GROUPS][CDF_SIZE(INTRA_MODES)];
+        AomCdfProb uv_mode_cdf[CFL_ALLOWED_TYPES][INTRA_MODES]
             [CDF_SIZE(UV_INTRA_MODES)];
         AomCdfProb partition_cdf[PARTITION_CONTEXTS][CDF_SIZE(EXT_PARTITION_TYPES)];
 

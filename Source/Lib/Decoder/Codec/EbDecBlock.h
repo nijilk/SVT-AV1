@@ -11,7 +11,7 @@
 
 #define MODE_INFO_DBG   0
 
-static const block_size Partition_Subsize[10][BlockSizeS_ALL] =
+static const BlockSize Partition_Subsize[10][BlockSizeS_ALL] =
 { 
     { BLOCK_4X4, 
     BLOCK_INVALID, BLOCK_INVALID, BLOCK_8X8, 
@@ -119,7 +119,7 @@ typedef struct FilterIntraModeInfo {
 
     /*!< Specifies the type of intra filtering, and can represent any of the following:
      * FILTER_DC_PRED, FILTER_V_PRED, FILTER_H_PRED, FILTER_D157_PRED, FILTER_PAETH_PRED */
-    FILTER_INTRA_MODE filter_intra_mode;
+    FilterIntraMode filter_intra_mode;
 
     /*!< This bit specifies whether or not intra filtering can be used. */
     uint8_t use_filter_intra;
@@ -130,7 +130,7 @@ typedef struct FilterIntraModeInfo {
 typedef struct InterIntraMode {
 
     /*!< Specifies the type of intra prediction to be used */
-    INTERINTRA_MODE interintra_mode;
+    InterIntraMode interintra_mode;
 
     /*!< equal to 1 specifies that wedge blending should be used.
         * wedge_interintra equal to 0 specifies that intra blending should be used. */
@@ -182,7 +182,7 @@ typedef struct TransformInfo {
 typedef struct ModeInfo_t {
 
     // Common for both INTER and INTRA blocks
-    block_size          sb_type;
+    BlockSize          sb_type;
     PredictionMode      mode;
     int8_t              skip;
 
@@ -211,7 +211,7 @@ typedef struct ModeInfo_t {
     uint16_t        first_chroma_tu_offset;
 
     // Only for INTRA blocks
-    UV_PredictionMode   uv_mode;
+    UvPredictionMode   uv_mode;
 
     uint8_t             use_intrabc;
 
@@ -225,9 +225,9 @@ typedef struct ModeInfo_t {
     InterIntraMode_t    interintra_mode;
 
     /*!< Specifies the type of motion compensation to perform. */
-    MOTION_MODE         motion_mode;
+    MotionMode         motion_mode;
 
-    INTERINTRA_MODE     is_inter_intra;
+    InterIntraMode     is_inter_intra;
 
     InterCompoundData_t inter_compound;
 

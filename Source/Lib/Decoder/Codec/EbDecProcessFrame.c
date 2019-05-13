@@ -22,10 +22,10 @@
 /* decode partition */
 static void decode_partition(DecModCtxt *dec_mod_ctxt,
                              int32_t mi_row, int32_t mi_col,
-                             block_size bsize, SBInfo *sb_info)
+                             BlockSize bsize, SBInfo *sb_info)
 {
     EbDecHandle *dec_handle = (EbDecHandle *)dec_mod_ctxt->dec_handle_ptr;
-    block_size  subsize;
+    BlockSize  subsize;
     PartitionType partition;
     
     int num4x4 = mi_size_wide[bsize];
@@ -42,7 +42,7 @@ static void decode_partition(DecModCtxt *dec_mod_ctxt,
                               mi_row, mi_col, sb_info, bsize);
 
     subsize = Partition_Subsize[partition][bsize];
-    block_size splitSize = Partition_Subsize[PARTITION_SPLIT][bsize];
+    BlockSize splitSize = Partition_Subsize[PARTITION_SPLIT][bsize];
 
 #define DECODE_BLOCK(db_r, db_c, db_subsize)                \
 decode_block(dec_mod_ctxt, db_r, db_c, db_subsize,          \

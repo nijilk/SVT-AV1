@@ -43,7 +43,7 @@ void set_segment_id(EbDecHandle *dec_handle, int mi_offset, int x_mis, int y_mis
             parse_ctxt->parse_nbr4x4_ctxt.segment_maps[mi_offset + y * frm_header->mi_cols + x] = segment_id;
 }
 
-int bsize_to_max_depth(block_size bsize) {
+int bsize_to_max_depth(BlockSize bsize) {
     TxSize tx_size = max_txsize_rect_lookup[bsize];
     int depth = 0;
     while (depth < MAX_TX_DEPTH && tx_size != TX_4X4) {
@@ -53,7 +53,7 @@ int bsize_to_max_depth(block_size bsize) {
     return depth;
 }
 
-static INLINE int bsize_to_tx_size_cat(block_size bsize) {
+static INLINE int bsize_to_tx_size_cat(BlockSize bsize) {
     TxSize tx_size = max_txsize_rect_lookup[bsize];
     assert(tx_size != TX_4X4);
     int depth = 0;
@@ -97,14 +97,14 @@ int get_tx_size_context(const PartitionInfo_t *xd, ParseCtxt *parse_ctxt) {
         return 0;
 }
 
-TxSize depth_to_tx_size(int depth, block_size bsize) {
+TxSize depth_to_tx_size(int depth, BlockSize bsize) {
     TxSize tx_size = max_txsize_rect_lookup[bsize];
     for (int d = 0; d < depth; ++d) tx_size = sub_tx_size_map[tx_size];
     return tx_size;
 }
 
 void update_tx_context(ParseCtxt *parse_ctxt,
-    int mi_row, int mi_col, block_size bsize, TxSize txSize) {
+    int mi_row, int mi_col, BlockSize bsize, TxSize txSize) {
     ParseNbr4x4Ctxt *ngr_ctx = &parse_ctxt->parse_nbr4x4_ctxt;
     uint8_t *const above_ctx = ngr_ctx->above_tx_wd + mi_col;
     uint8_t *const left_ctx = ngr_ctx->left_tx_ht + (mi_row - parse_ctxt->sb_row_mi);
@@ -121,7 +121,7 @@ void update_tx_context(ParseCtxt *parse_ctxt,
 
 TxSize read_selected_tx_size(PartitionInfo_t *xd, SvtReader *r, EbDecHandle *dec_handle) {
     ParseCtxt *parse_ctxt = (ParseCtxt *)dec_handle->pv_parse_ctxt;
-    const block_size bsize = xd->mi->sb_type;
+    const BlockSize bsize = xd->mi->sb_type;
     const int32_t tx_size_cat = bsize_to_tx_size_cat(bsize);
     const int maxTxDepth = bsize_to_max_depth(bsize);
     const int ctx = get_tx_size_context(xd, parse_ctxt);
@@ -144,14 +144,14 @@ int dec_is_inter_block(const ModeInfo_t *mbmi) {
 }
 
 
-int max_block_wide(block_size bsize) {
+int max_block_wide(BlockSize bsize) {
     int max_blocks_wide = block_size_wide[bsize];
 
     // Scale the width in the transform block unit.
     return max_blocks_wide >> tx_size_wide_log2[0];
 }
 
-int max_block_high(block_size bsize) {
+int max_block_high(BlockSize bsize) {
     int max_blocks_high = block_size_high[bsize];
 
     // Scale the height in the transform block unit.
@@ -171,7 +171,7 @@ TxSize get_sqr_tx_size(int tx_dim) {
 
 int txfm_partition_context(TXFM_CONTEXT *above_ctx,
     TXFM_CONTEXT *left_ctx,
-    block_size bsize, TxSize tx_size) {
+    BlockSize bsize, TxSize tx_size) {
     const uint8_t txw = tx_size_wide[tx_size];
     const uint8_t txh = tx_size_high[tx_size];
     const int above = *above_ctx < txw;
@@ -217,16 +217,16 @@ int get_intra_inter_context(PartitionInfo_t *xd) {
     }
 }
 
-int use_angle_delta(block_size bsize) {
+int use_angle_delta(BlockSize bsize) {
     return bsize >= BLOCK_8X8;
 }
 
-PredictionMode read_intra_mode(SvtReader *r, aom_cdf_prob *cdf) {
+PredictionMode read_intra_mode(SvtReader *r, AomCdfProb *cdf) {
     return (PredictionMode)svt_read_symbol(r, cdf, INTRA_MODES, ACCT_STR);
 }
 
 /* TODO : Should reuse encode function */
-int dec_is_chroma_reference(int mi_row, int mi_col, block_size bsize,
+int dec_is_chroma_reference(int mi_row, int mi_col, BlockSize bsize,
     int subsampling_x, int subsampling_y) {
     const int bw = mi_size_wide[bsize];
     const int bh = mi_size_high[bsize];
@@ -235,21 +235,21 @@ int dec_is_chroma_reference(int mi_row, int mi_col, block_size bsize,
     return ref_pos;
 }
 
-UV_PredictionMode read_intra_mode_uv(FRAME_CONTEXT *ec_ctx,
+UvPredictionMode read_intra_mode_uv(FRAME_CONTEXT *ec_ctx,
     SvtReader *r,
-    CFL_ALLOWED_TYPE cfl_allowed,
+    CflAllowedType cfl_allowed,
     PredictionMode y_mode) {
-    const UV_PredictionMode uv_mode =
+    const UvPredictionMode uv_mode =
         svt_read_symbol(r, ec_ctx->uv_mode_cdf[cfl_allowed][y_mode],
             UV_INTRA_MODES - !cfl_allowed, ACCT_STR);
     return uv_mode;
 }
 
-CFL_ALLOWED_TYPE is_cfl_allowed(PartitionInfo_t *xd, EbColorConfig* color_cfg,
+CflAllowedType is_cfl_allowed(PartitionInfo_t *xd, EbColorConfig* color_cfg,
                                 uint8_t         *lossless_array)
 {
     const ModeInfo_t *mbmi = xd->mi;
-    const block_size bsize = mbmi->sb_type;
+    const BlockSize bsize = mbmi->sb_type;
     assert(bsize < BlockSizeS_ALL);
     if (lossless_array[mbmi->segment_id]) {
         // In lossless, CfL is available when the partition size is equal to the
@@ -257,20 +257,20 @@ CFL_ALLOWED_TYPE is_cfl_allowed(PartitionInfo_t *xd, EbColorConfig* color_cfg,
         const int ssx = color_cfg->subsampling_x;
         const int ssy = color_cfg->subsampling_y;
         const int plane_bsize = get_plane_block_size(bsize, ssx, ssy);
-        return (CFL_ALLOWED_TYPE)(plane_bsize == BLOCK_4X4);
+        return (CflAllowedType)(plane_bsize == BLOCK_4X4);
     }
     // Spec: CfL is available to luma partitions lesser than or equal to 32x32
-    return (CFL_ALLOWED_TYPE)(block_size_wide[bsize] <= 32 &&
+    return (CflAllowedType)(block_size_wide[bsize] <= 32 &&
         block_size_high[bsize] <= 32);
 }
 
 int allow_palette(int allow_screen_content_tools,
-    block_size sb_type) {
+    BlockSize sb_type) {
     return allow_screen_content_tools && block_size_wide[sb_type] <= 64 &&
         block_size_high[sb_type] <= 64 && sb_type >= BLOCK_8X8;
 }
 
-int filter_intra_allowed_bsize(EbDecHandle *dec_handle, block_size bs) {
+int filter_intra_allowed_bsize(EbDecHandle *dec_handle, BlockSize bs) {
     if (!dec_handle->seq_header.enable_filter_intra || bs == BLOCK_INVALID)
         return 0;
 
@@ -302,7 +302,7 @@ void clamp_mv(MV_dec *mv, int min_col, int max_col, int min_row,
 }
 #endif
 /*TODO: Move to common after segregating from encoder */
-PredictionMode dec_get_uv_mode(UV_PredictionMode mode) {
+PredictionMode dec_get_uv_mode(UvPredictionMode mode) {
     assert(mode < UV_INTRA_MODES);
     static const PredictionMode uv2y[] = {
       DC_PRED,        // UV_DC_PRED
@@ -326,7 +326,7 @@ PredictionMode dec_get_uv_mode(UV_PredictionMode mode) {
 }
 
 TxType intra_mode_to_tx_type(const ModeInfo_t *mbmi,
-    PLANE_TYPE plane_type) {
+    PlaneType plane_type) {
     static const TxType _intra_mode_to_tx_type[INTRA_MODES] = {
         DCT_DCT,    // DC
         ADST_DCT,   // V
@@ -381,12 +381,12 @@ static INLINE void integer_mv_precision(MV_dec *mv) {
 }
 
 
-static INLINE int block_center_x(int mi_col, block_size bs) {
+static INLINE int block_center_x(int mi_col, BlockSize bs) {
     const int bw = block_size_wide[bs];
     return mi_col * MI_SIZE + bw / 2 - 1;
 }
 
-static INLINE int block_center_y(int mi_row, block_size bs) {
+static INLINE int block_center_y(int mi_row, BlockSize bs) {
     const int bh = block_size_high[bs];
     return mi_row * MI_SIZE + bh / 2 - 1;
 }
@@ -399,7 +399,7 @@ static INLINE int convert_to_trans_prec(int allow_hp, int coor) {
 }
 
 IntMv_dec gm_get_motion_vector(const EbWarpedMotionParams *gm,
-    int allow_hp, block_size bsize,
+    int allow_hp, BlockSize bsize,
     int mi_col, int mi_row,
     int is_integer) {
     IntMv_dec res;
@@ -563,7 +563,7 @@ int get_comp_reference_type_context(const PartitionInfo_t *xd) {
     return pred_context;
 }
 
-aom_cdf_prob *get_y_mode_cdf(FRAME_CONTEXT *tile_ctx,
+AomCdfProb *get_y_mode_cdf(FRAME_CONTEXT *tile_ctx,
     const ModeInfo_t *above_mi,
     const ModeInfo_t *left_mi) {
     const PredictionMode above = above_mi ? above_mi->mode : DC_PRED;
@@ -619,7 +619,7 @@ int get_comp_index_context() {
 }
 
 
-int is_interintra_allowed_bsize(const block_size bsize) {
+int is_interintra_allowed_bsize(const BlockSize bsize) {
     return (bsize >= BLOCK_8X8) && (bsize <= BLOCK_32X32);
 }
 
@@ -637,6 +637,6 @@ int is_interintra_allowed(const ModeInfo_t *mbmi) {
         is_interintra_allowed_ref(mbmi->ref_frame);
 }
 
-MOTION_MODE dec_motion_mode_allowed() {
+MotionMode dec_motion_mode_allowed() {
     return SIMPLE_TRANSLATION;
 }

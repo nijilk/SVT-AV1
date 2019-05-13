@@ -42,7 +42,7 @@ void update_nbrs_after_sb(FrameMiMap *frame_mi_map, int32_t sb_col) {
 /* TODO : Should be moved to nbr file */
 void update_block_nbrs(EbDecHandle *dec_handle,
     int mi_row, int mi_col,
-    block_size subsize)
+    BlockSize subsize)
 {
     ParseCtxt   *parse_ctx = (ParseCtxt*)dec_handle->pv_parse_ctxt;
     FrameMiMap  *frame_mi_map = &dec_handle->master_frame_buf.frame_mi_map;

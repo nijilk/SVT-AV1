@@ -15,7 +15,7 @@ ModeInfo_t* get_cur_mode_info(void *pv_dec_handle,
 
 void update_block_nbrs(EbDecHandle *dec_handle,
     int mi_row, int mi_col,
-    block_size subsize);
+    BlockSize subsize);
 
 ModeInfo_t * get_left_mode_info(EbDecHandle *dec_handle,
     int mi_row, int mi_col, SBInfo *sb_info);

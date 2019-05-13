@@ -12,11 +12,11 @@ extern "C" {
 
 PartitionType get_partition(DecModCtxt *dec_mod_ctxt, FrameHeader *frame_header,
     int32_t mi_row, int32_t mi_col, SBInfo *sb_info,
-    block_size bsize);
+    BlockSize bsize);
 
 // void decode_block();
 void decode_block(DecModCtxt *dec_mod_ctxt,
-    int32_t mi_row, int32_t mi_col, block_size bsize,
+    int32_t mi_row, int32_t mi_col, BlockSize bsize,
     TileInfo *tile, SBInfo *sb_info/*, uint32_t *recon*/);
 
 #ifdef __cplusplus
