@@ -247,7 +247,7 @@ void print_md5(unsigned char digest[16]) {
     for (i = 0; i < 16; ++i) printf("%02x", digest[i]);
 }
 
-void write_md5(EbBufferHeaderType *recon_buffer, CLInput *cli, MD5Context md5) {
+void write_md5(EbBufferHeaderType *recon_buffer, CLInput *cli, MD5Context *md5) {
     EbSvtIOFormat* img = (EbSvtIOFormat*)recon_buffer->p_buffer;
 
     uint32_t y = 0;
@@ -259,7 +259,7 @@ void write_md5(EbBufferHeaderType *recon_buffer, CLInput *cli, MD5Context md5) {
 
     //luma MD5 generation
     for (y = 0; y < h; ++y) {
-        md5_update(&md5, buf, w);
+        md5_update(md5, buf, w);
         buf += stride;
     }
 
@@ -271,7 +271,7 @@ void write_md5(EbBufferHeaderType *recon_buffer, CLInput *cli, MD5Context md5) {
     //cb MD5 generation
     buf = img->cb;
     for (y = 0; y < h; ++y) {
-        md5_update(&md5, buf, w);
+        md5_update(md5, buf, w);
         buf += stride;
     }
 
@@ -279,7 +279,7 @@ void write_md5(EbBufferHeaderType *recon_buffer, CLInput *cli, MD5Context md5) {
     buf = img->cr;
     stride = img->cr_stride;
     for (y = 0; y < h; ++y) {
-        md5_update(&md5, buf, w);
+        md5_update(md5, buf, w);
         buf += stride;
     }
 }

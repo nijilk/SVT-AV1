@@ -202,7 +202,7 @@ int32_t main(int32_t argc, char* argv[])
 
                     if (eb_svt_dec_get_picture(p_handle, recon_buffer, stream_info, frame_info) != EB_DecNoOutputPicture) {
                         if (enable_md5) {
-                            write_md5(recon_buffer, &cli, md5_ctx);
+                            write_md5(recon_buffer, &cli, &md5_ctx);
                         }
                         else {
                             write_frame(recon_buffer, &cli);

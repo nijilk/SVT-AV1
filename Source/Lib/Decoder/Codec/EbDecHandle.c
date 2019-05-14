@@ -441,7 +441,7 @@ EbErrorType eb_svt_dec_set_default_parameter(
     config_ptr->output_all_layers = 0;
     config_ptr->skip_film_grain = 0;
     config_ptr->skip_frames = 0;
-    config_ptr->framesToBeDecoded = 0;
+    config_ptr->frames_to_be_decoded = 0;
     config_ptr->compressed_ten_bit_format = 0;
     config_ptr->eight_bit_output = 0;
 
