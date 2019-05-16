@@ -3,9 +3,6 @@
 * SPDX - License - Identifier: BSD - 2 - Clause - Patent
 */
 
-//  Dummy decoder application file
-//    -- not functioning yet
-
 
 /***************************************
  * Includes
@@ -119,7 +116,7 @@ int32_t main(int32_t argc, char* argv[])
     cli.enable_md5 = 0;
 
     uint64_t stop_after = 0;
-    int in_frame = 0;
+    uint32_t in_frame = 0;
 
     
     MD5Context md5_ctx;
@@ -182,7 +179,8 @@ int32_t main(int32_t argc, char* argv[])
             EbAV1StreamInfo *stream_info = (EbAV1StreamInfo*)malloc(sizeof(EbAV1StreamInfo));
             EbAV1FrameInfo *frame_info = (EbAV1FrameInfo*)malloc(sizeof(EbAV1FrameInfo));
 
-            if (config_ptr->skip_frames) fprintf(stderr, "Skipping first %I64d frames.\n", config_ptr->skip_frames);
+            if (config_ptr->skip_frames)
+                fprintf(stderr, "Skipping first %lud frames.\n", config_ptr->skip_frames);
             uint64_t skip_frame = config_ptr->skip_frames;
             while (skip_frame) {
                 if (!read_input_frame(&cli, &buf, &bytes_in_buffer, &buffer_size, NULL)) break;

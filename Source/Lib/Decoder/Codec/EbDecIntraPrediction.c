@@ -29,7 +29,8 @@
 #include "EbDecHandle.h"
 
 #include "EbDecProcessFrame.h"
-//#include "EbDecParseHelper.h" //->This header is only for is_cfl_allowed function
+
+extern PredictionMode get_uv_mode(UvPredictionMode mode);
 
 /*TODO: Remove replication and harmonize with encoder after data str. harmonization */
 static INLINE int32_t dec_is_inter_block(const ModeInfo_t *mbmi) {
@@ -97,9 +98,9 @@ static INLINE void cfl_pad(CflCtx *cfl, int32_t width, int32_t height) {
 
     if (diff_width > 0) {
         const int min_height = height - diff_height;
-        uint16_t *recon_buf_q3 = cfl->recon_buf_q3 + (width - diff_width);
+        int16_t *recon_buf_q3 = cfl->recon_buf_q3 + (width - diff_width);
         for (int j = 0; j < min_height; j++) {
-            const uint16_t last_pixel = recon_buf_q3[-1];
+            const int16_t last_pixel = recon_buf_q3[-1];
             assert(recon_buf_q3 + diff_width <= cfl->recon_buf_q3 + CFL_BUF_SQUARE);
             for (int i = 0; i < diff_width; i++) {
                 recon_buf_q3[i] = last_pixel;
@@ -109,10 +110,10 @@ static INLINE void cfl_pad(CflCtx *cfl, int32_t width, int32_t height) {
         cfl->buf_width = width;
     }
     if (diff_height > 0) {
-        uint16_t *recon_buf_q3 =
+        int16_t *recon_buf_q3 =
             cfl->recon_buf_q3 + ((height - diff_height) * CFL_BUF_LINE);
         for (int j = 0; j < diff_height; j++) {
-            const uint16_t *last_row_q3 = recon_buf_q3 - CFL_BUF_LINE;
+            const int16_t *last_row_q3 = recon_buf_q3 - CFL_BUF_LINE;
             assert(recon_buf_q3 + width <= cfl->recon_buf_q3 + CFL_BUF_SQUARE);
             for (int i = 0; i < width; i++) {
                 recon_buf_q3[i] = last_row_q3[i];
@@ -253,7 +254,7 @@ void cfl_predict_block(PartitionInfo_t *xd, CflCtx *cfl_ctx, uint8_t *dst,
 
     if (!cfl_ctx->are_parameters_computed) cfl_compute_parameters(cfl_ctx, tx_size);
 
-    const int alpha_q3 =
+    const int32_t alpha_q3 =
         cfl_idx_to_alpha(mbmi->cfl_alpha_idx, mbmi->cfl_alpha_signs, plane - 1);
     assert((tx_size_high[tx_size] - 1) * CFL_BUF_LINE + tx_size_wide[tx_size] <=
         CFL_BUF_SQUARE);
@@ -305,7 +306,7 @@ static void cfl_store(CflCtx *cfl_ctx, const uint8_t *input, int input_stride,
     assert(store_col + store_width <= CFL_BUF_LINE);
 
     // Store the input into the CfL pixel buffer
-    uint16_t *recon_buf_q3 =
+    int16_t *recon_buf_q3 =
         cfl_ctx->recon_buf_q3 + (store_row * CFL_BUF_LINE + store_col);
 
     if (use_hbd) {
@@ -565,12 +566,11 @@ static void decode_build_intra_predictors(
 /////#####.....& rest of intra prediction tools are called through build_intra_predictors() function.....#####/////
 
 void svtav1_predict_intra_block(PartitionInfo_t *xd, int32_t plane,
-                                int32_t blk_col, int32_t blk_row,
                                 TxSize tx_size, TileInfo *td,
                                 uint8_t *pred_buf, int32_t pred_strd,
                                 uint8_t *topNeighArray,
                                 uint8_t *leftNeighArray,
-                                SeqHeader *seq_header, FrameHeader *frame_header,
+                                SeqHeader *seq_header,
                                 int32_t blk_mi_col_off, int32_t blk_mi_row_off)
 {
     //ToDo:are_parameters_computed variable for CFL so that cal part for V plane we can skip, 
@@ -665,7 +665,7 @@ void svtav1_predict_intra_block(PartitionInfo_t *xd, int32_t plane,
 }
 
 void svt_av1_predict_intra(DecModCtxt *dec_mod_ctxt, PartitionInfo_t *part_info,
-    int32_t plane, int32_t blk_mi_col, int32_t blk_mi_row,
+    int32_t plane, 
     TxSize tx_size, TileInfo *td,
     uint8_t *blk_recon_buf, int32_t recon_strd,
     EbBitDepthEnum bit_depth, int32_t blk_mi_col_off, int32_t blk_mi_row_off )
@@ -675,8 +675,8 @@ void svt_av1_predict_intra(DecModCtxt *dec_mod_ctxt, PartitionInfo_t *part_info,
 
     uint8_t    topNeighArray[64 * 2 + 1];
     uint8_t    leftNeighArray[64 * 2 + 1];
-    uint8_t     *pred_buf;
-    int32_t     pred_strd;
+    //uint8_t     *pred_buf;
+    //int32_t     pred_strd;
     assert(part_info->wpx[0] <= 64);
     assert(part_info->hpx[0] <= 64);
 
@@ -699,11 +699,10 @@ void svt_av1_predict_intra(DecModCtxt *dec_mod_ctxt, PartitionInfo_t *part_info,
     if (plane != AOM_PLANE_Y && part_info->mi->uv_mode == UV_CFL_PRED) {
 
         svtav1_predict_intra_block(part_info, plane,
-            blk_mi_col, blk_mi_row,
             tx_size, td,
             blk_recon_buf, recon_strd,
             topNeighArray, leftNeighArray,
-            &dec_handle->seq_header, &dec_handle->frame_header,
+            &dec_handle->seq_header,
             blk_mi_col_off, blk_mi_row_off);
 
         cfl_predict_block(part_info, part_info->pv_cfl_ctxt,
@@ -715,10 +714,9 @@ void svt_av1_predict_intra(DecModCtxt *dec_mod_ctxt, PartitionInfo_t *part_info,
     }
 
     svtav1_predict_intra_block(part_info, plane,
-        blk_mi_col, blk_mi_row,
         tx_size, td,
         blk_recon_buf, recon_strd,
         topNeighArray, leftNeighArray,
-        &dec_handle->seq_header, &dec_handle->frame_header,
+        &dec_handle->seq_header, 
         blk_mi_col_off, blk_mi_row_off);
 }

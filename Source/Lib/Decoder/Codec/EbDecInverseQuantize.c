@@ -3,6 +3,17 @@
 * SPDX - License - Identifier: BSD - 2 - Clause - Patent
 */
 
+/*
+* Copyright (c) 2016, Alliance for Open Media. All rights reserved
+*
+* This source code is subject to the terms of the BSD 2 Clause License and
+* the Alliance for Open Media Patent License 1.0. If the BSD 2 Clause License
+* was not distributed with this source code in the LICENSE file, you can
+* obtain it at www.aomedia.org/license/software. If the Alliance for Open
+* Media Patent License 1.0 was not distributed with this source code in the
+* PATENTS file, you can obtain it at www.aomedia.org/license/patent.
+*/
+
 #include "EbDefinitions.h"
 #include "EbPictureBufferDesc.h"
 
@@ -13,11 +24,6 @@
 #include "EbObuParse.h"
 
 #include "EbTransforms.h"
-
-// av1_num_planes() already defined (how to handle static function) in EbObuParse.c file
-int av1_num_planes(EbColorConfig   *color_info) {
-    return color_info->mono_chrome ? 1 : MAX_MB_PLANE;
-}
 
 // Same wrapper(av1_ac/dc_quant_QTX) available in .c file of encoder
 int16_t get_dc_quant(int32_t qindex, int32_t delta, AomBitDepth bit_depth)
@@ -34,8 +40,8 @@ int16_t get_ac_quant(int32_t qindex, int32_t delta, AomBitDepth bit_depth)
 void setup_segmentation_dequant(FrameHeader *frame_info, SeqHeader *seq_header,
     EbColorConfig *color_config)
 {
+    (void)color_config;
     int bit_depth = seq_header->color_config.bit_depth;
-    int using_qm = frame_info->quantization_params.using_qmatrix;
     int max_segments = frame_info->segmentation_params.segmentation_enabled ?
         MAX_SEGMENTS : 1;
     int32_t qindex;
@@ -66,14 +72,15 @@ void setup_segmentation_dequant(FrameHeader *frame_info, SeqHeader *seq_header,
 void av1_inverse_qm_init(FrameHeader *frame, EbColorConfig *color_config)
 {
     const int num_planes = av1_num_planes(color_config);
-    int q, c, t;
+    int q, c;
+    uint8_t t;
     int current;
     for (q = 0; q < NUM_QM_LEVELS; ++q) {
         for (c = 0; c < num_planes; ++c) {
             current = 0;
             for (t = 0; t < TX_SIZES_ALL; ++t) {
                 const int size = tx_size_2d[t];
-                const int qm_tx_size = av1_get_adjusted_tx_size(t);
+                const uint8_t qm_tx_size = av1_get_adjusted_tx_size(t);
                 if (q == NUM_QM_LEVELS - 1) {
                     frame->giqmatrix[q][c][t] = NULL;
                 }
@@ -94,29 +101,31 @@ void av1_inverse_qm_init(FrameHeader *frame, EbColorConfig *color_config)
 
 // Called in decode_tiles()
 // Default initilaization of dequant and iquant
+/*
 void av1_init_sb(FrameHeader *frame)
 {
     frame->dequants_delta_q = &frame->dequants;
 }
+*/
 
 // Called in parse_decode_block()
 // Update de-quantization parameter based on delta qp param
-void update_dequant(EbDecHandle *dec_handle, PartitionInfo_t *part)
+void update_dequant(EbDecHandle *dec_handle, SBInfo *sb_info)
 {
     int32_t current_qindex;
     int dc_delta_q, ac_delta_q;
     SeqHeader *seq_header = &dec_handle->seq_header;
     FrameHeader *frame = &dec_handle->frame_header;
 
-    int num_planes = av1_num_planes(&seq_header->color_config);
     if (!frame->delta_q_params.delta_q_present) {
         frame->dequants_delta_q = &frame->dequants;
     }
     else {
         for (int i = 0; i < MAX_SEGMENTS; i++) {
             current_qindex =
-                get_qindex(seq_header, i, clamp(frame->quantization_params.base_q_idx +
-                    part->sb_info->sb_delta_q[0], 1, MAXQ));
+                get_qindex(&frame->segmentation_params, i,
+                    clamp(frame->quantization_params.base_q_idx +
+                    sb_info->sb_delta_q[0], 1, MAXQ));
 
             // Y Plane: AC and DC
             dc_delta_q = frame->quantization_params.delta_q_y_dc;
@@ -156,6 +165,7 @@ int get_dqv(const int16_t *dequant, int coeff_idx, const QmVal *iqmatrix) {
 int32_t inverse_quantize(EbDecHandle * dec_handle, PartitionInfo_t *part, ModeInfo_t *mode,
     int32_t *level, int32_t *qcoeffs, TxType tx_type, TxSize tx_size, int plane)
 {
+    (void)part;
     SeqHeader *seq = &dec_handle->seq_header;
     FrameHeader *frame = &dec_handle->frame_header;
     const ScanOrder *const scan_order = &av1_scan_orders[tx_size][tx_type]; //get_scan(tx_size, tx_type);
@@ -195,7 +205,6 @@ int32_t inverse_quantize(EbDecHandle * dec_handle, PartitionInfo_t *part, ModeIn
         dequant = frame->dequants_delta_q->v_dequant_QTX[mode->segment_id];
     }
 
-    int num_planes = av1_num_planes(&seq->color_config);
     const int shift = av1_get_tx_scale(tx_size);
 
     // Level is 1D array with eob length as first value then continued by 

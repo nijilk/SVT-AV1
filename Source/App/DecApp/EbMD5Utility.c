@@ -255,7 +255,7 @@ void write_md5(EbBufferHeaderType *recon_buffer, CLInput *cli, MD5Context *md5) 
     uint32_t w = cli->width;
     uint32_t h = cli->height;
     uint32_t stride = img->y_stride;
-    uint32_t b_size = w * h;
+    //uint32_t b_size = w * h;
 
     //luma MD5 generation
     for (y = 0; y < h; ++y) {
@@ -266,7 +266,7 @@ void write_md5(EbBufferHeaderType *recon_buffer, CLInput *cli, MD5Context *md5) 
     w = w / 2;
     h = h / 2;
     stride = img->cb_stride;
-    b_size = w * h;
+   
 
     //cb MD5 generation
     buf = img->cb;

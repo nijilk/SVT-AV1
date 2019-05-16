@@ -197,33 +197,11 @@ typedef struct ParseCtxt {
         
 } ParseCtxt;
 
-// Returns 1 when OBU type is valid, and 0 otherwise.
-static int is_valid_obu_type(int obu_type) {
-    int valid_type = 0;
-    switch (obu_type) {
-    case OBU_SEQUENCE_HEADER:
-    case OBU_TEMPORAL_DELIMITER:
-    case OBU_FRAME_HEADER:
-    case OBU_TILE_GROUP:
-    case OBU_METADATA:
-    case OBU_FRAME:
-    case OBU_REDUNDANT_FRAME_HEADER:
-        //case OBU_TILE_LIST:
-    case OBU_PADDING: valid_type = 1; break;
-    default: break;
-    }
-    return valid_type;
-}
-
-// Find smallest k>=0 such that (blk_size << k) >= target
-static int32_t dec_tile_log2(int32_t blk_size, int32_t target) {
-    int32_t k;
-    for (k = 0; (blk_size << k) < target; k++) {
-    }
-    return k;
-}
+int get_qindex(SegmentationParams *seg_params, int segment_id, int base_q_idx);
+void parse_super_block(EbDecHandle *dec_handle,
+    uint32_t blk_row, uint32_t blk_col, SBInfo *sbInfo);
 
 EbErrorType decode_obu(EbDecHandle *dec_handle_ptr, uint8_t *data, uint32_t data_size);
-EbErrorType decode_multiple_obu(EbDecHandle *dec_handle_ptr, uint8_t *data, uint32_t data_size);
+EbErrorType decode_multiple_obu(EbDecHandle *dec_handle_ptr, const uint8_t *data, uint32_t data_size);
 
 #endif  // EbDecObuParser_h

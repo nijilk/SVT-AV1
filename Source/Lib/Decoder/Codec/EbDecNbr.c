@@ -48,7 +48,7 @@ void update_block_nbrs(EbDecHandle *dec_handle,
     FrameMiMap  *frame_mi_map = &dec_handle->master_frame_buf.frame_mi_map;
 
     int32_t offset = parse_ctx->cur_mode_info_cnt;
-    int32_t num_mis_in_sb_wd = frame_mi_map->num_mis_in_sb_wd;
+    // int32_t num_mis_in_sb_wd = frame_mi_map->num_mis_in_sb_wd;
     int bw4 = mi_size_wide[subsize];
     int bh4 = mi_size_high[subsize];
 

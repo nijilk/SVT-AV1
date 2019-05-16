@@ -12,31 +12,14 @@ extern "C" {
 
 // Do we need to save the luma pixels from the current block,
 // for a possible future CfL prediction?
-INLINE CflAllowedType store_cfl_required(const EbColorConfig *cc,
-                                           const PartitionInfo_t  *xd,
-                                            CflCtx *cfl_ctx)
-{
-    const ModeInfo_t *mbmi = xd->mi;
 
-    if (cc->mono_chrome) return CFL_DISALLOWED;
+    CflAllowedType store_cfl_required(const EbColorConfig *cc,
+                                      const PartitionInfo_t  *xd);
 
-    if (!xd->has_chroma) {
-        // For non-chroma-reference blocks, we should always store the luma pixels,
-        // in case the corresponding chroma-reference block uses CfL.
-        // Note that this can only happen for block sizes which are <8 on
-        // their shortest side, as otherwise they would be chroma reference
-        // blocks.
-        return CFL_ALLOWED;
-    }
 
-    // If this block has chroma information, we know whether we're
-    // actually going to perform a CfL prediction
-    return (CflAllowedType)(!dec_is_inter_block(mbmi) &&
-        mbmi->uv_mode == UV_CFL_PRED);
-}
 
 void svt_av1_predict_intra(DecModCtxt *dec_mod_ctxt, PartitionInfo_t *part_info,
-        int32_t plane, int32_t blk_mi_col, int32_t blk_mi_row,
+        int32_t plane, 
         TxSize tx_size, TileInfo *td,
         uint8_t *blk_recon_buf, int32_t recon_strd,
         EbBitDepthEnum bit_depth, int32_t blk_mi_col_off, int32_t blk_mi_row_off);

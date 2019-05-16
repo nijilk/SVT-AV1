@@ -16,24 +16,25 @@
 #include "EbSvtAv1Dec.h"
 #include "EbDecHandle.h"
 
+#include "EbDecInverseQuantize.h"
 #include "EbDecProcessFrame.h"
 #include "EbDecProcessBlock.h"
 
 /* decode partition */
 static void decode_partition(DecModCtxt *dec_mod_ctxt,
-                             int32_t mi_row, int32_t mi_col,
+                             uint32_t mi_row, uint32_t mi_col,
                              BlockSize bsize, SBInfo *sb_info)
 {
     EbDecHandle *dec_handle = (EbDecHandle *)dec_mod_ctxt->dec_handle_ptr;
     BlockSize  subsize;
     PartitionType partition;
     
-    int num4x4 = mi_size_wide[bsize];
-    int half_block_4x4 = num4x4 >> 1;
-    int quarter_block_4x4 = half_block_4x4 >> 1;
+    uint8_t num4x4 = mi_size_wide[bsize];
+    uint32_t half_block_4x4 =(uint32_t)num4x4 >> 1;
+    uint32_t quarter_block_4x4 = half_block_4x4 >> 1;
 
-    int has_rows = (mi_row + half_block_4x4) < dec_handle->frame_header.mi_rows;
-    int has_cols = (mi_col + half_block_4x4) < dec_handle->frame_header.mi_cols;
+    uint32_t has_rows = (mi_row + half_block_4x4) < dec_handle->frame_header.mi_rows;
+    uint32_t has_cols = (mi_col + half_block_4x4) < dec_handle->frame_header.mi_cols;
 
     if (mi_row >= dec_handle->frame_header.mi_rows || 
         mi_col >= dec_handle->frame_header.mi_cols) return;
@@ -96,14 +97,14 @@ decode_partition(dec_mod_ctxt, (db_r), (db_c),              \
             break;
         case PARTITION_HORZ_4:
             for (int i = 0; i < 4; ++i) {
-                int this_mi_row = mi_row + i * quarter_block_4x4;
+                uint32_t this_mi_row = mi_row +  (i * quarter_block_4x4);
                 if (i > 0 && this_mi_row >= dec_handle->frame_header.mi_rows) break;
                 DECODE_BLOCK(this_mi_row, mi_col, subsize);
                 }
             break;
         case PARTITION_VERT_4:
             for (int i = 0; i < 4; ++i) {
-                int this_mi_col = mi_col + i * quarter_block_4x4;
+                uint32_t this_mi_col = mi_col + (i * quarter_block_4x4);
                 if (i > 0 && this_mi_col >= dec_handle->frame_header.mi_cols) break;
                 DECODE_BLOCK(mi_row, this_mi_col, subsize);
                 }
@@ -114,18 +115,18 @@ decode_partition(dec_mod_ctxt, (db_r), (db_c),              \
 
 // decoding of the superblock
 void decode_super_block(DecModCtxt *dec_mod_ctxt,
-                        int32_t mi_row, int32_t mi_col,
-                        SBInfo *sbInfo)
+                        uint32_t mi_row, uint32_t mi_col,
+                        SBInfo *sb_info)
 {
     EbDecHandle *dec_handle = (EbDecHandle *)dec_mod_ctxt->dec_handle_ptr;
 
     /* Pointer updates */
 
     /* SB level dequant update */
-    update_dequant(dec_handle);
+    update_dequant(dec_handle, sb_info);
 
     /* Decode partition */
     decode_partition(dec_mod_ctxt, mi_row, mi_col,
-                     dec_handle->seq_header.sb_size, sbInfo);
+                     dec_handle->seq_header.sb_size, sb_info);
 
 }

@@ -3601,8 +3601,8 @@ static void write_color_config(
         printf("ERROR[AN]: is_monochrome not supported yet\n");
         return;
     }
-    if (0/*cm->color_primaries == AOM_CICP_CP_BT_709 &&
-         cm->transfer_characteristics == AOM_CICP_TC_SRGB &&
+    if (0/*cm->color_primaries == EB_CICP_CP_BT_709 &&
+         cm->transfer_characteristics == EB_CICP_TC_SRGB &&
          cm->matrix_coefficients ==
          AOM_CICP_MC_IDENTITY*/) {  // it would be better to remove this
          // dependency too

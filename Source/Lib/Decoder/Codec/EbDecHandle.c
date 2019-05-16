@@ -16,6 +16,14 @@
 
 #include "EbSvtAv1Dec.h"
 #include "EbDecHandle.h"
+#include "EbDecMemInit.h"
+
+#if defined(__linux__) || defined(__APPLE__)
+#include <pthread.h>
+#include <errno.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#endif
 
 #define RTCD_C
 #include "aom_dsp_rtcd.h"
@@ -30,7 +38,7 @@ uint64_t                         *svt_dec_total_lib_memory;
 
 uint32_t                         svt_dec_lib_malloc_count = 0;
 
-#if 1 //TODO: Should be removed! Check
+//TODO: Should be removed! Check
 EbMemoryMapEntry                 *memory_map;
 uint32_t                         *memory_map_index;
 uint64_t                         *total_lib_memory;
@@ -38,7 +46,11 @@ uint64_t                         *total_lib_memory;
 uint32_t                         lib_malloc_count = 0;
 uint32_t                         lib_semaphore_count = 0;
 uint32_t                         lib_mutex_count = 0;
-#endif
+
+void init_intra_dc_predictors_c_internal(void);
+void init_intra_predictors_internal(void);
+EbErrorType decode_multiple_obu(EbDecHandle *dec_handle_ptr, 
+            const uint8_t *data, uint32_t data_size);
 
 void SwitchToRealTime(){
 #if defined(__linux__) || defined(__APPLE__)
@@ -60,6 +72,7 @@ static EbErrorType eb_dec_handle_ctor(
     EbDecHandle     **decHandleDblPtr,
     EbComponentType * ebHandlePtr)
 {
+    (void)ebHandlePtr;
     EbErrorType return_error = EB_ErrorNone;
 
     // Allocate Memory
@@ -92,7 +105,18 @@ int svt_dec_out_buf(
 
     int wd = dec_handle_ptr->frame_header.frame_size.frame_width;
     int ht = dec_handle_ptr->frame_header.frame_size.frame_height;
-    int i;
+    int i, sx, sy;
+
+    switch (recon_picture_buf->color_format) {
+        case EB_YUV420 :
+            sx = 1;
+            sy = 1;
+            break;
+        default :
+            assert(0);
+    }
+
+    if (recon_picture_buf->bit_depth == EB_8BIT) {
 
     uint8_t *dst;
     uint8_t *src;
@@ -110,32 +134,106 @@ int svt_dec_out_buf(
     }
 
     /* Cb */
-    dst = out_img->cb + (out_img->origin_x >> 1) +
-            ((out_img->origin_y >> 1) * out_img->cb_stride);
-    src = recon_picture_buf->buffer_cb + (recon_picture_buf->origin_x >> 1) +
-        ((recon_picture_buf->origin_y >> 1) * recon_picture_buf->stride_cb);
+        dst = out_img->cb + (out_img->origin_x >> sx) +
+            ((out_img->origin_y >> sy) * out_img->cb_stride);
+        src = recon_picture_buf->buffer_cb + (recon_picture_buf->origin_x >> sx) +
+            ((recon_picture_buf->origin_y >> sy) * recon_picture_buf->stride_cb);
 
-    for (i = 0; i < ht>>1; i++) {
-        memcpy(dst, src, wd>>1);
+        for (i = 0; i < ht >> sy; i++) {
+            memcpy(dst, src, wd >> sx);
         dst += out_img->cb_stride;
         src += recon_picture_buf->stride_cb;
     }
 
     /* Cr */
-    dst = out_img->cr + (out_img->origin_x >> 1) +
-            ((out_img->origin_y >> 1) * out_img->cr_stride);
-    src = recon_picture_buf->buffer_cr + (recon_picture_buf->origin_x >> 1) +
-        ((recon_picture_buf->origin_y >> 1)* recon_picture_buf->stride_cr);
+        dst = out_img->cr + (out_img->origin_x >> sx) +
+            ((out_img->origin_y >> sy) * out_img->cr_stride);
+        src = recon_picture_buf->buffer_cr + (recon_picture_buf->origin_x >> sx) +
+            ((recon_picture_buf->origin_y >> sy)* recon_picture_buf->stride_cr);
 
-    for (i = 0; i < ht>>1; i++) {
-        memcpy(dst, src, wd>>1);
+        for (i = 0; i < ht >> sy; i++) {
+            memcpy(dst, src, wd >> sx);
         dst += out_img->cr_stride;
         src += recon_picture_buf->stride_cr;
     }
-
+    } else {
+        assert(0);
+        return 0;
+    }
     return 1;
 }
 
+/**********************************
+Set Default Library Params
+**********************************/
+EbErrorType eb_svt_dec_set_default_parameter(
+    EbSvtAv1DecConfiguration    *config_ptr)
+{
+    EbErrorType                  return_error = EB_ErrorNone;
+
+    if (config_ptr == NULL)
+        return EB_ErrorBadParameter;
+
+    config_ptr->operating_point = -1;
+    config_ptr->output_all_layers = 0;
+    config_ptr->skip_film_grain = 0;
+    config_ptr->skip_frames = 0;
+    config_ptr->frames_to_be_decoded = 0;
+    config_ptr->compressed_ten_bit_format = 0;
+    config_ptr->eight_bit_output = 0;
+
+    /* Picture parameters */
+    config_ptr->max_picture_width = 0;
+    config_ptr->max_picture_height = 0;
+    config_ptr->max_bit_depth = EB_EIGHT_BIT;
+    config_ptr->max_color_format = EB_YUV420;
+    config_ptr->asm_type = 0;
+    config_ptr->threads = 1;
+
+    // Application Specific parameters
+    config_ptr->channel_id = 0;
+    config_ptr->active_channel_count = 1;
+    config_ptr->stat_report = 0;
+
+    return return_error;
+}
+
+/**********************************
+* Decoder Handle Initialization
+**********************************/
+static EbErrorType init_svt_av1_decoder_handle(
+    EbComponentType     *hComponent)
+{
+    EbErrorType       return_error = EB_ErrorNone;
+    EbComponentType  *svt_dec_component = (EbComponentType*)hComponent;
+
+    printf("SVT [version]:\tSVT-AV1 Decoder Lib v%d.%d.%d\n",
+        SVT_VERSION_MAJOR, SVT_VERSION_MINOR, SVT_VERSION_PATCHLEVEL);
+#if ( defined( _MSC_VER ) && (_MSC_VER < 1910) ) 
+    printf("SVT [build]  : Visual Studio 2013");
+#elif ( defined( _MSC_VER ) && (_MSC_VER >= 1910) ) 
+    printf("SVT [build]  :\tVisual Studio 2017");
+#elif defined(__GNUC__)
+    printf("SVT [build]  :\tGCC %d.%d.%d\t", __GNUC__, __GNUC_MINOR__, __GNUC_PATCHLEVEL__);
+#else
+    printf("SVT [build]  :\tunknown compiler");
+#endif
+    printf(" %u bit\n", (unsigned) sizeof(void*) * 8);
+    printf("LIB Build date: %s %s\n", __DATE__, __TIME__);
+    printf("-------------------------------------------\n");
+
+    SwitchToRealTime();
+
+    // Set Component Size & Version
+    svt_dec_component->size = sizeof(EbComponentType);
+
+    // Decoder Private Handle Ctor
+    return_error = (EbErrorType)eb_dec_handle_ctor(
+        (EbDecHandle  **) &(svt_dec_component->p_component_private),
+        svt_dec_component);
+
+    return return_error;
+}
 
 #if defined(__linux__) || defined(__APPLE__)
 __attribute__((visibility("default")))
@@ -149,7 +247,6 @@ EB_API EbErrorType eb_dec_init_handle(
 
     if (p_handle == NULL)
         return EB_ErrorBadParameter;
-    EbComponentType temp;
 
     *p_handle = (EbComponentType*) malloc(sizeof(EbComponentType));
 
@@ -272,6 +369,9 @@ EB_API EbErrorType eb_svt_dec_get_picture(
     EbAV1StreamInfo      *stream_info,
     EbAV1FrameInfo       *frame_info)
 {
+    (void)stream_info;
+    (void)frame_info;
+    
     EbErrorType return_error = EB_ErrorNone;
     if (svt_dec_component == NULL)
         return EB_ErrorBadParameter;
@@ -386,77 +486,10 @@ EB_API EbErrorType eb_dec_set_frame_buffer_callbacks(
   eb_release_frame_buffer     release_buffer,
   void                        *priv_data)
 {
+    (void)svt_dec_component;
+    (void)allocate_buffer;
+    (void)release_buffer;
+    (void)priv_data;
+
     return EB_ErrorNone;
-}
-
-/**********************************
-* Decoder Handle Initialization
-**********************************/
-static EbErrorType init_svt_av1_decoder_handle(
-    EbComponentType     *hComponent)
-{
-    EbErrorType       return_error = EB_ErrorNone;
-    EbComponentType  *svt_dec_component = (EbComponentType*)hComponent;
-
-    printf("SVT [version]:\tSVT-AV1 Decoder Lib v%d.%d.%d\n",
-        SVT_VERSION_MAJOR, SVT_VERSION_MINOR, SVT_VERSION_PATCHLEVEL);
-#if ( defined( _MSC_VER ) && (_MSC_VER < 1910) ) 
-    printf("SVT [build]  : Visual Studio 2013");
-#elif ( defined( _MSC_VER ) && (_MSC_VER >= 1910) ) 
-    printf("SVT [build]  :\tVisual Studio 2017");
-#elif defined(__GNUC__)
-    printf("SVT [build]  :\tGCC %d.%d.%d\t", __GNUC__, __GNUC_MINOR__, __GNUC_PATCHLEVEL__);
-#else
-    printf("SVT [build]  :\tunknown compiler");
-#endif
-    printf(" %u bit\n", (unsigned) sizeof(void*) * 8);
-    printf("LIB Build date: %s %s\n", __DATE__, __TIME__);
-    printf("-------------------------------------------\n");
-
-    SwitchToRealTime();
-
-    // Set Component Size & Version
-    svt_dec_component->size = sizeof(EbComponentType);
-
-    // Decoder Private Handle Ctor
-    return_error = (EbErrorType)eb_dec_handle_ctor(
-        (EbDecHandle  **) &(svt_dec_component->p_component_private),
-        svt_dec_component);
-
-    return return_error;
-}
-
-/**********************************
-Set Default Library Params
-**********************************/
-EbErrorType eb_svt_dec_set_default_parameter(
-    EbSvtAv1DecConfiguration    *config_ptr)
-{
-    EbErrorType                  return_error = EB_ErrorNone;
-
-    if (config_ptr == NULL)
-        return EB_ErrorBadParameter;
-
-    config_ptr->operating_point = -1;
-    config_ptr->output_all_layers = 0;
-    config_ptr->skip_film_grain = 0;
-    config_ptr->skip_frames = 0;
-    config_ptr->frames_to_be_decoded = 0;
-    config_ptr->compressed_ten_bit_format = 0;
-    config_ptr->eight_bit_output = 0;
-
-    /* Picture parameters */
-    config_ptr->max_picture_width = 0;
-    config_ptr->max_picture_height = 0;
-    config_ptr->max_bit_depth = EB_EIGHT_BIT;
-    config_ptr->max_color_format = EB_YUV420;
-    config_ptr->asm_type = 0;
-    config_ptr->threads = 1;
-
-    // Application Specific parameters
-    config_ptr->channel_id = 0;
-    config_ptr->active_channel_count = 1;
-    config_ptr->stat_report = 0;
-
-    return return_error;
 }

@@ -9,8 +9,6 @@
 
 #define IVF_FRAME_HDR_SZ (4 + 8) /* 4 byte size + 8 byte timestamp */
 
-static const char *IVF_SIGNATURE = "DKIF";
-
 static const char * const csp_names[] = { "400", "420", "422", "444", 0 };
 
 /**********************************

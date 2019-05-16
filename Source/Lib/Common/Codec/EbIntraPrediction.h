@@ -128,15 +128,11 @@ extern const int8_t av1_filter_intra_taps[FILTER_INTRA_MODES][8][8];
 /////####.... To make functions common between EbIntraPrediction.c & 
 void *aom_memset16(void *dest, int32_t val, size_t length);
 
-extern PartitionType from_shape_to_part[];
-
 int32_t use_intra_edge_upsample(int32_t bs0, int32_t bs1, int32_t delta,
                                        int32_t type);
 
 BlockSize scale_chroma_bsize(BlockSize bsize, int32_t subsampling_x,
                               int32_t subsampling_y);
-
-PredictionMode get_uv_mode(UvPredictionMode mode);
 
 int32_t intra_edge_filter_strength(int32_t bs0, int32_t bs1, int32_t delta, int32_t type);
 
@@ -150,25 +146,11 @@ int32_t intra_edge_filter_strength(int32_t bs0, int32_t bs1, int32_t delta, int3
 
 extern const uint8_t extend_modes[INTRA_MODES];
 
-extern const uint8_t *const has_tr_tables[BlockSizeS_ALL];
-
-extern const uint8_t *const has_tr_vert_tables[BlockSizeS];
-
-extern const uint8_t *get_has_tr_table(PartitionType partition,
-    BlockSize bsize);
-
 /* TODO: Need to harmonize with fun from EbAdaptiveMotionVectorPrediction.c */
 int32_t intra_has_top_right(BlockSize   sb_size, BlockSize bsize, int32_t mi_row,
     int32_t mi_col, int32_t top_available, int32_t right_available,
     PartitionType partition, TxSize txsz, int32_t row_off,
     int32_t col_off, int32_t ss_x, int32_t ss_y);
-
-const uint8_t *const has_bl_tables[BlockSizeS_ALL];
-
-const uint8_t *const has_bl_vert_tables[BlockSizeS];
-
-extern const uint8_t *get_has_bl_table(PartitionType partition,
-    BlockSize bsize);
 
 extern int32_t intra_has_bottom_left(BlockSize sb_size, BlockSize bsize, int32_t mi_row,
     int32_t mi_col, int32_t bottom_available, int32_t left_available,
@@ -186,13 +168,6 @@ void dr_predictor(uint8_t *dst, ptrdiff_t stride, TxSize tx_size,
     int32_t upsample_above, int32_t upsample_left, int32_t angle);
 
 void filter_intra_edge_corner(uint8_t *p_above, uint8_t *p_left);
-
-void highbd_dr_predictor(uint16_t *dst, ptrdiff_t stride,
-    TxSize tx_size, const uint16_t *above,
-    const uint16_t *left, int32_t upsample_above,
-    int32_t upsample_left, int32_t angle, int32_t bd);
-
-void filter_intra_edge_corner_high(uint16_t *p_above, uint16_t *p_left);
 
 void highbd_filter_intra_predictor(uint16_t *dst, ptrdiff_t stride,
                                           TxSize tx_size,
@@ -554,7 +529,7 @@ void highbd_filter_intra_predictor(uint16_t *dst, ptrdiff_t stride,
 typedef struct CflCtx {
         // Q3 reconstructed luma pixels (only Q2 is required, but Q3 is used to avoid
         // shifts)
-        uint16_t recon_buf_q3[CFL_BUF_SQUARE];
+        int16_t recon_buf_q3[CFL_BUF_SQUARE];
 
         // Height and width currently used in the CfL prediction buffer.
         int32_t buf_height, buf_width;
@@ -567,7 +542,7 @@ typedef struct CflCtx {
 } CflCtx;
 
     extern void cfl_luma_subsampling_420_lbd_c(
-        uint8_t *input, // AMIR-> Changed to 8 bit
+        const uint8_t *input, // AMIR-> Changed to 8 bit
         int32_t input_stride, int16_t *output_q3,
         int32_t width, int32_t height);
     extern void cfl_luma_subsampling_420_hbd_c(
@@ -632,10 +607,10 @@ typedef struct CflCtx {
 /* Function pointers return by CfL functions */
 
 typedef void(*cfl_subsample_lbd_fn)(const uint8_t *input, int input_stride,
-    uint16_t *output_q3);
+    int16_t *output_q3);
 
 typedef void(*cfl_subsample_hbd_fn)(const uint16_t *input, int input_stride,
-    uint16_t *output_q3);
+    int16_t *output_q3);
 
 typedef void(*cfl_subtract_average_fn)(int16_t *dst);
 
@@ -645,23 +620,24 @@ typedef void(*cfl_predict_lbd_fn)(const int16_t *pred_buf_q3, uint8_t *pred, int
 typedef void(*cfl_predict_hbd_fn)(const int16_t *src, uint16_t *dst,
     int dst_stride, int alpha_q3, int bd);
 
-cfl_subsample_hbd_fn cfl_get_luma_subsampling_420_hbd_c(TxSize tx_size);
 #define cfl_get_luma_subsampling_420_hbd cfl_get_luma_subsampling_420_hbd_c
+cfl_subsample_hbd_fn cfl_get_luma_subsampling_420_hbd_c(TxSize tx_size);
 
-cfl_subsample_lbd_fn cfl_get_luma_subsampling_420_lbd_c(TxSize tx_size);
 #define cfl_get_luma_subsampling_420_lbd cfl_get_luma_subsampling_420_lbd_c
+cfl_subsample_lbd_fn cfl_get_luma_subsampling_420_lbd_c(TxSize tx_size);
 
-cfl_subsample_hbd_fn cfl_get_luma_subsampling_422_hbd_c(TxSize tx_size);
 #define cfl_get_luma_subsampling_422_hbd cfl_get_luma_subsampling_422_hbd_c
+cfl_subsample_hbd_fn cfl_get_luma_subsampling_422_hbd_c(TxSize tx_size);
 
-cfl_subsample_lbd_fn cfl_get_luma_subsampling_422_lbd_c(TxSize tx_size);
 #define cfl_get_luma_subsampling_422_lbd cfl_get_luma_subsampling_422_lbd_c
+cfl_subsample_lbd_fn cfl_get_luma_subsampling_422_lbd_c(TxSize tx_size);
 
-cfl_subsample_hbd_fn cfl_get_luma_subsampling_444_hbd_c(TxSize tx_size);
 #define cfl_get_luma_subsampling_444_hbd cfl_get_luma_subsampling_444_hbd_c
+cfl_subsample_hbd_fn cfl_get_luma_subsampling_444_hbd_c(TxSize tx_size);
 
-cfl_subsample_lbd_fn cfl_get_luma_subsampling_444_lbd_c(TxSize tx_size);
 #define cfl_get_luma_subsampling_444_lbd cfl_get_luma_subsampling_444_lbd_c
+cfl_subsample_lbd_fn cfl_get_luma_subsampling_444_lbd_c(TxSize tx_size);
+
 
 cfl_subtract_average_fn get_subtract_average_fn_c(TxSize tx_size);
 #define get_subtract_average_fn get_subtract_average_fn_c

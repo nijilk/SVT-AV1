@@ -55,6 +55,7 @@ int is_interintra_allowed_mode(const PredictionMode mode);
 int is_interintra_allowed_ref(const MvReferenceFrame rf[2]);
 int is_interintra_allowed(const ModeInfo_t *mbmi);
 MotionMode dec_motion_mode_allowed();
-
+void update_tx_context(ParseCtxt *parse_ctxt,
+    int mi_row, int mi_col, BlockSize bsize, TxSize txSize);
 
 #endif  // EbDecParseHelper_h

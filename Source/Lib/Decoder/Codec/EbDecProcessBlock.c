@@ -15,6 +15,9 @@
 #include "EbSvtAv1Dec.h"
 #include "EbDecHandle.h"
 
+#include "EbObuParse.h"
+#include "EbDecParseHelper.h"
+
 #include "EbDecInverseQuantize.h"
 #include "EbDecProcessFrame.h"
 
@@ -23,9 +26,32 @@
 
 #include "EbTransforms.h"
 
+CflAllowedType store_cfl_required(const EbColorConfig *cc,
+                                  const PartitionInfo_t  *xd)
+                                  
+{
+    const ModeInfo_t *mbmi = xd->mi;
+
+    if (cc->mono_chrome) return CFL_DISALLOWED;
+
+    if (!xd->has_chroma) {
+        // For non-chroma-reference blocks, we should always store the luma pixels,
+        // in case the corresponding chroma-reference block uses CfL.
+        // Note that this can only happen for block sizes which are <8 on
+        // their shortest side, as otherwise they would be chroma reference
+        // blocks.
+        return CFL_ALLOWED;
+    }
+
+    // If this block has chroma information, we know whether we're
+    // actually going to perform a CfL prediction
+    return (CflAllowedType)(!dec_is_inter_block(mbmi) &&
+        mbmi->uv_mode == UV_CFL_PRED);
+}
+
  /* decode partition */
 PartitionType get_partition(DecModCtxt *dec_mod_ctxt, FrameHeader *frame_header,
-                            int32_t mi_row, int32_t mi_col, SBInfo *sb_info,
+                            uint32_t mi_row, uint32_t mi_col, SBInfo *sb_info,
                             BlockSize bsize)
 {
     if (mi_row >= frame_header->mi_rows || mi_col >= frame_header->mi_cols)
@@ -172,7 +198,7 @@ void decode_block(DecModCtxt *dec_mod_ctxt, int32_t mi_row, int32_t mi_col,
     part_info.sb_info = sb_info;
     part_info.mi_row = mi_row;
     part_info.mi_col = mi_col;
-    part_info.has_chroma = is_chroma_reference;
+    part_info.has_chroma = (int8_t) is_chroma_reference;
     part_info.pv_cfl_ctxt = &dec_mod_ctxt->cfl_ctx;
 
     /*!< Distance of MB away from frame edges in subpixels (1/8th pixel). */
@@ -270,7 +296,6 @@ void decode_block(DecModCtxt *dec_mod_ctxt, int32_t mi_row, int32_t mi_col,
                         continue;
 
                     /* TODO : Clean the logic! */
-#if 1
                     if (row == 0 && col == 0)
                         trans_info = (plane == 0) ?
                         (sb_info->sb_luma_trans_info + mode_info->first_luma_tu_offset) :
@@ -278,9 +303,7 @@ void decode_block(DecModCtxt *dec_mod_ctxt, int32_t mi_row, int32_t mi_col,
                          + (plane - 1));
                     else
                         assert(0);
-#else
-                    trans_info = get_cur_trans_info_intra(plane, sb_info, mode_info);
-#endif
+
                     tx_size = trans_info->tx_size;
 
                     const int stepr = tx_size_high_unit[tx_size];
@@ -304,11 +327,8 @@ void decode_block(DecModCtxt *dec_mod_ctxt, int32_t mi_row, int32_t mi_col,
                             derive_blk_pointers(recon_picture_buf, plane,
                                 (mi_col >> sub_x) + blk_col, (mi_row >> sub_y) + blk_row,
                                 &blk_recon_buf, &recon_strd, sub_x, sub_y);
-#if 0
-                            if(!plane)
-#endif
+
                             svt_av1_predict_intra(dec_mod_ctxt, &part_info, plane,
-                                (mi_col >> sub_x) + blk_col, (mi_row >> sub_y) + blk_row,
                                 tx_size, dec_mod_ctxt->cur_tile_info, blk_recon_buf,
                                 recon_strd, recon_picture_buf->bit_depth, blk_col, blk_row);
 
@@ -333,11 +353,6 @@ void decode_block(DecModCtxt *dec_mod_ctxt, int32_t mi_row, int32_t mi_col,
                                     mode_info, coeffs, qcoeffs, tx_type, tx_size, plane);
                                 if(n_coeffs != 0)
                                 {
-#if 0
-                                    printf("\n dec eob %d %p plane %d Loc %d %d",
-                                        n_coeffs, coeffs, plane, mi_row + blk_row, mi_col + blk_col);
-                                    fflush(stdout);
-#endif
                                     plane ? (dec_mod_ctxt->cur_chroma_coeff += (n_coeffs + 1)) :
                                             (dec_mod_ctxt->cur_luma_coeff += (n_coeffs + 1));
 
@@ -351,7 +366,7 @@ void decode_block(DecModCtxt *dec_mod_ctxt, int32_t mi_row, int32_t mi_col,
 
                             /* Store Luma for CFL if required! */
                             if (plane == AOM_PLANE_Y && store_cfl_required(
-                                color_config, &part_info, &dec_mod_ctxt->cfl_ctx))
+                                color_config, &part_info))
                             {
                                 cfl_store_tx(&part_info, &dec_mod_ctxt->cfl_ctx,
                                     blk_row, blk_col, tx_size, bsize, color_config,

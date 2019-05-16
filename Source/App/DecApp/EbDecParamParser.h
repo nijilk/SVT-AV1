@@ -15,6 +15,12 @@
 #include "EbSvtAv1Dec.h"
 #include "EbFileUtils.h"
 
+#ifdef _MSC_VER
+#define FOPEN(f,s,m) fopen_s(&f,s,m)
+#else
+#define FOPEN(f,s,m) f=fopen(s,m)
+#endif
+
  /**********************************
   * CLI options
   **********************************/

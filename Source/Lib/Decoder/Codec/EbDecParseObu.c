@@ -3,6 +3,17 @@
 * SPDX - License - Identifier: BSD - 2 - Clause - Patent
 */
 
+/*
+* Copyright (c) 2016, Alliance for Open Media. All rights reserved
+*
+* This source code is subject to the terms of the BSD 2 Clause License and
+* the Alliance for Open Media Patent License 1.0. If the BSD 2 Clause License
+* was not distributed with this source code in the LICENSE file, you can
+* obtain it at www.aomedia.org/license/software. If the Alliance for Open
+* Media Patent License 1.0 was not distributed with this source code in the
+* PATENTS file, you can obtain it at www.aomedia.org/license/patent.
+*/
+
 #include "stdlib.h"
 
 #include "EbDefinitions.h"
@@ -18,6 +29,7 @@
 #include "EbDecMemInit.h"
 
 /*TODO : Should be removed */
+#include "EbDecInverseQuantize.h"
 #include "EbDecProcessFrame.h"
 
 #include "EbDecNbr.h"
@@ -49,15 +61,18 @@ int byte_alignment(bitstrm_t *bs)
     return 0;
 }
 
-// TODO: Need to sync with encoder
-static INLINE int av1_num_planes(EbColorConfig   *color_info) {
-    return color_info->mono_chrome ? 1 : MAX_MB_PLANE;
-}
-
-void compute_image_size(bitstrm_t *bs, FrameHeader *frame_info)
+void compute_image_size(FrameHeader *frame_info)
 {
     frame_info->mi_cols = 2 * ((frame_info->frame_size.frame_width + 7 - 1) >> 3);
     frame_info->mi_rows = 2 * ((frame_info->frame_size.frame_height + 7 - 1) >> 3);
+}
+
+// Find smallest k>=0 such that (blk_size << k) >= target
+static int32_t dec_tile_log2(int32_t blk_size, int32_t target) {
+    int32_t k;
+    for (k = 0; (blk_size << k) < target; k++) {
+    }
+    return k;
 }
 
 int inverse_recenter(int r, int v)
@@ -70,24 +85,23 @@ int inverse_recenter(int r, int v)
         return r + (v >> 1);
 }
 
-int decode_unsigned_subexp_with_ref(bitstrm_t *bs, int mx, int r)
-{
-    int v = decode_subexp(bs, mx);
-    if ((r << 1) <= mx) {
-        return inverse_recenter(r, v);
+// Returns 1 when OBU type is valid, and 0 otherwise.
+static int is_valid_obu_type(int obu_type) {
+    int valid_type = 0;
+    switch (obu_type) {
+    case OBU_SEQUENCE_HEADER:
+    case OBU_TEMPORAL_DELIMITER:
+    case OBU_FRAME_HEADER:
+    case OBU_TILE_GROUP:
+    case OBU_METADATA:
+    case OBU_FRAME:
+    case OBU_REDUNDANT_FRAME_HEADER:
+        //case OBU_TILE_LIST:
+    case OBU_PADDING: valid_type = 1; break;
+    default: break;
     }
-    else {
-        return mx - 1 - inverse_recenter(mx - 1 - r, v);
-    }
+    return valid_type;
 }
-
-int decode_signed_subexp_with_ref(bitstrm_t *bs, FrameHeader *frame_info,
-    int low, int high, int r)
-{
-    int x = decode_unsigned_subexp_with_ref(bs, high - low, r - low);
-    return x + low;
-}
-
 // Read Operating point parameters
 void read_operating_params_info(bitstrm_t *bs, EbOperatingParametersInfo   *op_info,
     DecoderModelInfo   *model_info, int index)
@@ -142,12 +156,12 @@ void read_bit_depth(bitstrm_t *bs, EbColorConfig   *color_info, SeqHeader   *seq
     uint8_t twelve_bit, high_bitdepth;
     high_bitdepth = dec_get_bits(bs, 1);
     PRINT("high_bitdepth",high_bitdepth);
-    if (seq_header->seq_profile == PROFILE_2 && high_bitdepth) {
+    if (seq_header->seq_profile == PROFESSIONAL_PROFILE && high_bitdepth) {
         twelve_bit = dec_get_bits(bs, 1);
         PRINT("twelve_bit", twelve_bit);
         color_info->bit_depth = twelve_bit ? AOM_BITS_12 : AOM_BITS_10;
     }
-    else if (seq_header->seq_profile <= PROFILE_2)
+    else if (seq_header->seq_profile <= PROFESSIONAL_PROFILE)
         color_info->bit_depth = high_bitdepth ? AOM_BITS_10 : AOM_BITS_8;
     else
         return; // EB_DecUnsupportedBitstream;
@@ -158,7 +172,7 @@ void read_color_config(bitstrm_t *bs, EbColorConfig   *color_info, SeqHeader   *
 {
     read_bit_depth(bs, color_info, seq_header);
     color_info->mono_chrome =
-        (seq_header->seq_profile != PROFILE_1) ? dec_get_bits(bs, 1) : 0;
+        (seq_header->seq_profile != HIGH_PROFILE) ? dec_get_bits(bs, 1) : 0;
     PRINT("mono_chrome", color_info->mono_chrome);
     color_info->color_description_present_flag = dec_get_bits(bs, 1);
     PRINT("color_description_present_flag", color_info->color_description_present_flag);
@@ -171,7 +185,7 @@ void read_color_config(bitstrm_t *bs, EbColorConfig   *color_info, SeqHeader   *
         PRINT("matrix_coefficients", color_info->matrix_coefficients);
     }
     else {
-        color_info->color_primaries = AOM_CICP_CP_UNSPECIFIED;
+        color_info->color_primaries = EB_CICP_CP_UNSPECIFIED;
         color_info->transfer_characteristics = AOM_CICP_TC_UNSPECIFIED;
         color_info->matrix_coefficients = AOM_CICP_MC_UNSPECIFIED;
     }
@@ -183,13 +197,13 @@ void read_color_config(bitstrm_t *bs, EbColorConfig   *color_info, SeqHeader   *
         color_info->separate_uv_delta_q = 0;
         return;
     }
-    else if (color_info->color_primaries == AOM_CICP_CP_BT_709 &&
-        color_info->transfer_characteristics == AOM_CICP_TC_SRGB &&
-        color_info->matrix_coefficients == AOM_CICP_MC_IDENTITY) {
+    else if (color_info->color_primaries == EB_CICP_CP_BT_709 &&
+        color_info->transfer_characteristics == EB_CICP_TC_SRGB &&
+        color_info->matrix_coefficients == EB_CICP_MC_IDENTITY) {
         color_info->subsampling_x = color_info->subsampling_y = 0;
         color_info->color_range = 1;  // assume full color-range
-        if (!(seq_header->seq_profile == PROFILE_1 ||
-            (seq_header->seq_profile == PROFILE_2 &&
+        if (!(seq_header->seq_profile == HIGH_PROFILE ||
+            (seq_header->seq_profile == PROFESSIONAL_PROFILE &&
                 color_info->bit_depth == AOM_BITS_12)))
             return; // EB_DecUnsupportedBitstream;
     }
@@ -197,9 +211,9 @@ void read_color_config(bitstrm_t *bs, EbColorConfig   *color_info, SeqHeader   *
     {
         color_info->color_range = dec_get_bits(bs, 1);
         PRINT("color_range", color_info->color_range);
-        if (seq_header->seq_profile == PROFILE_0)
+        if (seq_header->seq_profile == MAIN_PROFILE)
             color_info->subsampling_x = color_info->subsampling_y = 1; // 420 only
-        else if (seq_header->seq_profile == PROFILE_1)
+        else if (seq_header->seq_profile == HIGH_PROFILE)
             color_info->subsampling_x = color_info->subsampling_y = 0; // 444 only
         else {
             if (color_info->bit_depth == AOM_BITS_12) {
@@ -217,7 +231,7 @@ void read_color_config(bitstrm_t *bs, EbColorConfig   *color_info, SeqHeader   *
                 color_info->subsampling_y = 0;
             }
         }
-        if (color_info->matrix_coefficients == AOM_CICP_MC_IDENTITY &&
+        if (color_info->matrix_coefficients == EB_CICP_MC_IDENTITY &&
             (color_info->subsampling_x || color_info->subsampling_y))
             return; // EB_DecUnsupportedBitstream;
         if (color_info->subsampling_x && color_info->subsampling_y)
@@ -236,7 +250,6 @@ void read_temporal_delimitor_obu(uint8_t *seen_frame_header) {
 EbErrorType read_sequence_header_obu(bitstrm_t *bs, SeqHeader   *seq_header)
 {
     EbErrorType status;
-    uint8_t flag;
 
     seq_header->seq_profile = (EbAv1SeqProfile)dec_get_bits(bs, 3);
     PRINT("seq_profile", seq_header->seq_profile);
@@ -575,13 +588,13 @@ void read_frame_size(bitstrm_t *bs, SeqHeader   *seq_header, FrameHeader
     PRINT_FRAME("frame_width", frame_info->frame_size.frame_width - 1);
     PRINT_FRAME("frame_height", frame_info->frame_size.frame_height - 1);
     superres_params(bs, seq_header, frame_info);
-    compute_image_size(bs, frame_info);
+    compute_image_size(frame_info);
 
     assert((frame_info->frame_size.frame_width - 1) <= seq_header->max_frame_width - 1);
     assert((frame_info->frame_size.frame_height - 1) <= seq_header->max_frame_height - 1);
 }
 
-void read_render_size(bitstrm_t *bs, SeqHeader   *seq_header, FrameHeader   *frame_info)
+void read_render_size(bitstrm_t *bs, FrameHeader   *frame_info)
 {
     uint8_t render_and_frame_size_different;
     render_and_frame_size_different = dec_get_bits(bs, 1);
@@ -602,13 +615,13 @@ void read_render_size(bitstrm_t *bs, SeqHeader   *seq_header, FrameHeader   *fra
 void frame_size_with_refs(bitstrm_t *bs, SeqHeader   *seq_header, FrameHeader
     *frame_info, int *frame_size_override_flag)
 {
-    int found_ref, width, height;
+    int found_ref;
     for (int i = 0; i < REFS_PER_FRAME; i++) {
         found_ref = dec_get_bits(bs, 1);
         PRINT_FRAME("found_ref", found_ref);
         if (found_ref == 1) {
-            width = frame_info->frame_size.superres_upscaled_width;
-            height = frame_info->frame_size.superres_upscaled_height;
+            // width = frame_info->frame_size.superres_upscaled_width;
+            // height = frame_info->frame_size.superres_upscaled_height;
             // TODO: Assign FrameWidth/Height
             break;
         }
@@ -616,12 +629,12 @@ void frame_size_with_refs(bitstrm_t *bs, SeqHeader   *seq_header, FrameHeader
     if (found_ref == 0)
     {
         read_frame_size(bs, seq_header, frame_info, frame_size_override_flag);
-        read_render_size(bs, seq_header, frame_info);
+        read_render_size(bs, frame_info);
     }
     else
     {
         superres_params(bs, seq_header, frame_info);
-        compute_image_size(bs, frame_info);
+        compute_image_size(frame_info);
     }
 }
 
@@ -744,8 +757,8 @@ void read_tile_info(bitstrm_t *bs, TilesInfo *tile_info, SeqHeader *seq_header,
     }
 
     // Bitstream conformance
-    assert(tile_info->tile_cols <= MAX_TILE_ROWS);
-    assert(tile_info->tile_rows <= MAX_TILE_COLS);
+    assert(tile_info->tile_cols <= MAX_TILE_ROWS_AV1);
+    assert(tile_info->tile_rows <= MAX_TILE_COLS_AV1);
 
     if (tile_info->tile_cols_log2 > 0 || tile_info->tile_rows_log2 > 0) {
         tile_info->context_update_tile_id = dec_get_bits(bs,
@@ -1142,10 +1155,27 @@ int decode_subexp(bitstrm_t *bs, int numSyms)
     return 0;
 }
 
+int decode_unsigned_subexp_with_ref(bitstrm_t *bs, int mx, int r)
+{
+    int v = decode_subexp(bs, mx);
+    if ((r << 1) <= mx) {
+        return inverse_recenter(r, v);
+    }
+    else {
+        return mx - 1 - inverse_recenter(mx - 1 - r, v);
+    }
+}
+
+int decode_signed_subexp_with_ref(bitstrm_t *bs, int low, int high, int r)
+{
+    int x = decode_unsigned_subexp_with_ref(bs, high - low, r - low);
+    return x + low;
+}
+
 void read_global_param(bitstrm_t *bs, TransformationType type, int ref_idx,
     int idx, FrameHeader *frame_info)
 {
-    int PrevGmParams[ALTREF_FRAME][6] = { 0 };
+    int PrevGmParams[ALTREF_FRAME][6]; // Need to initialize in setup_past_independence() section: 6.8.2
     for (int ref = LAST_FRAME; ref <= ALTREF_FRAME; ref++)
         for (int i = 0; i <= 5; i++)
             PrevGmParams[ref][i] = ((i % 3 == 2) ? 1 << WARPEDMODEL_PREC_BITS : 0);
@@ -1171,7 +1201,7 @@ void read_global_param(bitstrm_t *bs, TransformationType type, int ref_idx,
     // PrevGmParams[][] is not in struct but getting referenced in difference palce
     r = (PrevGmParams[ref_idx][idx] >> prec_diff) - sub;
     frame_info->global_motion_params.gm_params[ref_idx][idx] =
-        (decode_signed_subexp_with_ref(bs, frame_info, -mx, mx + 1, r) <<
+        (decode_signed_subexp_with_ref(bs, -mx, mx + 1, r) <<
          prec_diff) + round;
 }
 
@@ -1309,10 +1339,10 @@ void read_skip_mode_params(bitstrm_t *bs, FrameHeader *frame_info, int FrameIsIn
 void read_film_grain_params(bitstrm_t *bs, FilmGrainParams *grain_params,
     SeqHeader *seq_header, FrameHeader *frame_info)
 {
-    int film_grain_params_ref_idx, temp_grain_seed, i, grain_scaling_minus_8,
-        numPosLuma, numPosChroma;
-    if (!seq_header->film_grain_params_present || !frame_info->show_frame &&
-        !frame_info->showable_frame) {
+    int film_grain_params_ref_idx, temp_grain_seed, i, numPosLuma, numPosChroma;
+
+    if (!seq_header->film_grain_params_present || (!frame_info->show_frame &&
+        !frame_info->showable_frame)) {
         // TODO: reset_grain_params(grain_params);
         return;
     }
@@ -1354,8 +1384,8 @@ void read_film_grain_params(bitstrm_t *bs, FilmGrainParams *grain_params,
     else
         grain_params->chroma_scaling_from_luma = dec_get_bits(bs, 1);
     if (seq_header->color_config.mono_chrome || grain_params->chroma_scaling_from_luma
-        || (seq_header->color_config.subsampling_y == 1) &&
-        (seq_header->color_config.subsampling_x == 1) && grain_params->num_y_points) {
+        || ( (seq_header->color_config.subsampling_y == 1) &&
+        (seq_header->color_config.subsampling_x == 1) && grain_params->num_y_points)) {
         grain_params->num_cb_points = 0;
         grain_params->num_cr_points = 0;
     }
@@ -1468,10 +1498,14 @@ void read_uncompressed_header(bitstrm_t *bs, SeqHeader *seq_header,
     FrameHeader *frame_info, ObuHeader *obu_header, EbColorConfig *color_info,
     int num_planes)
 {
-    int id_len, allFrames, FrameIsIntra = 0, i, frame_size_override_flag = 0, diff_len;
+    (void)color_info;
+    int id_len=0, allFrames, FrameIsIntra = 0, i, frame_size_override_flag = 0;
+    uint32_t diff_len;
     int delta_frame_id_length_minus_1, frame_refs_short_signaling;
-    int last_frame_idx, gold_frame_idx, frame_to_show_map_idx,
-        prev_frame_id = 0, have_prev_frame_id, diff_frame_id;
+    int gold_frame_idx, frame_to_show_map_idx;
+    int have_prev_frame_id, diff_frame_id;
+    int last_frame_idx;
+    uint32_t prev_frame_id = 0;
     uint8_t expected_frame_id, display_frame_id;
 
     if (seq_header->frame_id_numbers_present_flag) {
@@ -1506,13 +1540,13 @@ void read_uncompressed_header(bitstrm_t *bs, SeqHeader *seq_header,
                     return; // EB_Corrupt_Frame;
             }
 
-            frame_info->frame_type; //frame_type = RefFrameType[ frame_to_show_map_idx ]
+            //frame_type = RefFrameType[ frame_to_show_map_idx ]
             if (frame_info->frame_type == KEY_FRAME)
                 frame_info->refresh_frame_flags = allFrames;
             if (seq_header->film_grain_params_present)
                 // TODO: Handle while implementing Inter
                 // load_grain_params(frame_to_show_map_idx);
-                frame_info->film_grain_params;
+                assert(0);
             return;
         }
         frame_info->frame_type = dec_get_bits(bs, 2);
@@ -1527,7 +1561,7 @@ void read_uncompressed_header(bitstrm_t *bs, SeqHeader *seq_header,
             frame_info->showable_frame = (frame_info->frame_type != KEY_FRAME);
         else
             frame_info->showable_frame = dec_get_bits(bs, 1);
-        if (frame_info->frame_type == EB_AV1_SWITCH_PICTURE ||
+        if (frame_info->frame_type == S_FRAME ||
             (frame_info->frame_type == KEY_FRAME && frame_info->show_frame))
             frame_info->error_resilient_mode = 1;
         else
@@ -1574,7 +1608,7 @@ void read_uncompressed_header(bitstrm_t *bs, SeqHeader *seq_header,
         prev_frame_id = frame_info->current_frame_id;
 
     if (seq_header->frame_id_numbers_present_flag) {
-        int PrevFrameID = frame_info->current_frame_id;
+        // int PrevFrameID = frame_info->current_frame_id;
         frame_info->current_frame_id = dec_get_bits(bs, id_len);
         PRINT_FRAME("current_frame_id", frame_info->current_frame_id);
 
@@ -1586,17 +1620,16 @@ void read_uncompressed_header(bitstrm_t *bs, SeqHeader *seq_header,
                 diff_frame_id =
                     (1 << id_len) + frame_info->current_frame_id - prev_frame_id;
             }
-        }
-
         // Bitstream conformance
         if (frame_info->current_frame_id == prev_frame_id || diff_frame_id >=
             1 << (id_len - 1))
             return; // EB_Corrupt_Frame;
+        }
 
         //mark_ref_frames( id_len )
         diff_len = seq_header->delta_frame_id_length_minus_2 + 2;
         for (i = 0; i < REF_FRAMES; i++) {
-            if (frame_info->current_frame_id > (1 << diff_len)) {
+            if (frame_info->current_frame_id > (uint32_t)(1 << diff_len)) {
                 if (frame_info->ref_frame_idx[i] > frame_info->current_frame_id ||
                     frame_info->ref_frame_idx[i] > (frame_info->current_frame_id -
                     (1 - diff_len)))
@@ -1604,7 +1637,7 @@ void read_uncompressed_header(bitstrm_t *bs, SeqHeader *seq_header,
             }
             else {
                 if (frame_info->ref_frame_idx[i] > frame_info->current_frame_id &&
-                    frame_info->ref_frame_idx[i] < ((1 << id_len) +
+                    frame_info->ref_frame_idx[i] < (uint32_t)((1 << id_len) +
                         frame_info->current_frame_id - (1 << diff_len)))
                     frame_info->ref_valid[i] = 0;
             }
@@ -1613,7 +1646,7 @@ void read_uncompressed_header(bitstrm_t *bs, SeqHeader *seq_header,
     else {
         frame_info->current_frame_id = 0;
     }
-    if (frame_info->frame_type == EB_AV1_SWITCH_PICTURE)
+    if (frame_info->frame_type == S_FRAME)
         frame_size_override_flag = 1;
     else if (seq_header->reduced_still_picture_header)
         frame_size_override_flag = 0;
@@ -1657,13 +1690,13 @@ void read_uncompressed_header(bitstrm_t *bs, SeqHeader *seq_header,
     frame_info->allow_high_precision_mv = 0;
     frame_info->use_ref_frame_mvs = 0;
     frame_info->allow_intrabc = 0;
-    if (frame_info->frame_type == EB_AV1_SWITCH_PICTURE || (frame_info->frame_type ==
+    if (frame_info->frame_type == S_FRAME || (frame_info->frame_type ==
         KEY_FRAME && frame_info->show_frame))
         frame_info->refresh_frame_flags = 0xFF;
     else
         frame_info->refresh_frame_flags = dec_get_bits(bs, 8);
 
-    if (frame_info->frame_type == EB_AV1_INTRA_ONLY_PICTURE)
+    if (frame_info->frame_type == INTRA_ONLY_FRAME)
         assert(frame_info->refresh_frame_flags != 0xFF);
 
     PRINT_FRAME("refresh_frame_flags", frame_info->refresh_frame_flags);
@@ -1681,7 +1714,7 @@ void read_uncompressed_header(bitstrm_t *bs, SeqHeader *seq_header,
     }
     if (FrameIsIntra) {
         read_frame_size(bs, seq_header, frame_info, &frame_size_override_flag);
-        read_render_size(bs, seq_header, frame_info);
+        read_render_size(bs, frame_info);
         if (frame_info->allow_screen_content_tools &&
             frame_info->frame_size.render_width) {
             if (frame_info->allow_screen_content_tools &&
@@ -1708,7 +1741,7 @@ void read_uncompressed_header(bitstrm_t *bs, SeqHeader *seq_header,
             }
         }
 
-        int DeltaFrameId;
+        //int DeltaFrameId;
         for (i = 0; i < INTER_REFS_PER_FRAME; i++) {
             if (!frame_refs_short_signaling) {
                 frame_info->ref_frame_idx[i] = dec_get_bits(bs, 3);
@@ -1730,7 +1763,7 @@ void read_uncompressed_header(bitstrm_t *bs, SeqHeader *seq_header,
                 &frame_size_override_flag);
         else {
             read_frame_size(bs, seq_header, frame_info, &frame_size_override_flag);
-            read_render_size(bs, seq_header, frame_info);
+            read_render_size(bs, frame_info);
         }
         if (frame_info->force_integer_mv)
             frame_info->allow_high_precision_mv = 0;
@@ -1746,12 +1779,12 @@ void read_uncompressed_header(bitstrm_t *bs, SeqHeader *seq_header,
         else
             frame_info->use_ref_frame_mvs = dec_get_bits(bs, 1);
         PRINT_FRAME("use_ref_frame_mvs", frame_info->use_ref_frame_mvs);
-        for (i = 0; i < INTER_REFS_PER_FRAME; i++) {
-            int refFrame = LAST_FRAME + i;
-            int hint = frame_info->ref_order_hint[frame_info->ref_frame_idx[i]];
+        //for (i = 0; i < INTER_REFS_PER_FRAME; i++) {
+            //int refFrame = LAST_FRAME + i;
+            // int hint = frame_info->ref_order_hint[frame_info->ref_frame_idx[i]];
             //frame_info->order_hint
             // RefOrderHint, RefFrameSignBias not available in structure
-        }
+        //}
     }
     if (seq_header->reduced_still_picture_header || frame_info->disable_cdf_update)
         frame_info->disable_frame_end_update_cdf = 1;
@@ -1833,7 +1866,7 @@ EbErrorType read_frame_header_obu(bitstrm_t *bs, SeqHeader *seq_header,
 {
     EbErrorType status = EB_ErrorNone;
     int num_planes = av1_num_planes(&seq_header->color_config);
-    int start_position, end_position, header_bytes;
+    uint32_t start_position, end_position, header_bytes;
 
     start_position = get_position(bs);
     read_uncompressed_header(bs, seq_header, frame_info, obu_header,
@@ -1919,6 +1952,8 @@ void clear_left_context(EbDecHandle *dec_handle_ptr)
 
 void clear_cdef(int32_t tile_row, int32_t tile_col, CDEFParams *cdefParams)
 {
+    (void)tile_row;
+    (void)tile_col;
     for (int i = 0; i < CDEF_MAX_STRENGTHS; i++)
     {
         cdefParams->cdef_uv_strength[i] = 0;
@@ -1959,6 +1994,7 @@ EbErrorType reset_parse_ctx(FRAME_CONTEXT *frm_ctx, int32_t base_qp) {
 EbErrorType parse_tile(bitstrm_t *bs, EbDecHandle *dec_handle_ptr,
                        TilesInfo *tile_info, int32_t tile_row, int32_t tile_col)
 {
+    (void)bs;
     EbErrorType status = EB_ErrorNone;
 
     EbColorConfig *color_config = &dec_handle_ptr->seq_header.color_config;
@@ -1971,7 +2007,7 @@ EbErrorType parse_tile(bitstrm_t *bs, EbDecHandle *dec_handle_ptr,
     // to-do access to wiener info that is currently part of PartitionInfo_t
     //clear_loop_restoration(num_planes, part_info);
 
-    for (int32_t mi_row = tile_info->tile_row_start_sb[tile_row]; 
+    for (uint32_t mi_row = tile_info->tile_row_start_sb[tile_row]; 
          mi_row < tile_info->tile_row_start_sb[tile_row + 1]; 
          mi_row += dec_handle_ptr->seq_header.sb_mi_size)
     {
@@ -1983,7 +2019,7 @@ EbErrorType parse_tile(bitstrm_t *bs, EbDecHandle *dec_handle_ptr,
         /*add tile level cfl init */
         cfl_init(&((DecModCtxt*)dec_handle_ptr->pv_dec_mod_ctxt)->cfl_ctx, color_config);
 
-        for (int32_t mi_col = tile_info->tile_col_start_sb[tile_col];
+        for (uint32_t mi_col = tile_info->tile_col_start_sb[tile_col];
             mi_col < tile_info->tile_col_start_sb[tile_col + 1];
             mi_col += dec_handle_ptr->seq_header.sb_mi_size)
 
@@ -2141,7 +2177,7 @@ EbErrorType read_tile_group_obu(bitstrm_t *bs, EbDecHandle *dec_handle_ptr,
 
     int num_tiles, tg_start, tg_end, tile_bits, tile_start_and_end_present_flag = 0;
     int tile_row, tile_col, tile_size;
-    int start_position, end_position, header_bytes;
+    uint32_t start_position, end_position, header_bytes;
     num_tiles = tiles_info->tile_cols * tiles_info->tile_rows;
 
     start_position = get_position(bs);
@@ -2205,81 +2241,17 @@ EbErrorType read_tile_group_obu(bitstrm_t *bs, EbDecHandle *dec_handle_ptr,
     return status;
 }
 
-#if 0
-// Reads frame OBU structure
-EbErrorType decode_obu(EbDecHandle *dec_handle_ptr, uint8_t *data, uint32_t data_size)
-{
-    bitstrm_t bs;
-    EbErrorType status;
-    ObuHeader obu_header;
 
-    dec_bits_init(&bs, data, data_size);
-
-    status = open_bistream_unit(&bs, &obu_header, data_size, &length_size);
-    if (status != EB_ErrorNone) return status;
-
-    payload_size = obu_header.payload_size;
-
-    switch (obu_header.obu_type) {
-
-    case OBU_TEMPORAL_DELIMITER:
-        PRINT_NAME("**************OBU_TEMPORAL_DELIMITER*******************")
-            read_temporal_delimitor_obu(&dec_handle_ptr->seen_frame_header);
-        break;
-
-    case OBU_SEQUENCE_HEADER:
-        PRINT_NAME("**************OBU_SEQUENCE_HEADER*******************")
-            status = read_sequence_header_obu(&bs, &dec_handle_ptr->seq_header);
-        if (status != EB_ErrorNone) return status;
-        break;
-
-    case OBU_FRAME_HEADER:
-    case OBU_REDUNDANT_FRAME_HEADER:
-    case OBU_FRAME:
-        if (obu_header.obu_type == OBU_FRAME)
-            PRINT_NAME("**************OBU_FRAME*******************")
-        else if (obu_header.obu_type == OBU_FRAME_HEADER) {
-            PRINT_NAME("**************OBU_FRAME_HEADER*******************")
-                assert(0 == dec_handle_ptr->seen_frame_header);
-        }
-        else {
-            PRINT_NAME("**************OBU_REDUNDANT_FRAME_HEADER*******************")
-                assert(1 == dec_handle_ptr->seen_frame_header);
-        }
-
-        if (!dec_handle_ptr->seen_frame_header) {
-            dec_handle_ptr->seen_frame_header = 1;
-            status = read_frame_header_obu(&bs, &dec_handle_ptr->seq_header,
-                &dec_handle_ptr->frame_info, &obu_header, obu_header.obu_type != OBU_FRAME);
-        }
-        else {
-            //frame_header_copy(); add code
-        }
-
-        if (obu_header.obu_type != OBU_FRAME) break; //for OBU_TILE_GROUP coming under OBU_FRAME
-
-        byte_alignment(&bs);
-
-    case OBU_TILE_GROUP:
-        //add code
-        break;
-
-    default:
-        PRINT_NAME("**************UNKNOWN OBU*******************")
-            break;
-    }
-
-    return status;
-}
-#else
 EbErrorType decode_obu(EbDecHandle *dec_handle_ptr, unsigned char *data, unsigned int data_size)
 {
+    (void)dec_handle_ptr;
+    (void)data;
+    (void)data_size;
     return 0;
 }
-#endif
 
 // Decode all OBUs in a Frame
-EbErrorType decode_multiple_obu(EbDecHandle *dec_handle_ptr, uint8_t *data, uint32_t data_size)
+EbErrorType decode_multiple_obu(EbDecHandle *dec_handle_ptr, const uint8_t *data, uint32_t data_size)
 {
     bitstrm_t bs;
     EbErrorType status = EB_ErrorNone;

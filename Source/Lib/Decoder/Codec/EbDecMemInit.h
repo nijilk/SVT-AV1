@@ -37,7 +37,7 @@ if (*(svt_dec_memory_map_index) >= MAX_NUM_PTR) { \
 svt_dec_lib_malloc_count++;
 
 #else
-#define EB_ALLIGN_MALLOC(type, pointer, n_elements, pointer_class) \
+#define EB_ALLIGN_MALLOC_DEC(type, pointer, n_elements, pointer_class) \
 if (posix_memalign((void**)(&(pointer)), ALVALUE, n_elements) != 0) { \
     return EB_ErrorInsufficientResources; \
         } \

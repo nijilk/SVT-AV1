@@ -21,6 +21,7 @@
 #include "EbObuParse.h"
 
 #include "EbDecMemInit.h"
+#include "EbDecInverseQuantize.h"
 
 /*TODO: Remove and harmonize with encoder. Globals prevent harmonization now! */
 /*****************************************
@@ -49,6 +50,7 @@ EbErrorType dec_eb_recon_picture_buffer_desc_ctor(
     picture_buffer_desc_ptr->width = pictureBufferDescInitDataPtr->max_width;
     picture_buffer_desc_ptr->height = pictureBufferDescInitDataPtr->max_height;
     picture_buffer_desc_ptr->bit_depth = pictureBufferDescInitDataPtr->bit_depth;
+    picture_buffer_desc_ptr->color_format = pictureBufferDescInitDataPtr->color_format;
     picture_buffer_desc_ptr->stride_y = pictureBufferDescInitDataPtr->max_width + pictureBufferDescInitDataPtr->left_padding + pictureBufferDescInitDataPtr->right_padding;
     picture_buffer_desc_ptr->stride_cb = picture_buffer_desc_ptr->stride_cr = picture_buffer_desc_ptr->stride_y >> 1;
     picture_buffer_desc_ptr->origin_x = pictureBufferDescInitDataPtr->left_padding;
@@ -210,7 +212,11 @@ static EbErrorType init_master_frame_ctxt(EbDecHandle  *dec_handle_ptr) {
     input_picture_buffer_desc_init_data.max_width = seq_header->max_frame_width;
     input_picture_buffer_desc_init_data.max_height = seq_header->max_frame_height;
     input_picture_buffer_desc_init_data.bit_depth = seq_header->color_config.bit_depth;
-    input_picture_buffer_desc_init_data.buffer_enable_mask = PICTURE_BUFFER_DESC_FULL_MASK;
+
+    input_picture_buffer_desc_init_data.color_format    = dec_handle_ptr->
+                                                dec_config.max_color_format;
+    input_picture_buffer_desc_init_data.buffer_enable_mask = 
+                                                PICTURE_BUFFER_DESC_FULL_MASK;
 
     input_picture_buffer_desc_init_data.left_padding = PAD_VALUE;
     input_picture_buffer_desc_init_data.right_padding = PAD_VALUE;
@@ -236,23 +242,24 @@ static EbErrorType init_parse_context (EbDecHandle  *dec_handle_ptr) {
 
     SeqHeader   *seq_header = &dec_handle_ptr->seq_header;
 
-    int32_t num_mi_row, num_mi_col, num_mi_frame;
+    int32_t num_mi_row, num_mi_col; 
+    //int32_t num_mi_frame;
 
     int32_t num_4x4_neigh_sb    = seq_header->sb_mi_size;
     int32_t sb_size_log2        = seq_header->sb_size_log2;
     int32_t sb_aligned_width    = ALIGN_POWER_OF_TWO(seq_header->max_frame_width,
                                     sb_size_log2);
-    int32_t sb_aligned_height   = ALIGN_POWER_OF_TWO(seq_header->max_frame_height,
-                                    sb_size_log2);
+    /*int32_t sb_aligned_height   = ALIGN_POWER_OF_TWO(seq_header->max_frame_height,
+                                    sb_size_log2);*/
     int32_t sb_cols             = sb_aligned_width >> sb_size_log2;
-    int32_t sb_rows             = sb_aligned_height >> sb_size_log2;
+    //int32_t sb_rows             = sb_aligned_height >> sb_size_log2;
     int8_t num_planes           = seq_header->color_config.mono_chrome ? 1 : MAX_MB_PLANE;
 
     ParseNbr4x4Ctxt *neigh_ctx = &parse_ctx->parse_nbr4x4_ctxt;
 
     num_mi_col = sb_cols * num_4x4_neigh_sb;
     num_mi_row = num_4x4_neigh_sb;
-    num_mi_frame = sb_cols * sb_rows * num_4x4_neigh_sb;
+    //num_mi_frame = sb_cols * sb_rows * num_4x4_neigh_sb;
 
     EB_MALLOC_DEC(uint8_t*, neigh_ctx->above_tx_wd, num_mi_col * sizeof(uint8_t), EB_N_PTR);
     EB_MALLOC_DEC(uint8_t*, neigh_ctx->left_tx_ht, num_mi_row * sizeof(uint8_t), EB_N_PTR);

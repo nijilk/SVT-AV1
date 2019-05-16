@@ -4,13 +4,15 @@
 */
 
 #include "EbDefinitions.h"
+#include "EbBitstreamUnit.h"
+
 #include "EbDecBitstream.h"
 
 /* Function used for bitstream structure initialization
 Assumes data is aligned to 4 bytes. If not aligned  then all bitstream
 accesses will be unaligned and hence  costlier. Since this is codec memory that
 holds emulation prevented data, assumption of aligned to 4 bytes is valid */
-void dec_bits_init(bitstrm_t *bs, uint8_t *data, uint32_t u4_numbytes) {
+void dec_bits_init(bitstrm_t *bs, const uint8_t *data, uint32_t u4_numbytes) {
     uint32_t cur_word;
     uint32_t nxt_word;
     uint32_t temp;
@@ -21,11 +23,11 @@ void dec_bits_init(bitstrm_t *bs, uint8_t *data, uint32_t u4_numbytes) {
     temp = *buf++;
     nxt_word = TO_BIG_ENDIAN(temp);
     bs->bit_ofst = 0;
-    bs->buf_base = data;
+    bs->buf_base = (uint8_t *)data;
     bs->buf = buf;
     bs->cur_word = cur_word;
     bs->nxt_word = nxt_word;
-    bs->buf_max = data + u4_numbytes + 8;
+    bs->buf_max = (uint8_t *)data + u4_numbytes + 8;
     return;
 }
 
@@ -46,10 +48,11 @@ uint32_t dec_get_bits(bitstrm_t *bs, uint32_t numbits) {
 void dec_get_bits_leb128(bitstrm_t *bs, size_t available, uint64_t *value, 
     size_t *length) 
 {
+    (void)available;
     *value = 0;
     *length = 0;
     int i;
-    uint8_t leb128_byte = 0;
+    uint32_t leb128_byte = 0;
 
     for (i = 0; i < 8; i++) {
         leb128_byte = dec_get_bits(bs, 8);
@@ -95,7 +98,7 @@ int32_t dec_get_bits_su(bitstrm_t *bs, uint32_t n) {
 /* Unsigned little-endian n-byte number appearing directly in the bitstream */
 uint32_t dec_get_bits_le(bitstrm_t *bs, uint32_t n) {
     uint32_t t = 0, byte;
-        for (int i = 0; i < n; i++) {
+        for (uint32_t i = 0; i < n; i++) {
             byte = dec_get_bits(bs, 8);
             t += (byte << (i * 8));
         }
@@ -103,7 +106,7 @@ uint32_t dec_get_bits_le(bitstrm_t *bs, uint32_t n) {
 }
 
 uint32_t get_position(bitstrm_t *bs) {
-    return ( (( ((uint8_t *)bs->buf) - bs->buf_base) * 8) - WORD_SIZE/*nxt_word*/ 
+    return (uint32_t)( (( ((uint8_t *)bs->buf) - bs->buf_base) * 8) - WORD_SIZE/*nxt_word*/ 
             - (WORD_SIZE - bs->bit_ofst)/*cur_word*/ );
 }
 

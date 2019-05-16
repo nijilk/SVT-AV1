@@ -1,3 +1,19 @@
+/*
+* Copyright(c) 2019 Netflix, Inc.
+* SPDX - License - Identifier: BSD - 2 - Clause - Patent
+*/
+
+/*
+* Copyright (c) 2016, Alliance for Open Media. All rights reserved
+*
+* This source code is subject to the terms of the BSD 2 Clause License and
+* the Alliance for Open Media Patent License 1.0. If the BSD 2 Clause License
+* was not distributed with this source code in the LICENSE file, you can
+* obtain it at www.aomedia.org/license/software. If the Alliance for Open
+* Media Patent License 1.0 was not distributed with this source code in the
+* PATENTS file, you can obtain it at www.aomedia.org/license/patent.
+*/
+
 #include "EbDefinitions.h"
 #include "EbUtility.h"
 #include "EbPictureBufferDesc.h"
@@ -281,10 +297,8 @@ int filter_intra_allowed(EbDecHandle *dec_handle,
     const ModeInfo_t *mbmi) 
 {
     return mbmi->mode == DC_PRED &&
-#if 0
         /* TO DO : Add when palette support comes */
-        mbmi->palette_mode_info.palette_size[0] == 0 &&
-#endif
+        /*mbmi->palette_mode_info.palette_size[0] == 0 &&*/
         filter_intra_allowed_bsize(dec_handle, mbmi->sb_type);
 }
 
@@ -294,13 +308,7 @@ int allow_intrabc(const EbDecHandle *dec_handle) {
             && dec_handle->seq_header.seq_force_screen_content_tools
             && dec_handle->frame_header.allow_intrabc;
 }
-#if 0
-void clamp_mv(MV_dec *mv, int min_col, int max_col, int min_row,
-    int max_row) {
-    mv->col = clamp(mv->col, min_col, max_col);
-    mv->row = clamp(mv->row, min_row, max_row);
-}
-#endif
+
 /*TODO: Move to common after segregating from encoder */
 PredictionMode dec_get_uv_mode(UvPredictionMode mode) {
     assert(mode < UV_INTRA_MODES);

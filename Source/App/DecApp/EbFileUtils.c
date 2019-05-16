@@ -8,6 +8,8 @@
 
 #include "EbFileUtils.h"
 
+const char *IVF_SIGNATURE = "DKIF";
+
 static unsigned int mem_get_le16(const void *vmem) {
     unsigned int val;
     const uint8_t *mem = (const uint8_t *)vmem;

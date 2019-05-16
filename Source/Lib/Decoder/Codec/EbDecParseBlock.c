@@ -3,6 +3,17 @@
 * SPDX - License - Identifier: BSD - 2 - Clause - Patent
 */
 
+/*
+* Copyright (c) 2016, Alliance for Open Media. All rights reserved
+*
+* This source code is subject to the terms of the BSD 2 Clause License and
+* the Alliance for Open Media Patent License 1.0. If the BSD 2 Clause License
+* was not distributed with this source code in the LICENSE file, you can
+* obtain it at www.aomedia.org/license/software. If the Alliance for Open
+* Media Patent License 1.0 was not distributed with this source code in the
+* PATENTS file, you can obtain it at www.aomedia.org/license/patent.
+*/
+
 #include "EbDefinitions.h"
 #include "EbPictureBufferDesc.h"
 
@@ -470,8 +481,8 @@ static INLINE int get_nz_map_ctx_from_stats(
     return 0;
 }
 
-void palette_mode_info(EbDecHandle *dec_handle,
-    int mi_row, int mi_col, SvtReader *r) {
+void palette_mode_info(/*EbDecHandle *dec_handle,
+    int mi_row, int mi_col, SvtReader *r*/) {
     
     //TO-DO
     assert(0);
@@ -532,7 +543,6 @@ void read_cdef(EbDecHandle *dec_handle, SvtReader *r, PartitionInfo_t *xd,
     }
     // Read CDEF param at the first non-skip coding block
     const int mask = (1 << (6 - MI_SIZE_LOG2));
-    const int m = ~(mask - 1);
     const int index = dec_handle->seq_header.sb_size == BLOCK_128X128
         ? !!(mi_col & mask) + 2 * !!(mi_row & mask)
         : 0;
@@ -697,6 +707,103 @@ static void read_delta_params(EbDecHandle *dec_handle, SvtReader *r,
     }
 }
 
+int is_directional_mode(PredictionMode mode) {
+    return mode >= V_PRED && mode <= D67_PRED;
+}
+
+int intra_angle_info(SvtReader *r, AomCdfProb *cdf, PredictionMode mode, BlockSize bsize) {
+    int angleDeltaY = 0;
+    if (use_angle_delta(bsize) && is_directional_mode(mode))
+    {
+        const int sym = svt_read_symbol(r, cdf, 2 * MAX_ANGLE_DELTA + 1, ACCT_STR);
+        angleDeltaY = sym - MAX_ANGLE_DELTA;
+    }
+    return angleDeltaY;
+}
+
+int get_segment_id(FrameHeader *frm_info, uint8_t *segment_ids,
+    BlockSize bsize, uint32_t mi_row, uint32_t mi_col) {
+    const int mi_offset = mi_row * frm_info->mi_cols + mi_col;
+    const uint32_t bw = mi_size_wide[bsize];
+    const uint32_t bh = mi_size_high[bsize];
+    const int xmis = AOMMIN(frm_info->mi_cols - mi_col, bw);
+    const int ymis = AOMMIN(frm_info->mi_rows - mi_row, bh);
+    int x, y, segment_id = MAX_SEGMENTS;
+
+    for (y = 0; y < ymis; ++y)
+        for (x = 0; x < xmis; ++x)
+            segment_id =
+            AOMMIN(segment_id, segment_ids[mi_offset + y * frm_info->mi_cols + x]);
+
+    assert(segment_id >= 0 && segment_id < MAX_SEGMENTS);
+    return segment_id;
+}
+
+static int read_segment_id(EbDecHandle *dec_handle, PartitionInfo_t *xd, uint32_t mi_row,
+    uint32_t mi_col, SvtReader *r, int skip)
+{
+    int cdf_num = 0;
+    ParseCtxt *parse_ctxt = (ParseCtxt *)dec_handle->pv_parse_ctxt;
+
+    int prev_ul = -1;  // top left segment_id
+    int prev_l = -1;   // left segment_id
+    int prev_u = -1;   // top segment_id
+    int pred = -1;
+    if ((xd->up_available) && (xd->left_available)) {
+        prev_ul = get_segment_id(&dec_handle->frame_header, parse_ctxt->parse_nbr4x4_ctxt.segment_maps, BLOCK_4X4, mi_row - 1,
+            mi_col - 1);
+    }
+    if (xd->up_available) {
+        prev_u = get_segment_id(&dec_handle->frame_header, parse_ctxt->parse_nbr4x4_ctxt.segment_maps, BLOCK_4X4, mi_row - 1,
+            mi_col);
+    }
+    if (xd->left_available) {
+        prev_l = get_segment_id(&dec_handle->frame_header, parse_ctxt->parse_nbr4x4_ctxt.segment_maps, BLOCK_4X4, mi_row,
+            mi_col - 1);
+    }
+    if ((prev_ul == prev_u) && (prev_ul == prev_l))
+        cdf_num = 2;
+    else if ((prev_ul == prev_u) || (prev_ul == prev_l) || (prev_u == prev_l))
+        cdf_num = 1;
+
+    // If 2 or more are identical returns that as predictor, otherwise prev_l.
+    if (prev_u == -1)  // edge case
+        pred = prev_l == -1 ? 0 : prev_l;
+    if (prev_l == -1)  // edge case
+        pred = prev_u;
+    pred = (prev_ul == prev_u) ? prev_u : prev_l;
+    return pred;
+
+    if (skip) return pred;
+
+    FRAME_CONTEXT *ec_ctx = &parse_ctxt->frm_ctx[0];
+    SegmentationParams *seg = &(dec_handle->frame_header.segmentation_params);
+
+    struct segmentation_probs *segp = &ec_ctx->seg;
+    AomCdfProb *pred_cdf = segp->spatial_pred_seg_cdf[cdf_num];
+
+    int coded_id = svt_read_symbol(r, pred_cdf, MAX_SEGMENTS, ACCT_STR);
+    return neg_deinterleave(coded_id, pred, seg->last_active_seg_id + 1);
+}
+
+int intra_segment_id(EbDecHandle *dec_handle, PartitionInfo_t *xd, int mi_row, int mi_col,
+    int bsize, SvtReader *r, int skip)
+{
+    SegmentationParams *seg = &dec_handle->frame_header.segmentation_params;
+    int segment_id = 0;
+
+    if (seg->segmentation_enabled) {
+        const int mi_offset = mi_row * dec_handle->frame_header.mi_cols + mi_col;
+        const int bw = mi_size_wide[bsize];
+        const int bh = mi_size_high[bsize];
+        const int x_mis = AOMMIN((int32_t)(dec_handle->frame_header.mi_cols - mi_col), bw);
+        const int y_mis = AOMMIN((int32_t)(dec_handle->frame_header.mi_rows - mi_row), bh);
+        segment_id = read_segment_id(dec_handle, xd, mi_row, mi_col, r, skip);
+        set_segment_id(dec_handle, mi_offset, x_mis, y_mis, segment_id);
+    }
+    return segment_id;
+}
+
 void intra_frame_mode_info(EbDecHandle *dec_handle,
     PartitionInfo_t *xd, int mi_row,
     int mi_col, SvtReader *r, int8_t *cdef_strength) 
@@ -744,7 +851,7 @@ void intra_frame_mode_info(EbDecHandle *dec_handle,
     {
         mbmi->mode = read_intra_mode(r, get_y_mode_cdf(&parse_ctxt->frm_ctx[0], above_mi, left_mi));
         mbmi->angle_delta[PLANE_TYPE_Y] =
-            intra_angle_info(r, &parse_ctxt->frm_ctx[0].angle_delta_cdf[mbmi->mode - V_PRED], mbmi->mode, bsize);
+            intra_angle_info(r, &parse_ctxt->frm_ctx[0].angle_delta_cdf[mbmi->mode - V_PRED][0], mbmi->mode, bsize);
         const int has_chroma =
                 dec_is_chroma_reference(mi_row, mi_col, bsize, color_config.subsampling_x,
                 color_config.subsampling_y);
@@ -754,80 +861,14 @@ void intra_frame_mode_info(EbDecHandle *dec_handle,
             if (mbmi->uv_mode == UV_CFL_PRED)
                 mbmi->cfl_alpha_idx = read_cfl_alphas(&parse_ctxt->frm_ctx[0], r, &mbmi->cfl_alpha_signs);
             mbmi->angle_delta[PLANE_TYPE_UV] =
-            intra_angle_info(r, &parse_ctxt->frm_ctx[0].angle_delta_cdf[mbmi->uv_mode - V_PRED], mbmi->uv_mode, bsize);
+            intra_angle_info(r, &parse_ctxt->frm_ctx[0].angle_delta_cdf[mbmi->uv_mode - V_PRED][0], mbmi->uv_mode, bsize);
         }
 
         if (allow_palette(dec_handle->frame_header.allow_screen_content_tools, bsize))
-            palette_mode_info(dec_handle, mi_row, mi_col, r);
+            palette_mode_info(/*dec_handle, mi_row, mi_col, r*/);
         filter_intra_mode_info(dec_handle, xd, r);
 
     }
-}
-
-int get_segment_id(FrameHeader *frm_info, uint8_t *segment_ids,
-    BlockSize bsize, int mi_row, int mi_col) {
-    const int mi_offset = mi_row * frm_info->mi_cols + mi_col;
-    const int bw = mi_size_wide[bsize];
-    const int bh = mi_size_high[bsize];
-    const int xmis = min(frm_info->mi_cols - mi_col, bw);
-    const int ymis = min(frm_info->mi_rows - mi_row, bh);
-    int x, y, segment_id = MAX_SEGMENTS;
-
-    for (y = 0; y < ymis; ++y)
-        for (x = 0; x < xmis; ++x)
-            segment_id =
-            min(segment_id, segment_ids[mi_offset + y * frm_info->mi_cols + x]);
-
-    assert(segment_id >= 0 && segment_id < MAX_SEGMENTS);
-    return segment_id;
-}
-
-
-static int read_segment_id(EbDecHandle *dec_handle, PartitionInfo_t *xd, int mi_row,
-    int mi_col, int bsize, SvtReader *r, int skip)
-{
-    int cdf_num = 0;
-    ParseCtxt *parse_ctxt = (ParseCtxt *)dec_handle->pv_parse_ctxt;
-
-    int prev_ul = -1;  // top left segment_id
-    int prev_l = -1;   // left segment_id
-    int prev_u = -1;   // top segment_id
-    int pred = -1;
-    if ((xd->up_available) && (xd->left_available)) {
-        prev_ul = get_segment_id(&dec_handle->frame_header, parse_ctxt->parse_nbr4x4_ctxt.segment_maps, BLOCK_4X4, mi_row - 1,
-            mi_col - 1);
-    }
-    if (xd->up_available) {
-        prev_u = get_segment_id(&dec_handle->frame_header, parse_ctxt->parse_nbr4x4_ctxt.segment_maps, BLOCK_4X4, mi_row - 1,
-            mi_col);
-    }
-    if (xd->left_available) {
-        prev_l = get_segment_id(&dec_handle->frame_header, parse_ctxt->parse_nbr4x4_ctxt.segment_maps, BLOCK_4X4, mi_row,
-            mi_col - 1);
-    }
-    if ((prev_ul == prev_u) && (prev_ul == prev_l))
-        cdf_num = 2;
-    else if ((prev_ul == prev_u) || (prev_ul == prev_l) || (prev_u == prev_l))
-        cdf_num = 1;
-
-    // If 2 or more are identical returns that as predictor, otherwise prev_l.
-    if (prev_u == -1)  // edge case
-        pred = prev_l == -1 ? 0 : prev_l;
-    if (prev_l == -1)  // edge case
-        pred = prev_u;
-    pred = (prev_ul == prev_u) ? prev_u : prev_l;
-    return pred;
-
-    if (skip) return pred;
-
-    FRAME_CONTEXT *ec_ctx = &parse_ctxt->frm_ctx[0];
-    SegmentationParams *seg = &(dec_handle->frame_header.segmentation_params);
-
-    struct segmentation_probs *segp = &ec_ctx->seg;
-    AomCdfProb *pred_cdf = segp->spatial_pred_seg_cdf[cdf_num];
-
-    int coded_id = svt_read_symbol(r, pred_cdf, MAX_SEGMENTS, ACCT_STR);
-    return neg_deinterleave(coded_id, pred, seg->last_active_seg_id + 1);
 }
 
 static INLINE int get_pred_context_seg_id(const PartitionInfo_t *xd) {
@@ -850,18 +891,18 @@ void update_seg_ctx(ParseNbr4x4Ctxt *ngr_ctx, int blk_col,
 }
 
 int read_inter_segment_id(EbDecHandle *dec_handle, PartitionInfo_t *xd,
-    int mi_row, int mi_col, int preskip,
+    uint32_t mi_row, uint32_t mi_col, int preskip,
     SvtReader *r) {
     SegmentationParams *seg = &dec_handle->frame_header.segmentation_params;
     ModeInfo_t *const mbmi = xd->mi;
     FrameHeader *frame_header = &dec_handle->frame_header;
     ParseCtxt *parse_ctxt = (ParseCtxt *)dec_handle->pv_parse_ctxt;
     const int mi_offset = mi_row * frame_header->mi_cols + mi_col;
-    const int bw = mi_size_wide[mbmi->sb_type];
-    const int bh = mi_size_high[mbmi->sb_type];
+    const uint32_t bw = mi_size_wide[mbmi->sb_type];
+    const uint32_t bh = mi_size_high[mbmi->sb_type];
 
-    const int x_mis = min(frame_header->mi_cols - mi_col, bw);
-    const int y_mis = min(frame_header->mi_rows - mi_row, bh);
+    const int x_mis = AOMMIN(frame_header->mi_cols - mi_col, bw);
+    const int y_mis = AOMMIN(frame_header->mi_rows - mi_row, bh);
 
     //TODO - check neighbour access index
     int predictedSegmentId = get_segment_id(frame_header,
@@ -883,7 +924,7 @@ int read_inter_segment_id(EbDecHandle *dec_handle, PartitionInfo_t *xd,
                 mbmi->seg_id_predicted = 0;
             }
             update_seg_ctx(&parse_ctxt->parse_nbr4x4_ctxt, mi_col, bw, bh, mbmi->seg_id_predicted);
-            segment_id = read_segment_id(dec_handle, xd, mi_row, mi_col, mbmi->sb_type, r, 1);
+            segment_id = read_segment_id(dec_handle, xd, mi_row, mi_col, r, 1);
             set_segment_id(dec_handle, mi_offset, x_mis, y_mis, segment_id);
             return segment_id;
         }
@@ -899,12 +940,12 @@ int read_inter_segment_id(EbDecHandle *dec_handle, PartitionInfo_t *xd,
             segment_id = predictedSegmentId;
         }
         else {
-            segment_id = read_segment_id(dec_handle, xd, mi_row, mi_col, mbmi->sb_type, r, 0);
+            segment_id = read_segment_id(dec_handle, xd, mi_row, mi_col, r, 0);
         }
         update_seg_ctx(&parse_ctxt->parse_nbr4x4_ctxt, mi_col, bw, bh, mbmi->seg_id_predicted);
     }
     else {
-        segment_id = read_segment_id(dec_handle, xd, mi_row, mi_col, mbmi->sb_type, r, 0);
+        segment_id = read_segment_id(dec_handle, xd, mi_row, mi_col, r, 0);
     }
     set_segment_id(dec_handle, mi_offset, x_mis, y_mis, segment_id);
 
@@ -927,7 +968,7 @@ void intra_block_mode_info(EbDecHandle *dec_handle, int mi_row,
     mbmi->mode = read_intra_mode(r, parse_ctxt->frm_ctx[0].y_mode_cdf[size_group_lookup[bsize]]);
 
     mbmi->angle_delta[PLANE_TYPE_Y] =
-        intra_angle_info(r, parse_ctxt->frm_ctx[0].angle_delta_cdf[mbmi->mode - V_PRED], mbmi->mode, bsize);
+        intra_angle_info(r, &parse_ctxt->frm_ctx[0].angle_delta_cdf[mbmi->mode - V_PRED][0], mbmi->mode, bsize);
     const int has_chroma =
         dec_is_chroma_reference(mi_row, mi_col, bsize, color_cfg->subsampling_x,
             color_cfg->subsampling_y);
@@ -940,21 +981,39 @@ void intra_block_mode_info(EbDecHandle *dec_handle, int mi_row,
                 read_cfl_alphas(&parse_ctxt->frm_ctx[0], r, &mbmi->cfl_alpha_signs);
         }
         mbmi->angle_delta[PLANE_TYPE_UV] = intra_angle_info(r,
-            parse_ctxt->frm_ctx[0].angle_delta_cdf[mbmi->uv_mode - V_PRED], mbmi->uv_mode, bsize);
+            &parse_ctxt->frm_ctx[0].angle_delta_cdf[mbmi->uv_mode - V_PRED][0], mbmi->uv_mode, bsize);
     }
 
     if (allow_palette(dec_handle->seq_header.seq_force_screen_content_tools, bsize))
-        palette_mode_info(dec_handle, mi_row, mi_col, r);
+        palette_mode_info(/*dec_handle, mi_row, mi_col, r*/);
 
     filter_intra_mode_info(dec_handle, xd, r);
 }
 
+int read_is_inter(EbDecHandle* dec_handle, PartitionInfo_t * xd,
+    int segment_id, SvtReader *r) {
+    ParseCtxt *parse_ctxt = (ParseCtxt *)dec_handle->pv_parse_ctxt;
+    int is_inter = 0;
+    if (xd->mi->skip_mode)
+        is_inter = 1;
+    if (seg_feature_active(&dec_handle->frame_header.segmentation_params, segment_id, SEG_LVL_REF_FRAME)) {
+        is_inter = get_segdata(&dec_handle->frame_header.segmentation_params, segment_id, SEG_LVL_REF_FRAME) != INTRA_FRAME;
+    }
+    if (seg_feature_active(&dec_handle->frame_header.segmentation_params, segment_id, SEG_LVL_GLOBALMV)) {
+        is_inter = 1;
+    }
+    else {
+        const int ctx = get_intra_inter_context(xd);
+        is_inter = svt_read_symbol(r, parse_ctxt->frm_ctx[0].intra_inter_cdf[ctx], 2, ACCT_STR);
+    }
+    return is_inter;
+}
+
 void inter_frame_mode_info(EbDecHandle *dec_handle,
-    PartitionInfo_t * xd, int mi_row,
-    int mi_col, SvtReader *r, int8_t *cdef_strength) {
+    PartitionInfo_t * xd, uint32_t mi_row,
+    uint32_t mi_col, SvtReader *r, int8_t *cdef_strength) {
     ModeInfo_t *mbmi = xd->mi;
     int inter_block = 1;
-    ParseCtxt *parse_ctxt = (ParseCtxt *)dec_handle->pv_parse_ctxt;
 
     mbmi->mv[0].as_int = 0;
     mbmi->mv[1].as_int = 0;
@@ -971,14 +1030,10 @@ void inter_frame_mode_info(EbDecHandle *dec_handle,
         mbmi->segment_id = read_inter_segment_id(dec_handle, xd, mi_row, mi_col, 0, r);
 
     read_cdef(dec_handle, r, xd, mi_col, mi_row, cdef_strength);
-#if 0
-    read_delta_qindex(dec_handle, r, mbmi, mi_col, mi_row);
 
-    read_delta_lf(dec_handle, r, parse_ctxt->frm_ctx[0].delta_lf_cdf, mbmi, mi_col, mi_row);
-#else
     /*TODO : Change to read_delta_params */
     assert(0);
-#endif
+
     if (!mbmi->skip_mode)
         inter_block = read_is_inter(dec_handle, xd, mbmi->segment_id, r);
 
@@ -989,8 +1044,8 @@ void inter_frame_mode_info(EbDecHandle *dec_handle,
         intra_block_mode_info(dec_handle, mi_row, mi_col, xd, mbmi, r);
 }
 
-void mode_info(EbDecHandle *decHandle, PartitionInfo_t *part_info, int mi_row,
-    int mi_col, SvtReader *r, int8_t *cdef_strength) {
+void mode_info(EbDecHandle *decHandle, PartitionInfo_t *part_info, uint32_t mi_row,
+    uint32_t mi_col, SvtReader *r, int8_t *cdef_strength) {
     ModeInfo_t *mi = part_info->mi;
     mi->use_intrabc = 0;
 
@@ -999,24 +1054,6 @@ void mode_info(EbDecHandle *decHandle, PartitionInfo_t *part_info, int mi_row,
     else 
         // TO-DO
         inter_frame_mode_info(decHandle, part_info, mi_row, mi_col, r, cdef_strength);
-}
-
-int intra_segment_id(EbDecHandle *dec_handle, PartitionInfo_t *xd, int mi_row, int mi_col, 
-                    int bsize, SvtReader *r, int skip)
-{
-    SegmentationParams *seg = &dec_handle->frame_header.segmentation_params;
-    int segment_id = 0;
-
-    if (seg->segmentation_enabled) {
-        const int mi_offset = mi_row * dec_handle->frame_header.mi_cols + mi_col;
-        const int bw = mi_size_wide[bsize];
-        const int bh = mi_size_high[bsize];
-        const int x_mis = AOMMIN(dec_handle->frame_header.mi_cols - mi_col, bw);
-        const int y_mis = AOMMIN(dec_handle->frame_header.mi_rows - mi_row, bh);
-        segment_id = read_segment_id(dec_handle, xd, mi_row, mi_col, bsize, r, skip);
-        set_segment_id(dec_handle, mi_offset, x_mis, y_mis, segment_id);
-    }
-    return segment_id;
 }
 
 TxSize read_tx_size(EbDecHandle *dec_handle, PartitionInfo_t *xd,
@@ -1051,15 +1088,11 @@ static INLINE void txfm_nbr_update(uint8_t *above_ctx,
 }
 
 void read_var_tx_size(EbDecHandle *dec_handle, PartitionInfo_t *xd,
-                               TxSize tx_size, int depth,
-                               int blk_row, int blk_col, SvtReader *r) {
-    ParseCtxt *parse_ctxt = (ParseCtxt *)dec_handle->pv_parse_ctxt;
-    ParseNbr4x4Ctxt *nbr_ctx = &parse_ctxt->parse_nbr4x4_ctxt;
-    int txfmSplit = 0;
+                               TxSize tx_size,
+                               int blk_row, int blk_col) {
     ModeInfo_t *mbmi = xd->mi;
     const BlockSize bsize = mbmi->sb_type;
-    FRAME_CONTEXT *frm_ctx = &parse_ctxt->frm_ctx[0];
-    EbColorConfig *color_cfg = &dec_handle->seq_header.color_config;
+    (void)dec_handle;
     const int max_blocks_high = max_block_high(bsize);
     const int max_blocks_wide = max_block_wide(bsize);
     if (blk_row >= max_blocks_high || blk_col >= max_blocks_wide) return;
@@ -1067,51 +1100,7 @@ void read_var_tx_size(EbDecHandle *dec_handle, PartitionInfo_t *xd,
     TxSize txs = max_txsize_rect_lookup[bsize];
     for (int level = 0; level < MAX_VARTX_DEPTH - 1; ++level)
         txs = sub_tx_size_map[txs];
-    const int tx_w_log2 = tx_size_wide_log2[txs] - MI_SIZE_LOG2;
-    const int tx_h_log2 = tx_size_high_log2[txs] - MI_SIZE_LOG2;
-    const int bw_log2 = mi_size_wide_log2[bsize];
-    const int stride_log2 = bw_log2 - tx_w_log2;
-#if 0 /* TODO : Update TransformInfo_t data structure properly for inter case */
-    if (depth == MAX_VARTX_DEPTH) {
-        txfmSplit = 0;
-        txfm_nbr_update(nbr_ctx->above_tx_wd + blk_col,
-            nbr_ctx->left_tx_ht, tx_size, tx_size);
-        return;
-    }
-
-    const int ctx = txfm_partition_context(parse_ctxt->parse_nbr4x4_ctxt.above_tx_wd + blk_col,
-        parse_ctxt->parse_nbr4x4_ctxt.left_tx_ht + blk_row,
-            mbmi->sb_type, tx_size);
-        
-        txfmSplit = svt_read_symbol(r, frm_ctx->txfm_partition_cdf[ctx], 2, ACCT_STR);
-
-    if (txfmSplit) {
-        const TxSize sub_txs = sub_tx_size_map[tx_size];
-        const int bsw = tx_size_wide_unit[sub_txs];
-        const int bsh = tx_size_high_unit[sub_txs];
-        if (sub_txs == TX_4X4) {
-            xd->blk_transform_info->tx_size = sub_txs;
-            txfm_nbr_update(nbr_ctx->above_tx_wd + blk_col,
-                nbr_ctx->left_tx_ht, sub_txs, tx_size);
-            return;
-        }
-        assert(bsw > 0 && bsh > 0);
-        for (int row = 0; row < tx_size_high_unit[tx_size]; row += bsh) {
-            for (int col = 0; col < tx_size_wide_unit[tx_size]; col += bsw) {
-                int offsetr = blk_row + row;
-                int offsetc = blk_col + col;
-                read_var_tx_size(dec_handle, xd, sub_txs, depth + 1, offsetr, offsetc, r);
-            }
-        }
-    }
-    else {
-        xd->blk_transform_info->tx_size = tx_size;
-        txfm_nbr_update(nbr_ctx->above_tx_wd + blk_col,
-            nbr_ctx->left_tx_ht, tx_size, tx_size);
-    }
-#else
     assert(0);
-#endif
 }
 
 static INLINE TxSize av1_get_max_uv_txsize(BlockSize bsize, int subsampling_x,
@@ -1211,7 +1200,6 @@ void update_flat_trans_info(EbDecHandle *dec_handle, PartitionInfo_t *part_info,
 void read_block_tx_size(EbDecHandle *dec_handle, SvtReader *r, PartitionInfo_t *part_info,
                            BlockSize bsize) {
     ModeInfo_t *mbmi = part_info->mi;
-    PartitionType partition = mbmi->partition;
 
     int inter_block_tx = dec_is_inter_block(mbmi);
 
@@ -1227,46 +1215,13 @@ void read_block_tx_size(EbDecHandle *dec_handle, SvtReader *r, PartitionInfo_t *
 
         for (int idy = 0; idy < height; idy += bh)
             for (int idx = 0; idx < width; idx += bw)
-                read_var_tx_size(dec_handle, part_info, max_tx_size, 0, idx, idy, r);
+                read_var_tx_size(dec_handle, part_info, max_tx_size, idx, idy);
     }
     else {
         TxSize tx_size = read_tx_size(dec_handle, part_info, !mbmi->skip || !inter_block_tx, r);
         /* Update Flat Transform Info */
         update_flat_trans_info(dec_handle, part_info, bsize, tx_size);
     }
-}
-
-int read_is_inter(EbDecHandle* dec_handle, PartitionInfo_t * xd,
-    int segment_id, SvtReader *r) {
-    ParseCtxt *parse_ctxt = (ParseCtxt *)dec_handle->pv_parse_ctxt;
-    int is_inter = 0;
-    if (xd->mi->skip_mode)
-        is_inter = 1;
-    if (seg_feature_active(&dec_handle->frame_header.segmentation_params, segment_id, SEG_LVL_REF_FRAME)) {
-        is_inter = get_segdata(&dec_handle->frame_header.segmentation_params, segment_id, SEG_LVL_REF_FRAME) != INTRA_FRAME;
-    }
-    if (seg_feature_active(&dec_handle->frame_header.segmentation_params, segment_id, SEG_LVL_GLOBALMV)) {
-        is_inter = 1;
-    }
-    else {
-        const int ctx = get_intra_inter_context(xd);
-        is_inter = svt_read_symbol(r, parse_ctxt->frm_ctx[0].intra_inter_cdf[ctx], 2, ACCT_STR);
-    }
-    return is_inter;
-}
-
-int is_directional_mode(PredictionMode mode) {
-    return mode >= V_PRED && mode <= D67_PRED;
-}
-
-int intra_angle_info(SvtReader *r, AomCdfProb *cdf, PredictionMode mode, BlockSize bsize) {
-    int angleDeltaY = 0;
-    if (use_angle_delta(bsize) && is_directional_mode(mode))
-    {
-        const int sym = svt_read_symbol(r, cdf, 2 * MAX_ANGLE_DELTA + 1, ACCT_STR);
-        angleDeltaY = sym - MAX_ANGLE_DELTA;
-    }
-    return angleDeltaY;
 }
 
 int read_mv_component(SvtReader *r, NmvComponent *mvcomp,
@@ -1327,34 +1282,13 @@ BlockSize get_plane_residual_size(BlockSize bsize,
     return ss_size_lookup[bsize][subsampling_x][subsampling_y];
 }
 
-#if 0
-TxSize get_tx_size(int plane, PartitionInfo_t *xd, EbColorConfig *color_cfg) {
-    const ModeInfo_t *mbmi = xd->mi;
-    if (plane == 0) return xd->blk_transform_info->tx_size;
-
-    int subsampling_x = color_cfg->subsampling_x;
-    int subsampling_y = color_cfg->subsampling_y;
-    BlockSize plane_bsize = ss_size_lookup[xd->mi->sb_type][subsampling_x][subsampling_y];
-    const TxSize uv_tx = max_txsize_rect_lookup[plane_bsize];
-
-    if (tx_size_wide[uv_tx] == 64 || tx_size_high[uv_tx] == 64) {
-        if (tx_size_wide[uv_tx] == 16)
-            return TX_16X32;
-        if (tx_size_high[uv_tx] == 16)
-            return TX_32X16;
-        return TX_32X32;
-    }
-    return uv_tx;
-}
-#endif
-
 TxSetType get_tx_set(TxSize tx_size, int is_inter,
     int use_reduced_set) {
     return get_ext_tx_set_type(tx_size, is_inter, use_reduced_set);
 }
 
-void parse_transform_type(EbDecHandle *dec_handle, PartitionInfo_t *xd, int blk_row,
-    int blk_col, TxSize tx_size, SvtReader *r, TransformInfo_t *trans_info) {
+void parse_transform_type(EbDecHandle *dec_handle, PartitionInfo_t *xd,
+     TxSize tx_size, SvtReader *r, TransformInfo_t *trans_info) {
     ModeInfo_t *mbmi = xd->mi;
 
     TxType *tx_type = &trans_info->txk_type;
@@ -1399,7 +1333,7 @@ void parse_transform_type(EbDecHandle *dec_handle, PartitionInfo_t *xd, int blk_
     }
 }
 
-void clamp_mv_row_col(MV *mv, int32_t bw, int32_t bh, PartitionInfo_t *xd)
+void clamp_mv_row_col()
 {
     //TO-DO
 
@@ -1412,22 +1346,7 @@ void clamp_mv_row_col(MV *mv, int32_t bw, int32_t bh, PartitionInfo_t *xd)
 const ScanOrder* get_scan(TxSize tx_size, TxSize tx_type) {
     return &av1_scan_orders[tx_size][tx_type];
 }
-#if 0 //delete
-static INLINE int get_txk_type_index(BlockSize bsize, int blk_row,
-    int blk_col) {
-    TxSize txs = max_txsize_rect_lookup[bsize];
-    for (int level = 0; level < MAX_VARTX_DEPTH; ++level)
-        txs = sub_tx_size_map[txs];
-    const int tx_w_log2 = tx_size_wide_log2[txs] - MI_SIZE_LOG2;
-    const int tx_h_log2 = tx_size_high_log2[txs] - MI_SIZE_LOG2;
-    const int bw_uint_log2 = mi_size_wide_log2[bsize];
-    const int stride_log2 = bw_uint_log2 - tx_w_log2;
-    const int index =
-        ((blk_row >> tx_h_log2) << stride_log2) + (blk_col >> tx_w_log2);
-    assert(index < 64);
-    return index;
-}
-#endif
+
 TxType compute_tx_type(PlaneType plane_type,
     const PartitionInfo_t *xd, int blk_row,
     int blk_col, TxSize tx_size,
@@ -1469,7 +1388,7 @@ static INLINE int is_interintra_wedge_used(BlockSize sb_type) {
 }
 
 static INLINE int is_comp_ref_allowed(BlockSize bsize) {
-    return min(block_size_wide[bsize], block_size_high[bsize]) >= 8;
+    return AOMMIN(block_size_wide[bsize], block_size_high[bsize]) >= 8;
 }
 
 static INLINE int is_masked_compound_type(COMPOUND_TYPE type) {
@@ -1502,7 +1421,7 @@ static INLINE int is_any_masked_compound_used(BlockSize sb_type) {
     return 0;
 }
 
-void read_interintra_mode(EbDecHandle *dec_handle, PartitionInfo_t *xd, ModeInfo_t *mbmi,
+void read_interintra_mode(EbDecHandle *dec_handle, ModeInfo_t *mbmi,
     SvtReader *r, int size_group) {
     ParseCtxt *parse_ctxt = (ParseCtxt *)dec_handle->pv_parse_ctxt;
     FRAME_CONTEXT *frm_ctx = &parse_ctxt->frm_ctx[0];
@@ -1553,11 +1472,11 @@ static INLINE int get_comp_group_idx_context(const PartitionInfo_t *xd) {
             left_ctx = 3;
     }
 
-    return min(5, above_ctx + left_ctx);
+    return AOMMIN(5, above_ctx + left_ctx);
 }
 
 void read_compound_type(EbDecHandle *dec_handle, PartitionInfo_t *xd, ModeInfo_t *mbmi, 
-    SvtReader *r, int size_group) {
+    SvtReader *r) {
 
     BlockSize bsize = mbmi->sb_type;
     mbmi->inter_compound.comp_group_idx = 0;
@@ -1629,7 +1548,7 @@ void read_compound_type(EbDecHandle *dec_handle, PartitionInfo_t *xd, ModeInfo_t
     }
 }
 
-MotionMode read_motion_mode(EbDecHandle *dec_handle, PartitionInfo_t *xd,
+MotionMode read_motion_mode(EbDecHandle *dec_handle,
     ModeInfo_t *mbmi, SvtReader *r) {
     ParseCtxt *parse_ctxt = (ParseCtxt *)dec_handle->pv_parse_ctxt;
     FRAME_CONTEXT *frm_ctx = &parse_ctxt->frm_ctx[0];
@@ -1852,13 +1771,13 @@ static INLINE int get_lower_levels_ctx_2d(const uint8_t *levels, int coeff_idx,
     assert(coeff_idx > 0);
     int mag;
     levels = levels + get_padded_idx(coeff_idx, bwl);
-    mag = min(levels[1], 3);                                     // { 0, 1 }
-    mag += min(levels[(1 << bwl) + TX_PAD_HOR], 3);              // { 1, 0 }
-    mag += min(levels[(1 << bwl) + TX_PAD_HOR + 1], 3);          // { 1, 1 }
-    mag += min(levels[2], 3);                                    // { 0, 2 }
-    mag += min(levels[(2 << bwl) + (2 << TX_PAD_HOR_LOG2)], 3);  // { 2, 0 }
+    mag = AOMMIN(levels[1], 3);                                     // { 0, 1 }
+    mag += AOMMIN(levels[(1 << bwl) + TX_PAD_HOR], 3);              // { 1, 0 }
+    mag += AOMMIN(levels[(1 << bwl) + TX_PAD_HOR + 1], 3);          // { 1, 1 }
+    mag += AOMMIN(levels[2], 3);                                    // { 0, 2 }
+    mag += AOMMIN(levels[(2 << bwl) + (2 << TX_PAD_HOR_LOG2)], 3);  // { 2, 0 }
 
-    const int ctx = min((mag + 1) >> 1, 4);
+    const int ctx = AOMMIN((mag + 1) >> 1, 4);
     return ctx + av1_nz_map_ctx_offset[tx_size][coeff_idx];
 }
 static INLINE int get_lower_levels_ctx(const uint8_t *levels,
@@ -1904,19 +1823,19 @@ static INLINE int get_br_ctx(const uint8_t *const levels,
     switch (tx_class) {
     case TX_CLASS_2D:
         mag += levels[pos + stride + 1];
-        mag = min((mag + 1) >> 1, 6);
+        mag = AOMMIN((mag + 1) >> 1, 6);
         if (c == 0) return mag;
         if ((row < 2) && (col < 2)) return mag + 7;
         break;
     case TX_CLASS_HORIZ:
         mag += levels[pos + 2];
-        mag = min((mag + 1) >> 1, 6);
+        mag = AOMMIN((mag + 1) >> 1, 6);
         if (c == 0) return mag;
         if (col == 0) return mag + 7;
         break;
     case TX_CLASS_VERT:
         mag += levels[pos + (stride << 1)];
-        mag = min((mag + 1) >> 1, 6);
+        mag = AOMMIN((mag + 1) >> 1, 6);
         if (c == 0) return mag;
         if (row == 0) return mag + 7;
         break;
@@ -1934,10 +1853,10 @@ static INLINE int get_br_ctx_2d(const uint8_t *const levels,
     const int col = c - (row << bwl);
     const int stride = (1 << bwl) + TX_PAD_HOR;
     const int pos = row * stride + col;
-    int mag = min(levels[pos + 1], MAX_BASE_BR_RANGE) +
-        min(levels[pos + stride], MAX_BASE_BR_RANGE) +
-        min(levels[pos + 1 + stride], MAX_BASE_BR_RANGE);
-    mag = min((mag + 1) >> 1, 6);
+    int mag = AOMMIN(levels[pos + 1], MAX_BASE_BR_RANGE) +
+        AOMMIN(levels[pos + stride], MAX_BASE_BR_RANGE) +
+        AOMMIN(levels[pos + 1 + stride], MAX_BASE_BR_RANGE);
+    mag = AOMMIN((mag + 1) >> 1, 6);
     if ((row | col) < 2) return mag + 7;
     return mag + 14;
 }
@@ -2013,8 +1932,6 @@ uint16_t parse_coeffs(EbDecHandle *dec_handle, PartitionInfo_t *xd, SvtReader *r
     const int all_zero = svt_read_symbol(
         r, frm_ctx->txb_skip_cdf[txs_ctx][txb_skip_ctx], 2, ACCT_STR);
 
-    ModeInfo_t *const mbmi = xd->mi;
-    const int shift = av1_get_tx_scale(tx_size);
     const int bwl = get_txb_bwl(tx_size);
 
     uint16_t eob = 0;
@@ -2033,7 +1950,7 @@ uint16_t parse_coeffs(EbDecHandle *dec_handle, PartitionInfo_t *xd, SvtReader *r
     }
 
     if (plane == AOM_PLANE_Y)
-        parse_transform_type(dec_handle, xd, blk_row, blk_col, tx_size, r, trans_info);
+        parse_transform_type(dec_handle, xd, tx_size, r, trans_info);
 
     uint8_t     *lossless_array = &dec_handle->frame_header.lossless_array[0];
     trans_info->txk_type = compute_tx_type(plane_type, xd, blk_row, blk_col,
@@ -2180,7 +2097,7 @@ uint16_t parse_coeffs(EbDecHandle *dec_handle, PartitionInfo_t *xd, SvtReader *r
         coeff_buf[c + 1] = sign ? -level : level;
     }
 
-    cul_level = min(COEFF_CONTEXT_MASK, cul_level);
+    cul_level = AOMMIN(COEFF_CONTEXT_MASK, cul_level);
 
     update_coeff_ctx(dec_handle, blk_row, blk_col,
         tx_size_wide_unit[tx_size], tx_size_high_unit[tx_size],
@@ -2191,8 +2108,7 @@ uint16_t parse_coeffs(EbDecHandle *dec_handle, PartitionInfo_t *xd, SvtReader *r
     return eob;
 }
 
-void palette_tokens(PartitionInfo_t * xd, int plane,
-    SvtReader *r) {
+void palette_tokens(int plane) {
     assert(plane == 0 || plane == 1);
 
     // TO-DO
@@ -2254,7 +2170,8 @@ int get_reference_mode_context(const PartitionInfo_t *xd) {
 void read_ref_frames(EbDecHandle *dec_handle, PartitionInfo_t *const xd,
     SvtReader *r, int segment_id, MvReferenceFrame ref_frame[2])
 {
-    ParseCtxt *parse_ctxt = (ParseCtxt *)dec_handle->pv_parse_ctxt;
+    (void)r;
+    //ParseCtxt *parse_ctxt = (ParseCtxt *)dec_handle->pv_parse_ctxt;
 
     if (xd->mi->skip_mode) {
 
@@ -2272,16 +2189,17 @@ void read_ref_frames(EbDecHandle *dec_handle, PartitionInfo_t *const xd,
         ref_frame[1] = NONE_FRAME;
     }
     else {
-        ReferenceMode mode = SINGLE_REFERENCE;
+        assert(0);
+        /* ReferenceMode mode = SINGLE_REFERENCE;
         int bw4 = mi_size_wide[xd->mi->sb_type];
         int bh4 = mi_size_high[xd->mi->sb_type];
         if (dec_handle->frame_header.reference_mode == REFERENCE_MODE_SELECT &&
-            (min(bw4, bh4) >= 2)) 
+            (AOMMIN(bw4, bh4) >= 2))
         {
             const int ctx = get_reference_mode_context(xd);
             const ReferenceMode mode = (ReferenceMode)svt_read_symbol(
                 r, parse_ctxt->frm_ctx[0].comp_inter_cdf[ctx], 2, ACCT_STR);
-        }
+        }*/
 
         //if (mode == COMPOUND_REFERENCE) {
         //    const int ctx = get_comp_reference_type_context(xd);
@@ -2568,16 +2486,16 @@ uint16_t parse_transform_block(EbDecHandle *dec_handle, PartitionInfo_t *pi, Svt
                               int start_x, int start_y, TxSize tx_size,
                               int is_inter, int skip)
 {
-    ParseCtxt *parse_ctxt = (ParseCtxt *)dec_handle->pv_parse_ctxt;
-
+    // ParseCtxt *parse_ctxt = (ParseCtxt *)dec_handle->pv_parse_ctxt;
+    (void)is_inter;
     uint16_t eob = 0 , sub_x, sub_y;
     BlockSize bsize = pi->mi->sb_type;
     
     sub_x = (plane > 0) ? dec_handle->seq_header.color_config.subsampling_x : 0;
     sub_y = (plane > 0) ? dec_handle->seq_header.color_config.subsampling_y : 0;
 
-    if ( start_x >= (dec_handle->frame_header.mi_cols >> sub_x) || 
-         start_y >= (dec_handle->frame_header.mi_rows >> sub_y) )
+    if ( (uint32_t)start_x >= (dec_handle->frame_header.mi_cols >> sub_x) || 
+         (uint32_t)start_y >= (dec_handle->frame_header.mi_rows >> sub_y) )
         return eob;
 
     if (!skip) {
@@ -2601,14 +2519,14 @@ uint16_t parse_transform_block(EbDecHandle *dec_handle, PartitionInfo_t *pi, Svt
 }
 
 /* Gives the pointer to current block's transform info. Will work only for Intra */
-INLINE TransformInfo_t* get_cur_trans_info_intra(int plane, SBInfo  *sb_info, ModeInfo_t *mi){
+static INLINE TransformInfo_t* get_cur_trans_info_intra(int plane, SBInfo  *sb_info, ModeInfo_t *mi){
     return (plane == 0) ? (sb_info->sb_luma_trans_info + mi->first_luma_tu_offset) : 
                           (sb_info->sb_chroma_trans_info + mi->first_chroma_tu_offset + (plane-1));
 }
 
 /* TODO: Clean the logic! */
 static INLINE TxSize av1_get_tx_size(int plane, PartitionInfo_t *pi, int sub_x, int sub_y) {
-    const ModeInfo_t *mbmi = pi->mi;
+    /*const */ModeInfo_t *mbmi = pi->mi;
     if (plane == 0) return (get_cur_trans_info_intra(plane, pi->sb_info,mbmi)->tx_size);
     return av1_get_max_uv_txsize(mbmi->sb_type, sub_x, sub_y);
 }
@@ -2686,10 +2604,6 @@ void parse_residual(EbDecHandle *dec_handle, PartitionInfo_t *pi, SvtReader *r,
                             if (eob != 0) {
                                 plane ? (parse_ctx->cur_chroma_coeff_buf += (eob + 1)) : (parse_ctx->cur_luma_coeff_buf += (eob + 1));
                                 trans_info->cbf = 1;
-#if 0
-                                printf("\n parse eob %d %p plane %d Loc %d %d", eob, coeff, plane, mi_row + y, mi_col + x);
-                                fflush(stdout);
-#endif
                                 }
                             else
                                 trans_info->cbf = 0;
@@ -2706,7 +2620,7 @@ void parse_residual(EbDecHandle *dec_handle, PartitionInfo_t *pi, SvtReader *r,
 
 
 void parse_block(EbDecHandle *dec_handle,
-    int mi_row, int mi_col, SvtReader *r,
+    uint32_t mi_row, uint32_t mi_col, SvtReader *r,
     BlockSize subsize, TileInfo *tile,
     SBInfo *sb_info,
     PartitionType partition)
@@ -2744,17 +2658,17 @@ void parse_block(EbDecHandle *dec_handle,
         part_info.has_chroma = color_config.mono_chrome ? 1: MAX_MB_PLANE;
 
     /* TODO : tile->tile_rows boundary condn check is wrong */
-    part_info.up_available = (mi_row > tile->mi_row_start);
-    part_info.left_available = (mi_col > tile->mi_col_start);
+    part_info.up_available = ((int32_t)mi_row > tile->mi_row_start);
+    part_info.left_available = ((int32_t)mi_col > tile->mi_col_start);
     part_info.chroma_up_available = part_info.up_available;
     part_info.chroma_left_available = part_info.left_available;
     
     if (part_info.has_chroma) 
     {
         if (bh4 == 1 && color_config.subsampling_y)
-            part_info.chroma_up_available = (mi_row - 1) > tile->mi_row_start;
+            part_info.chroma_up_available = (int32_t)(mi_row - 1) > tile->mi_row_start;
         if (bw4 == 1 && color_config.subsampling_x)
-            part_info.chroma_left_available = (mi_col - 1) > tile->mi_col_start;
+            part_info.chroma_left_available = (int32_t)(mi_col - 1) > tile->mi_col_start;
     }
     else
     {
@@ -2809,7 +2723,7 @@ void parse_block(EbDecHandle *dec_handle,
 
     if (!dec_is_inter_block(mode)) {
         for (int plane = 0; plane < AOMMIN(2, dec_handle->seq_header.color_config.mono_chrome ? 1 : MAX_MB_PLANE); ++plane)
-            palette_tokens(&part_info, plane, r);
+            palette_tokens(plane);
     }
 
     read_block_tx_size(dec_handle, r, &part_info, subsize);
@@ -2944,14 +2858,14 @@ parse_block(dec_handle, db_r, db_c, reader, db_subsize,     \
         break;
     case PARTITION_HORZ_4:
         for (int i = 0; i < 4; ++i) {
-            int this_blk_row = blk_row + i * quarter_block_4x4;
+            uint32_t this_blk_row = blk_row + (uint32_t)(i * quarter_block_4x4);
             if (i > 0 && this_blk_row >= dec_handle->frame_header.mi_rows) break;
             PARSE_BLOCK(this_blk_row, blk_col, subSize);
         }
         break;
     case PARTITION_VERT_4:
         for (int i = 0; i < 4; ++i) {
-            int this_blk_col = blk_col + i * quarter_block_4x4;
+            uint32_t this_blk_col = blk_col + (uint32_t)(i * quarter_block_4x4);
             if (i > 0 && this_blk_col >= dec_handle->frame_header.mi_cols) break;
             PARSE_BLOCK(blk_row, this_blk_col, subSize);
         }

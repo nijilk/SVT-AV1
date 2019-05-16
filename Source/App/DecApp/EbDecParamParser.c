@@ -93,7 +93,7 @@ EbErrorType read_command_line(int32_t argc, char *const argv[],
         if (cmd_copy[token_index] != NULL) {
             if (EB_STRCMP(cmd_copy[token_index], INPUT_FILE_TOKEN) == 0) {
                 FILE * fin = NULL;
-                fopen_s(&fin, config_strings[token_index], "rb");
+                FOPEN(fin, config_strings[token_index], "rb");
                 if (!fin) {
                     printf("Invalid input file \n");
                     return EB_ErrorBadParameter;
@@ -112,7 +112,7 @@ EbErrorType read_command_line(int32_t argc, char *const argv[],
             }
             else if (EB_STRCMP(cmd_copy[token_index], OUTPUT_FILE_TOKEN) == 0) {
                 FILE * fout = NULL;
-                fopen_s(&fout, config_strings[token_index], "wb");
+                FOPEN(fout, config_strings[token_index], "wb");
                 if (!fout) {
                     printf("Invalid output file \n");
                     return EB_ErrorBadParameter;
