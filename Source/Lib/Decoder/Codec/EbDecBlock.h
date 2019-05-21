@@ -154,7 +154,7 @@ typedef struct {
     uint8_t compound_idx;
 
     /*!< Specifies how the two predictions should be blended together. */
-    COMPOUND_TYPE type;
+    CompoundType type;
 
     /*!< Used to derive the direction and offset of the wedge mask used during blending. */
     uint8_t wedge_index;

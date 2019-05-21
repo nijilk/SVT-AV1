@@ -92,20 +92,17 @@ typedef struct EbComponentType
 
 typedef enum EbErrorType
 {
-    EB_ErrorNone = 0,
-
-    EB_DecUnsupportedBitstream = (int32_t)0x40001000,
-    EB_DecNoOutputPicture      = (int32_t)0x40001004,
-    EB_DecDecodingError        = (int32_t)0x40001008,
-    EB_Corrupt_Frame           = (int32_t)0x4000100C,
-
-    EB_ErrorInsufficientResources = (int32_t)0x80001000,
-    EB_ErrorUndefined             = (int32_t)0x80001001,
-    EB_ErrorInvalidComponent      = (int32_t)0x80001004,
-    EB_ErrorBadParameter          = (int32_t)0x80001005,
-    EB_ErrorDestroyThreadFailed   = (int32_t)0x80002012,
-    EB_ErrorSemaphoreUnresponsive = (int32_t)0x80002021,
-
+    EB_ErrorNone                   = 0,
+    EB_DecUnsupportedBitstream     = (int32_t)0x40001000,
+    EB_DecNoOutputPicture          = (int32_t)0x40001004,
+    EB_DecDecodingError            = (int32_t)0x40001008,
+    EB_Corrupt_Frame               = (int32_t)0x4000100C,
+    EB_ErrorInsufficientResources  = (int32_t)0x80001000,
+    EB_ErrorUndefined              = (int32_t)0x80001001,
+    EB_ErrorInvalidComponent       = (int32_t)0x80001004,
+    EB_ErrorBadParameter           = (int32_t)0x80001005,
+    EB_ErrorDestroyThreadFailed    = (int32_t)0x80002012,
+    EB_ErrorSemaphoreUnresponsive  = (int32_t)0x80002021,
     EB_ErrorDestroySemaphoreFailed = (int32_t)0x80002022,
     EB_ErrorCreateMutexFailed      = (int32_t)0x80002030,
     EB_ErrorMutexUnresponsive      = (int32_t)0x80002031,

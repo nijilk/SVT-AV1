@@ -445,7 +445,7 @@ typedef struct CDEFParams {
     uint8_t     cdef_damping;
 
     /*!< Specifies the number of bits needed to specify which CDEF filter to 
-     * 	apply*/
+     *     apply*/
     uint8_t     cdef_bits;
 
 

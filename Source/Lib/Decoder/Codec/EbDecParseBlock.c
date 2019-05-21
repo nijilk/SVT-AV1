@@ -637,7 +637,7 @@ int read_skip_mode(EbDecHandle *dec_handle, PartitionInfo_t *xd, int segment_id,
     if (seg_feature_active(&dec_handle->frame_header.segmentation_params, segment_id, SEG_LVL_SKIP) ||
         seg_feature_active(&dec_handle->frame_header.segmentation_params, segment_id, SEG_LVL_REF_FRAME) ||
         seg_feature_active(&dec_handle->frame_header.segmentation_params, segment_id, SEG_LVL_GLOBALMV) ||
-        !&dec_handle->frame_header.skip_mode_params.skip_mode_present ||
+        !dec_handle->frame_header.skip_mode_params.skip_mode_present ||
         block_size_wide[xd->mi->sb_type] < 8 ||
         block_size_high[xd->mi->sb_type] < 8) {
         return 0;
@@ -861,7 +861,7 @@ void intra_frame_mode_info(EbDecHandle *dec_handle,
             if (mbmi->uv_mode == UV_CFL_PRED)
                 mbmi->cfl_alpha_idx = read_cfl_alphas(&parse_ctxt->frm_ctx[0], r, &mbmi->cfl_alpha_signs);
             mbmi->angle_delta[PLANE_TYPE_UV] =
-            intra_angle_info(r, &parse_ctxt->frm_ctx[0].angle_delta_cdf[mbmi->uv_mode - V_PRED][0], mbmi->uv_mode, bsize);
+            intra_angle_info(r, &parse_ctxt->frm_ctx[0].angle_delta_cdf[mbmi->uv_mode - V_PRED][0], dec_get_uv_mode(mbmi->uv_mode), bsize);
         }
 
         if (allow_palette(dec_handle->frame_header.allow_screen_content_tools, bsize))
@@ -981,7 +981,7 @@ void intra_block_mode_info(EbDecHandle *dec_handle, int mi_row,
                 read_cfl_alphas(&parse_ctxt->frm_ctx[0], r, &mbmi->cfl_alpha_signs);
         }
         mbmi->angle_delta[PLANE_TYPE_UV] = intra_angle_info(r,
-            &parse_ctxt->frm_ctx[0].angle_delta_cdf[mbmi->uv_mode - V_PRED][0], mbmi->uv_mode, bsize);
+            &parse_ctxt->frm_ctx[0].angle_delta_cdf[mbmi->uv_mode - V_PRED][0], dec_get_uv_mode(mbmi->uv_mode), bsize);
     }
 
     if (allow_palette(dec_handle->seq_header.seq_force_screen_content_tools, bsize))
@@ -1174,15 +1174,15 @@ void update_flat_trans_info(EbDecHandle *dec_handle, PartitionInfo_t *part_info,
             const int unit_width = ROUND_POWER_OF_TWO(
                 AOMMIN(bw + idx, bw), sx);
             /* TODO : Can cause prblm for incomplete SBs. Fix! */
-            for (int blk_row = idy>>sy; blk_row < unit_height; blk_row += stepr) {
-                for (int blk_col = idx>>sx; blk_col < unit_width; blk_col += stepc) {
+            for (int blk_row = 0; blk_row < unit_height; blk_row += stepr) {
+                for (int blk_col = 0; blk_col < unit_width; blk_col += stepc) {
                     chroma_trans_info->tx_size = tx_size_uv;
                     chroma_trans_info++;
                     num_chroma_tus++;
                 }
             }
-            for (int blk_row = idy >> sy; blk_row < unit_height; blk_row += stepr) {
-                for (int blk_col = idx >> sx; blk_col < unit_width; blk_col += stepc) {
+            for (int blk_row = 0; blk_row < unit_height; blk_row += stepr) {
+                for (int blk_col = 0; blk_col < unit_width; blk_col += stepc) {
                     chroma_trans_info->tx_size = tx_size_uv;
                     chroma_trans_info++;
                 }
@@ -1343,7 +1343,7 @@ void clamp_mv_row_col()
         xd->mb_to_bottom_edge + bh * 8 + MV_BORDER);*/
 }
 
-const ScanOrder* get_scan(TxSize tx_size, TxSize tx_type) {
+const ScanOrder* get_scan(TxSize tx_size, TxType tx_type) {
     return &av1_scan_orders[tx_size][tx_type];
 }
 
@@ -1391,11 +1391,11 @@ static INLINE int is_comp_ref_allowed(BlockSize bsize) {
     return AOMMIN(block_size_wide[bsize], block_size_high[bsize]) >= 8;
 }
 
-static INLINE int is_masked_compound_type(COMPOUND_TYPE type) {
+static INLINE int is_masked_compound_type(CompoundType type) {
     return (type == COMPOUND_WEDGE || type == COMPOUND_DIFFWTD);
 }
 
-static INLINE int is_interinter_compound_used(COMPOUND_TYPE type,
+static INLINE int is_interinter_compound_used(CompoundType type,
     BlockSize sb_type) {
     const int comp_allowed = is_comp_ref_allowed(sb_type);
     switch (type) {
@@ -1409,11 +1409,11 @@ static INLINE int is_interinter_compound_used(COMPOUND_TYPE type,
 }
 
 static INLINE int is_any_masked_compound_used(BlockSize sb_type) {
-    COMPOUND_TYPE comp_type;
+    CompoundType comp_type;
     int i;
     if (!is_comp_ref_allowed(sb_type)) return 0;
     for (i = 0; i < COMPOUND_TYPES; i++) {
-        comp_type = (COMPOUND_TYPE)i;
+        comp_type = (CompoundType)i;
         if (is_masked_compound_type(comp_type) &&
             is_interinter_compound_used(comp_type, sb_type))
             return 1;
@@ -2555,6 +2555,7 @@ void parse_residual(EbDecHandle *dec_handle, PartitionInfo_t *pi, SvtReader *r,
         int mu_blocks_high = block_size_high[max_unit_bsize] >> tx_size_high_log2[0];
         mu_blocks_wide = AOMMIN(max_blocks_wide, mu_blocks_wide);
         mu_blocks_high = AOMMIN(max_blocks_high, mu_blocks_high);
+        TransformInfo_t *trans_info = NULL, *next_trans_chroma = NULL, *next_trans_luma = NULL;
 
         for (int row = 0; row < max_blocks_high; row += mu_blocks_high) {
             for (int col = 0; col < max_blocks_wide; col += mu_blocks_wide) {
@@ -2566,8 +2567,10 @@ void parse_residual(EbDecHandle *dec_handle, PartitionInfo_t *pi, SvtReader *r,
                     if (!dec_is_chroma_reference(mi_row, mi_col, mi_size, sub_x, sub_y))
                         continue;
 
-                    TransformInfo_t *trans_info = NULL;
+                    if (row == 0 && col == 0)
                     trans_info = get_cur_trans_info_intra(plane, pi->sb_info, mode);
+                    else
+                        trans_info = plane ? next_trans_chroma : next_trans_luma;
 
                     if (lossless)
                         tx_size = TX_4X4;
@@ -2585,7 +2588,8 @@ void parse_residual(EbDecHandle *dec_handle, PartitionInfo_t *pi, SvtReader *r,
                     for (int blk_row = row >> sub_y; blk_row < unit_height; blk_row += step_x) {
                         for (int blk_col = col >> sub_x; blk_col < unit_width; blk_col += step_y) {
 
-                            int32_t *coeff = plane ? parse_ctx->cur_chroma_coeff_buf : parse_ctx->cur_luma_coeff_buf;
+                            int32_t *coeff = plane ? parse_ctx->cur_chroma_coeff_buf :
+                                                     parse_ctx->cur_luma_coeff_buf;
 #if SVT_DEC_COEFF_DEBUG
                             {
                             uint8_t  *cur_coeff = (uint8_t*)coeff;
@@ -2612,6 +2616,12 @@ void parse_residual(EbDecHandle *dec_handle, PartitionInfo_t *pi, SvtReader *r,
                             trans_info++;
                         } //for blk_col
                     } //for blk_row
+
+                    // Remembers trans_info for next transform block within a block of 128xH / Wx128
+                    if (plane == 0)
+                        next_trans_luma = trans_info;
+                    else
+                        next_trans_chroma = trans_info;
                 }//for plane
             }
         }
@@ -2693,33 +2703,33 @@ void parse_block(EbDecHandle *dec_handle,
     mode->sb_type = subsize;
     mode_info(dec_handle, &part_info, mi_row, mi_col, r, cdef_strength);
 
-	/* Replicating same chroma mode for block pairs or 4x4 blks when chroma is present in last block*/
-	if(0 == parse_ctx->prev_blk_has_chroma)
-	{
-		/* if the previous block does not have chroma info then         */
-		/* current uv mode is stores in the previous ModeInfo structre. */
-		/* this is done to simplify neighbour access for mode deviation */
-		if (mode->sb_type != BLOCK_4X4)
-		{
-			//2 partition case
-			mode[-1].uv_mode = mode->uv_mode;
-			assert(part_info.has_chroma != 0);
-		}
-		else
-		{
-			/* wait unitl the last 4x4 block is parsed */
-			if (part_info.has_chroma)
-			{
-				//4 partition case
-				mode[-1].uv_mode = mode->uv_mode;
-				mode[-2].uv_mode = mode->uv_mode;
-				mode[-3].uv_mode = mode->uv_mode;
-			}
-		}
-	}
-	
-	/* current block's has_chroma info is stored for useage in next block */
-	parse_ctx->prev_blk_has_chroma = part_info.has_chroma;
+    /* Replicating same chroma mode for block pairs or 4x4 blks when chroma is present in last block*/
+    if(0 == parse_ctx->prev_blk_has_chroma)
+    {
+        /* if the previous block does not have chroma info then         */
+        /* current uv mode is stores in the previous ModeInfo structre. */
+        /* this is done to simplify neighbour access for mode deviation */
+        if (mode->sb_type != BLOCK_4X4)
+        {
+            //2 partition case
+            mode[-1].uv_mode = mode->uv_mode;
+            assert(part_info.has_chroma != 0);
+        }
+        else
+        {
+            /* wait unitl the last 4x4 block is parsed */
+            if (part_info.has_chroma)
+            {
+                //4 partition case
+                mode[-1].uv_mode = mode->uv_mode;
+                mode[-2].uv_mode = mode->uv_mode;
+                mode[-3].uv_mode = mode->uv_mode;
+            }
+        }
+    }
+    
+    /* current block's has_chroma info is stored for useage in next block */
+    parse_ctx->prev_blk_has_chroma = part_info.has_chroma;
 
     if (!dec_is_inter_block(mode)) {
         for (int plane = 0; plane < AOMMIN(2, dec_handle->seq_header.color_config.mono_chrome ? 1 : MAX_MB_PLANE); ++plane)

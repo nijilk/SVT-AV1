@@ -3473,7 +3473,6 @@ void  inject_inter_candidates(
 }
 #endif
 
-
  extern PredictionMode get_uv_mode(UvPredictionMode mode) {
     assert(mode < UV_INTRA_MODES);
     static const PredictionMode uv2y[] = {

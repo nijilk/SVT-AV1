@@ -76,20 +76,25 @@ static EbErrorType eb_dec_handle_ctor(
     EbErrorType return_error = EB_ErrorNone;
 
     // Allocate Memory
-    EbDecHandle   *decHandlePtr = (EbDecHandle  *)malloc(sizeof(EbDecHandle  ));
-    *decHandleDblPtr = decHandlePtr;
-    if (decHandlePtr == (EbDecHandle  *)EB_NULL) {
+    EbDecHandle   *dec_handle_ptr = (EbDecHandle  *)malloc(sizeof(EbDecHandle  ));
+    *decHandleDblPtr = dec_handle_ptr;
+    if (dec_handle_ptr == (EbDecHandle  *)EB_NULL) {
         return EB_ErrorInsufficientResources;
     }
-
-    decHandlePtr->memory_map = (EbMemoryMapEntry*)malloc(sizeof(EbMemoryMapEntry) * MAX_NUM_PTR);
-    decHandlePtr->memory_map_index = 0;
-    decHandlePtr->total_lib_memory = sizeof(EbDecHandle) + sizeof(EbMemoryMapEntry) * MAX_NUM_PTR;
-
+#if MEM_MAP_OPT
+    dec_handle_ptr->memory_map = (EbMemoryMapEntry*)malloc(sizeof(EbMemoryMapEntry));
+    dec_handle_ptr->memory_map_index = 0;
+    dec_handle_ptr->total_lib_memory = sizeof(EbComponentType) + sizeof(EbDecHandle) + sizeof(EbMemoryMapEntry);
+    dec_handle_ptr->memory_map_init_address = dec_handle_ptr->memory_map;
+#else
+    dec_handle_ptr->memory_map = (EbMemoryMapEntry*)malloc(sizeof(EbMemoryMapEntry) * MAX_NUM_PTR);
+    dec_handle_ptr->memory_map_index = 0;
+    dec_handle_ptr->total_lib_memory = sizeof(EbDecHandle) + sizeof(EbMemoryMapEntry) * MAX_NUM_PTR;
+#endif
     // Save Memory Map Pointers 
-    svt_dec_total_lib_memory = &decHandlePtr->total_lib_memory;
-    svt_dec_memory_map = decHandlePtr->memory_map;
-    svt_dec_memory_map_index = &decHandlePtr->memory_map_index;
+    svt_dec_total_lib_memory = &dec_handle_ptr->total_lib_memory;
+    svt_dec_memory_map = dec_handle_ptr->memory_map;
+    svt_dec_memory_map_index = &dec_handle_ptr->memory_map_index;
     svt_dec_lib_malloc_count = 0;
 
     return return_error;
@@ -394,7 +399,49 @@ EB_API EbErrorType eb_deinit_decoder(
 {
     if (svt_dec_component == NULL)
         return EB_ErrorBadParameter;
+#if MEM_MAP_OPT
+    EbDecHandle *dec_handle_ptr = (EbDecHandle*)svt_dec_component->p_component_private;
+    EbErrorType return_error    = EB_ErrorNone;
 
+    if (dec_handle_ptr) {
+        if (svt_dec_memory_map) {
+            // Loop through the ptr table and free all malloc'd pointers per channel
+            EbMemoryMapEntry*    memory_entry = svt_dec_memory_map;
+            if (memory_entry){
+                do {
+                    switch (memory_entry->ptr_type) {
+                        case EB_N_PTR:
+                            free(memory_entry->ptr);
+                            break;
+                        case EB_A_PTR:
+#ifdef _WIN32
+                            _aligned_free(memory_entry->ptr);
+#else
+                            free(memory_entry->ptr);
+#endif
+                            break;
+                        case EB_SEMAPHORE:
+                            eb_destroy_semaphore(memory_entry->ptr);
+                            break;
+                        case EB_THREAD:
+                            eb_destroy_thread(memory_entry->ptr);
+                            break;
+                        case EB_MUTEX:
+                            eb_destroy_mutex(memory_entry->ptr);
+                            break;
+                        default:
+                            return_error = EB_ErrorMax;
+                            break;
+                    }
+                    EbMemoryMapEntry*    tmp_memory_entry = memory_entry;
+                    memory_entry = (EbMemoryMapEntry*)tmp_memory_entry->prev_entry;
+                    if (tmp_memory_entry) free(tmp_memory_entry);
+                } while(memory_entry != dec_handle_ptr->memory_map_init_address && memory_entry);
+                if (dec_handle_ptr->memory_map_init_address) free(dec_handle_ptr->memory_map_init_address);
+            }
+        }
+    }
+#else
     EbDecHandle *dec_handle_ptr = (EbDecHandle*)svt_dec_component->p_component_private;
     EbErrorType return_error = EB_ErrorNone;
     int32_t              ptrIndex = 0;
@@ -436,7 +483,7 @@ EB_API EbErrorType eb_deinit_decoder(
 
         }
     }
-
+#endif
     return return_error;
 }
 

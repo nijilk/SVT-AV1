@@ -556,7 +556,6 @@ typedef struct CflCtx {
         int32_t round_offset,
         int32_t num_pel_log2);
 
-
 #define ROUND_POWER_OF_TWO_SIGNED(value, n)           \
   (((value) < 0) ? -ROUND_POWER_OF_TWO(-(value), (n)) \
                  : ROUND_POWER_OF_TWO((value), (n)))

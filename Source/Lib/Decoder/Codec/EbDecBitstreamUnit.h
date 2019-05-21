@@ -18,6 +18,9 @@
 #define EbDecBitstreamUnit_h
 
 #include "EbCabacContextModel.h"
+#include "EbBitstreamUnit.h" 
+//Added this EbBitstreamUnit.h because od_ec_window is defined in it, but 
+//we also defining it, so it leads to warning,  so i commented our defination & added EbBitstreamUnit.h file.  
 
 #ifdef __cplusplus
 extern "C" {
@@ -38,7 +41,7 @@ extern "C" {
 
 /*OPT: od_ec_window must be at least 32 bits, but if you have fast arithmetic
    on a larger type, you can speed up the decoder by using it here.*/
-typedef uint32_t od_ec_window;
+//typedef uint32_t od_ec_window;
 
 /*The size in bits of od_ec_window.*/
 #define OD_EC_WINDOW_SIZE ((int)sizeof(od_ec_window) * CHAR_BIT)

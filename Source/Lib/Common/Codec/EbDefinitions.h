@@ -1102,7 +1102,7 @@ typedef enum
     COMPOUND_INTRA,
     COMPOUND_TYPES,
     MASKED_COMPOUND_TYPES = 2,
-} COMPOUND_TYPE;
+} CompoundType;
 
 typedef enum ATTRIBUTE_PACKED 
 {

@@ -45,7 +45,7 @@ uint32_t dec_get_bits(bitstrm_t *bs, uint32_t numbits) {
 }
 
 /* Get unsigned integer represented by a variable number of little-endian bytes */
-void dec_get_bits_leb128(bitstrm_t *bs, size_t available, uint64_t *value, 
+void dec_get_bits_leb128(bitstrm_t *bs, size_t available, size_t *value,
     size_t *length) 
 {
     (void)available;

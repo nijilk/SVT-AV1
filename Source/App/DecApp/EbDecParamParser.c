@@ -75,7 +75,7 @@ EbErrorType read_command_line(int32_t argc, char *const argv[],
     int token_index = 0;
 
     for (token_index = 1; token_index < argc; token_index++, cmd_token_cnt++) {
-        if ((argv[token_index][0] == '-')) {
+        if (argv[token_index][0] == '-') {
             cmd_copy[cmd_token_cnt] = argv[token_index];
             if (argv[token_index + 1] != NULL && (argv[token_index + 1][0] != '-')) {
                 config_strings[cmd_token_cnt] = argv[++token_index];

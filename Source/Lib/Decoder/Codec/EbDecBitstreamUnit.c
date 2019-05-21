@@ -69,7 +69,8 @@
    URL="http://researchcommons.waikato.ac.nz/bitstream/handle/10289/78/content.pdf"
   }*/
 
-#include "EbBitstreamUnit.h"
+// Commented it because it is included in EbDecBitstreamUnit.h file.
+//#include "EbBitstreamUnit.h"
 #include "EbDecBitstreamUnit.h"
 
 

@@ -209,16 +209,16 @@ void decode_block(DecModCtxt *dec_mod_ctxt, int32_t mi_row, int32_t mi_col,
 
     /*!< Block Size width & height in pixels. */
     /* For Luma bock */ 
-    part_info.wpx[0] = bw4 * MI_SIZE;
-    part_info.hpx[0] = bh4 * MI_SIZE;
+    part_info.wpx[0] = AOMMIN(bw4 * MI_SIZE, 64);
+    part_info.hpx[0] = AOMMIN(bh4 * MI_SIZE, 64);
 
     /* For U plane chroma bock */
-    part_info.wpx[1] = (AOMMAX(1, bw4 >> sub_x)) * MI_SIZE;
-    part_info.hpx[1] = (AOMMAX(1, bh4 >> sub_y)) * MI_SIZE;
+    part_info.wpx[1] = AOMMIN((AOMMAX(1, bw4 >> sub_x)) * MI_SIZE, 64 >> sub_x);
+    part_info.hpx[1] = AOMMIN((AOMMAX(1, bh4 >> sub_y)) * MI_SIZE, 64 >> sub_y);
 
     /* For V plane chroma bock */
-    part_info.wpx[2] = (AOMMAX(1, bw4 >> sub_x)) * MI_SIZE;
-    part_info.hpx[2] = (AOMMAX(1, bh4 >> sub_y)) * MI_SIZE;
+    part_info.wpx[2] = AOMMIN((AOMMAX(1, bw4 >> sub_x)) * MI_SIZE, 64 >> sub_x);
+    part_info.hpx[2] = AOMMIN((AOMMAX(1, bh4 >> sub_y)) * MI_SIZE, 64 >> sub_y);
 
     /* TODO : tile->tile_rows boundary condn check is wrong */
     part_info.up_available = (mi_row > tile->mi_row_start);
@@ -281,7 +281,7 @@ void decode_block(DecModCtxt *dec_mod_ctxt, int32_t mi_row, int32_t mi_col,
             block_size_high[max_unit_bsize] >> tx_size_high_log2[0];
         mu_blocks_wide = AOMMIN(max_blocks_wide, mu_blocks_wide);
         mu_blocks_high = AOMMIN(max_blocks_high, mu_blocks_high);
-        TransformInfo_t *trans_info = NULL;
+        TransformInfo_t *trans_info = NULL, *next_trans_chroma = NULL, *next_trans_luma = NULL;
         TxSize tx_size;
 
         for (row = 0; row < max_blocks_high; row += mu_blocks_high) {
@@ -302,7 +302,7 @@ void decode_block(DecModCtxt *dec_mod_ctxt, int32_t mi_row, int32_t mi_col,
                         (sb_info->sb_chroma_trans_info + mode_info->first_chroma_tu_offset
                          + (plane - 1));
                     else
-                        assert(0);
+                        trans_info = plane ? next_trans_chroma : next_trans_luma;
 
                     tx_size = trans_info->tx_size;
 
@@ -377,6 +377,11 @@ void decode_block(DecModCtxt *dec_mod_ctxt, int32_t mi_row, int32_t mi_col,
                             trans_info++;
                         }
                     }
+                    // Remembers trans_info for next transform block within a block of 128xH / Wx128
+                    if (plane == 0)
+                        next_trans_luma = trans_info;
+                    else
+                        next_trans_chroma = trans_info;
                 }
             }
         }

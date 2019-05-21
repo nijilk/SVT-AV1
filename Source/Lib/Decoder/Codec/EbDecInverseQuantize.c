@@ -42,8 +42,8 @@ void setup_segmentation_dequant(FrameHeader *frame_info, SeqHeader *seq_header,
 {
     (void)color_config;
     int bit_depth = seq_header->color_config.bit_depth;
-    int max_segments = frame_info->segmentation_params.segmentation_enabled ?
-        MAX_SEGMENTS : 1;
+    /*int max_segments = frame_info->segmentation_params.segmentation_enabled ?
+        MAX_SEGMENTS : 1;*/
     int32_t qindex;
     for (int i = 0; i < MAX_SEGMENTS; i++) {
         qindex = get_qindex(&frame_info->segmentation_params, i,

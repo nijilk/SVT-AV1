@@ -49,8 +49,8 @@ typedef struct FrameMiMap {
     /* 2(for 4x4 chroma case) Top SB 4x4 row MI map */
     int16_t      *top_sbrow_mi_map;
 
-	/*  number of MI in SB width, 
-	    is same as number of MI in SB height */
+    /*  number of MI in SB width, 
+        is same as number of MI in SB height */
     int32_t     num_mis_in_sb_wd;
 }FrameMiMap;
 
@@ -116,6 +116,9 @@ typedef struct EbDecHandle {
     EbPictureBufferDesc   *recon_picture_buf[DEC_MAX_NUM_FRM_PRLL];
 
     // Memory Map
+#if MEM_MAP_OPT
+    EbMemoryMapEntry            *memory_map_init_address;
+#endif
     EbMemoryMapEntry            *memory_map;
     uint32_t                     memory_map_index;
     uint64_t                     total_lib_memory;

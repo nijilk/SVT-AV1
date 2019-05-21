@@ -190,10 +190,10 @@ typedef struct ParseCtxt {
     SBInfo  *left_sb_info;
     SBInfo  *above_sb_info;
         
-	/*!< Chroma mode indo state acroos sub 8x8 blocks
-	 * if Prev block does not have chroma info then this state is remembered in this variable to be used in next block
-	*/	
-	int32_t  prev_blk_has_chroma;
+    /*!< Chroma mode indo state acroos sub 8x8 blocks
+     * if Prev block does not have chroma info then this state is remembered in this variable to be used in next block
+    */    
+    int32_t  prev_blk_has_chroma;
         
 } ParseCtxt;
 

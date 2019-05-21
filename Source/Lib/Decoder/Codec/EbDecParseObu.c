@@ -186,14 +186,14 @@ void read_color_config(bitstrm_t *bs, EbColorConfig   *color_info, SeqHeader   *
     }
     else {
         color_info->color_primaries = EB_CICP_CP_UNSPECIFIED;
-        color_info->transfer_characteristics = AOM_CICP_TC_UNSPECIFIED;
-        color_info->matrix_coefficients = AOM_CICP_MC_UNSPECIFIED;
+        color_info->transfer_characteristics = EB_CICP_TC_UNSPECIFIED;
+        color_info->matrix_coefficients = EB_CICP_MC_UNSPECIFIED;
     }
     if (color_info->mono_chrome) {
         color_info->color_range = dec_get_bits(bs, 1);
         PRINT("color_range", color_info->color_range);
         color_info->subsampling_y = color_info->subsampling_x = 1;
-        color_info->chroma_sample_position = AOM_CSP_UNKNOWN;
+        color_info->chroma_sample_position = EB_CSP_UNKNOWN;
         color_info->separate_uv_delta_q = 0;
         return;
     }
@@ -2084,7 +2084,7 @@ EbErrorType parse_tile(bitstrm_t *bs, EbDecHandle *dec_handle_ptr,
 
             parse_ctx->left_sb_info = left_sb_info;
             parse_ctx->above_sb_info= above_sb_info;
-			parse_ctx->prev_blk_has_chroma = 1; //default at start of frame / tile
+            parse_ctx->prev_blk_has_chroma = 1; //default at start of frame / tile
             
             /* Init DecModCtxt */
             DecModCtxt *dec_mod_ctxt = (DecModCtxt*)dec_handle_ptr->pv_dec_mod_ctxt;

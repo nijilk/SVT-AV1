@@ -211,7 +211,7 @@ static EbErrorType init_master_frame_ctxt(EbDecHandle  *dec_handle_ptr) {
     // Init Picture Init data
     input_picture_buffer_desc_init_data.max_width = seq_header->max_frame_width;
     input_picture_buffer_desc_init_data.max_height = seq_header->max_frame_height;
-    input_picture_buffer_desc_init_data.bit_depth = seq_header->color_config.bit_depth;
+    input_picture_buffer_desc_init_data.bit_depth  = (EbBitDepthEnum)seq_header->color_config.bit_depth;
 
     input_picture_buffer_desc_init_data.color_format    = dec_handle_ptr->
                                                 dec_config.max_color_format;
