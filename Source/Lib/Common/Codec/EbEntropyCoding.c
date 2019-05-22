@@ -3322,6 +3322,13 @@ static void write_tile_info_max_tile(const PictureParentControlSet *const pcs_pt
     }
 }
 
+static int32_t tile_log2(int32_t blk_size, int32_t target) {
+    int32_t k;
+    for (k = 0; (blk_size << k) < target; k++) {
+    }
+    return k;
+}
+
 void av1_get_tile_limits(PictureParentControlSet * pcs_ptr) {
 
     Av1Common * cm = pcs_ptr->av1_cm;

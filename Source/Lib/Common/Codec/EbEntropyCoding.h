@@ -39,13 +39,7 @@ extern "C" {
 
 #define MAX_TILE_WIDTH (4096)        // Max Tile width in pixels
 #define MAX_TILE_AREA (4096 * 2304)  // Maximum tile area in pixels
-// Find smallest k>=0 such that (blk_size << k) >= target
-static int32_t tile_log2(int32_t blk_size, int32_t target) {
-    int32_t k;
-    for (k = 0; (blk_size << k) < target; k++) {
-    }
-    return k;
-}
+
     /*!\brief OBU types. */
     typedef enum ATTRIBUTE_PACKED 
     {

@@ -67,6 +67,7 @@ void compute_image_size(FrameHeader *frame_info)
     frame_info->mi_rows = 2 * ((frame_info->frame_size.frame_height + 7 - 1) >> 3);
 }
 
+/*TODO: Harmonize with encoder function */
 // Find smallest k>=0 such that (blk_size << k) >= target
 static int32_t dec_tile_log2(int32_t blk_size, int32_t target) {
     int32_t k;
