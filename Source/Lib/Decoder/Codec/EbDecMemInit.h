@@ -139,6 +139,10 @@ if (*(svt_dec_memory_map_index) >= MAX_NUM_PTR) { \
 svt_dec_lib_malloc_count++;
 #endif
 
+EbErrorType dec_eb_recon_picture_buffer_desc_ctor(
+    EbPtr  *object_dbl_ptr,
+    EbPtr   object_init_data_ptr);
+
 EbErrorType dec_mem_init(EbDecHandle  *dec_handle_ptr);
 
 #ifdef __cplusplus

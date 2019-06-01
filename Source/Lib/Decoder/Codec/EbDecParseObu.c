@@ -27,12 +27,14 @@
 
 #include "EbObuParse.h"
 #include "EbDecMemInit.h"
+#include "EbDecPicMgr.h"
 
 /*TODO : Should be removed */
 #include "EbDecInverseQuantize.h"
 #include "EbDecProcessFrame.h"
 
 #include "EbDecNbr.h"
+#include "EbDecUtils.h"
 
 #define CONFIG_MAX_DECODE_PROFILE 2
 
@@ -569,10 +571,10 @@ void superres_params(bitstrm_t *bs, SeqHeader   *seq_header, FrameHeader   *fram
 }
 
 // Read frame size
-void read_frame_size(bitstrm_t *bs, SeqHeader   *seq_header, FrameHeader
-    *frame_info, int *frame_size_override_flag)
+static void read_frame_size(bitstrm_t *bs, SeqHeader   *seq_header, FrameHeader
+    *frame_info, int frame_size_override_flag)
 {
-    if (*frame_size_override_flag) {
+    if (frame_size_override_flag) {
         frame_info->frame_size.frame_width =
             dec_get_bits(bs, seq_header->frame_width_bits + 1) + 1;
         frame_info->frame_size.frame_height
@@ -582,13 +584,13 @@ void read_frame_size(bitstrm_t *bs, SeqHeader   *seq_header, FrameHeader
         frame_info->frame_size.frame_width = seq_header->max_frame_width;
         frame_info->frame_size.frame_height = seq_header->max_frame_height;
     }
-    PRINT_FRAME("frame_width", frame_info->frame_size.frame_width - 1);
-    PRINT_FRAME("frame_height", frame_info->frame_size.frame_height - 1);
+    PRINT_FRAME("frame_width-1", frame_info->frame_size.frame_width - 1);
+    PRINT_FRAME("frame_height-1", frame_info->frame_size.frame_height - 1);
     superres_params(bs, seq_header, frame_info);
     compute_image_size(frame_info);
 
-    assert((frame_info->frame_size.frame_width - 1) <= seq_header->max_frame_width - 1);
-    assert((frame_info->frame_size.frame_height - 1) <= seq_header->max_frame_height - 1);
+    assert((frame_info->frame_size.frame_width) <= seq_header->max_frame_width);
+    assert((frame_info->frame_size.frame_height) <= seq_header->max_frame_height);
 }
 
 void read_render_size(bitstrm_t *bs, FrameHeader   *frame_info)
@@ -609,8 +611,8 @@ void read_render_size(bitstrm_t *bs, FrameHeader   *frame_info)
     PRINT_FRAME("render_height", frame_info->frame_size.render_height - 1);
 }
 
-void frame_size_with_refs(bitstrm_t *bs, SeqHeader   *seq_header, FrameHeader
-    *frame_info, int *frame_size_override_flag)
+static void frame_size_with_refs(bitstrm_t *bs, SeqHeader   *seq_header, FrameHeader
+    *frame_info, int frame_size_override_flag)
 {
     int found_ref;
     for (int i = 0; i < REFS_PER_FRAME; i++) {
@@ -1248,17 +1250,6 @@ uint8_t read_frame_reference_mode(bitstrm_t *bs, int FrameIsIntra)
         return dec_get_bits(bs, 1);
 }
 
-int get_relative_dist(SeqHeader *seq_header, int ref_hint, int order_hint)
-{
-    int diff, m;
-    if (!seq_header->order_hint_info.enable_order_hint)
-        return 0;
-    diff = ref_hint - order_hint;
-    m = 1 << (seq_header->order_hint_info.order_hint_bits - 1);
-    diff = (diff & (m - 1)) - (diff & m);
-    return diff;
-}
-
 // Read skip mode paramters
 void read_skip_mode_params(bitstrm_t *bs, FrameHeader *frame_info, int FrameIsIntra,
     SeqHeader *seq_header, int reference_select)
@@ -1272,18 +1263,22 @@ void read_skip_mode_params(bitstrm_t *bs, FrameHeader *frame_info, int FrameIsIn
         frame_info->skip_mode_params.skip_mode_allowed = 1;
         for (i = 0; i < REFS_PER_FRAME; i++) {
             ref_hint = frame_info->ref_order_hint[frame_info->ref_frame_idx[i]];
-            if (get_relative_dist(seq_header, ref_hint, frame_info->order_hint) < 0)
+            if (get_relative_dist(&seq_header->order_hint_info, ref_hint,
+                                  frame_info->order_hint) < 0)
             {
-                if (forwardIdx < 0 || get_relative_dist(seq_header, ref_hint,
-                    forwardIdx) > 0) {
+                if (forwardIdx < 0 || get_relative_dist(&seq_header->
+                    order_hint_info, ref_hint, forwardIdx) > 0)
+                {
                     forwardIdx = i;
                     forwardIdx = ref_hint;
                 }
             }
-            else if (get_relative_dist(seq_header, ref_hint, frame_info->order_hint) < 0)
+            else if (get_relative_dist(&seq_header->order_hint_info, ref_hint,
+                frame_info->order_hint) < 0)
             {
-                if (forwardIdx < 0 || get_relative_dist(seq_header, ref_hint,
-                    backwardIdx) > 0) {
+                if (forwardIdx < 0 || get_relative_dist(&seq_header->order_hint_info,
+                    ref_hint, backwardIdx) > 0)
+                {
                     backwardIdx = i;
                     backwardIdx = ref_hint;
                 }
@@ -1302,10 +1297,12 @@ void read_skip_mode_params(bitstrm_t *bs, FrameHeader *frame_info, int FrameIsIn
             secondForwardIdx = -1;
             for (i = 0; i < REFS_PER_FRAME; i++) {
                 ref_hint = frame_info->ref_order_hint[frame_info->ref_frame_idx[i]];
-                if (get_relative_dist(seq_header, ref_hint, frame_info->order_hint) < 0)
+                if (get_relative_dist(&seq_header->order_hint_info, ref_hint,
+                    frame_info->order_hint) < 0)
                 {
-                    if (secondForwardIdx < 0 || get_relative_dist(seq_header, ref_hint,
-                        frame_info->order_hint) > 0) {
+                    if (secondForwardIdx < 0 || get_relative_dist(&seq_header->
+                        order_hint_info, ref_hint, frame_info->order_hint) > 0)
+                    {
                         secondForwardIdx = i;
                         secondForwardIdx = ref_hint;
                     }
@@ -1478,11 +1475,12 @@ int get_qindex(SegmentationParams *seg_params, int segment_id, int base_q_idx)
         return base_q_idx;
 }
 
-void read_uncompressed_header(bitstrm_t *bs, SeqHeader *seq_header,
-    FrameHeader *frame_info, ObuHeader *obu_header, EbColorConfig *color_info,
-    int num_planes)
+void read_uncompressed_header(bitstrm_t *bs, EbDecHandle *dec_handle_ptr,
+                              ObuHeader *obu_header, int num_planes)
 {
-    (void)color_info;
+    SeqHeader *seq_header = &dec_handle_ptr->seq_header;
+    FrameHeader *frame_info = &dec_handle_ptr->frame_header;
+
     int id_len=0, allFrames, FrameIsIntra = 0, i, frame_size_override_flag = 0;
     uint32_t diff_len;
     int delta_frame_id_length_minus_1, frame_refs_short_signaling;
@@ -1533,6 +1531,7 @@ void read_uncompressed_header(bitstrm_t *bs, SeqHeader *seq_header,
                 assert(0);
             return;
         }
+
         frame_info->frame_type = dec_get_bits(bs, 2);
 
         FrameIsIntra = (frame_info->frame_type == INTRA_ONLY_FRAME ||
@@ -1638,6 +1637,7 @@ void read_uncompressed_header(bitstrm_t *bs, SeqHeader *seq_header,
     frame_info->order_hint = dec_get_bits(bs,
         seq_header->order_hint_info.order_hint_bits);
     PRINT_FRAME("order_hint", frame_info->order_hint);
+
     uint16_t opPtIdc; int inTemporalLayer, inSpatialLayer;
     if (!FrameIsIntra || !frame_info->error_resilient_mode) {
         frame_info->primary_ref_frame = dec_get_bits(bs, PRIMARY_REF_BITS);
@@ -1695,7 +1695,7 @@ void read_uncompressed_header(bitstrm_t *bs, SeqHeader *seq_header,
         }
     }
     if (FrameIsIntra) {
-        read_frame_size(bs, seq_header, frame_info, &frame_size_override_flag);
+        read_frame_size(bs, seq_header, frame_info, frame_size_override_flag);
         read_render_size(bs, frame_info);
         if (frame_info->allow_screen_content_tools &&
             frame_info->frame_size.render_width) {
@@ -1718,8 +1718,7 @@ void read_uncompressed_header(bitstrm_t *bs, SeqHeader *seq_header,
                 gold_frame_idx = dec_get_bits(bs, 3);
                 PRINT_FRAME("last_frame_idx", last_frame_idx);
                 PRINT_FRAME("gold_frame_idx", gold_frame_idx);
-                //TODO: Implement set_frame_refs(last_frame_idx, gold_frame_idx)
-                // remapped_ref_idx variable required (ref. liaom)
+                assert(0); //svt_set_frame_refs();
             }
         }
 
@@ -1741,10 +1740,10 @@ void read_uncompressed_header(bitstrm_t *bs, SeqHeader *seq_header,
             }
         }
         if (frame_size_override_flag && !frame_info->error_resilient_mode)
-            frame_size_with_refs(bs, seq_header, frame_info,
-                &frame_size_override_flag);
+            frame_size_with_refs(bs, seq_header, frame_info, 
+                frame_size_override_flag);
         else {
-            read_frame_size(bs, seq_header, frame_info, &frame_size_override_flag);
+            read_frame_size(bs, seq_header, frame_info, frame_size_override_flag);
             read_render_size(bs, frame_info);
         }
         if (frame_info->force_integer_mv)
@@ -1768,6 +1767,12 @@ void read_uncompressed_header(bitstrm_t *bs, SeqHeader *seq_header,
             // RefOrderHint, RefFrameSignBias not available in structure
         //}
     }
+
+    dec_handle_ptr->cur_pic_buf[0] = dec_pic_mgr_get_cur_pic(dec_handle_ptr->pv_pic_mgr,
+        &dec_handle_ptr->seq_header, &dec_handle_ptr->frame_header,
+        dec_handle_ptr->dec_config.max_color_format);
+    dec_handle_ptr->cur_pic_buf[0]->order_hint = dec_handle_ptr->frame_header.order_hint;
+
     if (seq_header->reduced_still_picture_header || frame_info->disable_cdf_update)
         frame_info->disable_frame_end_update_cdf = 1;
     else {
@@ -1776,6 +1781,8 @@ void read_uncompressed_header(bitstrm_t *bs, SeqHeader *seq_header,
             frame_info->disable_frame_end_update_cdf
             ? REFRESH_FRAME_CONTEXT_DISABLED : REFRESH_FRAME_CONTEXT_BACKWARD);
     }
+
+    generate_next_ref_frame_map(dec_handle_ptr);
 
     read_tile_info(bs, &frame_info->tiles_info, seq_header, frame_info);
     read_quantization_params(bs, &frame_info->quantization_params,
@@ -1842,16 +1849,15 @@ void read_uncompressed_header(bitstrm_t *bs, SeqHeader *seq_header,
     read_film_grain_params(bs, &frame_info->film_grain_params, seq_header, frame_info);
 }
 
-EbErrorType read_frame_header_obu(bitstrm_t *bs, SeqHeader *seq_header,
-    FrameHeader *frame_info, ObuHeader *obu_header, int trailing_bit)
+EbErrorType read_frame_header_obu(bitstrm_t *bs, EbDecHandle *dec_handle_ptr,
+                                  ObuHeader *obu_header, int trailing_bit)
 {
     EbErrorType status = EB_ErrorNone;
-    int num_planes = av1_num_planes(&seq_header->color_config);
+    int num_planes = av1_num_planes(&dec_handle_ptr->seq_header.color_config);
     uint32_t start_position, end_position, header_bytes;
 
     start_position = get_position(bs);
-    read_uncompressed_header(bs, seq_header, frame_info, obu_header,
-        &seq_header->color_config, num_planes);
+    read_uncompressed_header(bs, dec_handle_ptr, obu_header, num_planes);
     if (trailing_bit) {
         status = av1_check_trailing_bits(bs);
         if (status != EB_ErrorNone) return status;
@@ -2296,8 +2302,8 @@ EbErrorType decode_multiple_obu(EbDecHandle *dec_handle_ptr, const uint8_t *data
             if (!dec_handle_ptr->seen_frame_header)
             {
                 dec_handle_ptr->seen_frame_header = 1;
-                status = read_frame_header_obu(&bs, &dec_handle_ptr->seq_header,
-                    &dec_handle_ptr->frame_header, &obu_header, obu_header.obu_type != OBU_FRAME);
+                status = read_frame_header_obu(&bs, dec_handle_ptr, &obu_header, 
+                                               obu_header.obu_type != OBU_FRAME);
             }
             /*else {
                  For OBU_REDUNDANT_FRAME_HEADER, previous frame_header is taken from dec_handle_ptr->frame_header
