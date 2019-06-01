@@ -23,6 +23,8 @@
 #include "EbDecMemInit.h"
 #include "EbDecInverseQuantize.h"
 
+#include "EbDecPicMgr.h"
+
 /*TODO: Remove and harmonize with encoder. Globals prevent harmonization now! */
 /*****************************************
  * eb_recon_picture_buffer_desc_ctor
@@ -190,7 +192,7 @@ static EbErrorType init_master_frame_ctxt(EbDecHandle  *dec_handle_ptr) {
     EB_MALLOC_DEC(int16_t*, dec_handle_ptr->master_frame_buf.frame_mi_map.top_sbrow_mi_map,
         (sb_cols * (1 << (sb_size_log2 - MI_SIZE_LOG2)) * sizeof(int16_t)), EB_N_PTR);
     dec_handle_ptr->master_frame_buf.frame_mi_map.num_mis_in_sb_wd = (1 << (sb_size_log2 - MI_SIZE_LOG2));
-
+#if 0
     /* TODO: Recon Pic Buf. Should be generalized! */
     EbPictureBufferDescInitData input_picture_buffer_desc_init_data;
     // Init Picture Init data
@@ -213,7 +215,7 @@ static EbErrorType init_master_frame_ctxt(EbDecHandle  *dec_handle_ptr) {
     return_error = dec_eb_recon_picture_buffer_desc_ctor(
         (EbPtr*) &(dec_handle_ptr->recon_picture_buf[0]),
         (EbPtr)&input_picture_buffer_desc_init_data);
-
+#endif
     return return_error;
 }
 
@@ -293,12 +295,22 @@ EbErrorType dec_mem_init(EbDecHandle  *dec_handle_ptr) {
         return EB_ErrorNone;
 
     /* init module ctxts */
-    return_error = init_parse_context(dec_handle_ptr);
+    return_error |= dec_pic_mgr_init((EbDecPicMgr **)&dec_handle_ptr->pv_pic_mgr);
 
-    return_error = init_dec_mod_ctxt(dec_handle_ptr);
+    return_error |= init_parse_context(dec_handle_ptr);
+
+    return_error |= init_dec_mod_ctxt(dec_handle_ptr);
 
     /* init frame buffers */
-    return_error = init_master_frame_ctxt(dec_handle_ptr);
+    return_error |= init_master_frame_ctxt(dec_handle_ptr);
+
+    /* Initialize the references to NULL */
+    for (int i = 0; i < REF_FRAMES; i++) {
+        dec_handle_ptr->ref_frame_map[i] = NULL;
+        dec_handle_ptr->next_ref_frame_map[i] = NULL;
+        dec_handle_ptr->remapped_ref_idx[i] = INVALID_IDX;
+    }
+    dec_handle_ptr->cur_pic_buf[0] = NULL;
 
     dec_handle_ptr->mem_init_done = 1;
 

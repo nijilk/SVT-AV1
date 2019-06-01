@@ -98,7 +98,7 @@ int svt_dec_out_buf(
     EbDecHandle         *dec_handle_ptr,
     EbBufferHeaderType  *p_buffer)
 {
-    EbPictureBufferDesc *recon_picture_buf = dec_handle_ptr->recon_picture_buf[0];
+    EbPictureBufferDesc *recon_picture_buf = dec_handle_ptr->cur_pic_buf[0]->ps_pic_buf;
     EbSvtIOFormat       *out_img = (EbSvtIOFormat*)p_buffer->p_buffer;
 
     int wd = dec_handle_ptr->frame_header.frame_size.frame_width;
@@ -376,12 +376,15 @@ EB_API EbErrorType eb_svt_decode_frame(
     if (svt_dec_component == NULL)
         return EB_ErrorBadParameter;
 
-    EbDecHandle     *dec_handle_ptr = (EbDecHandle   *)svt_dec_component->p_component_private;
+    EbDecHandle *dec_handle_ptr = (EbDecHandle *)svt_dec_component->p_component_private;
     /*TODO : Remove or move. For Test purpose only */
     dec_handle_ptr->dec_cnt++;
     printf("\n SVT-AV1 Dec : Decoding Pic #%d", dec_handle_ptr->dec_cnt);
 
     return_error = decode_multiple_obu(dec_handle_ptr, data, data_size);
+
+    dec_pic_mgr_update_ref_pic(dec_handle_ptr, (EB_ErrorNone == return_error) ? 1 : 0,
+                                dec_handle_ptr->frame_header.refresh_frame_flags);
 
     return return_error;
 }
