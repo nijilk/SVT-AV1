@@ -101,6 +101,7 @@ enum {
     COMPOUND_MASK_TYPES,
 } UENUM1BYTE(COMPOUND_MASK_TYPE);
 
+/*TODO: Harmonize with encoder structure */
 typedef struct MV_decs {
     int16_t row;
     int16_t col;
@@ -114,6 +115,13 @@ typedef struct CandidateMv_dec {
     IntMv_dec comp_mv;
     int32_t weight;
 } CandidateMv_dec;
+
+#define MFMV_STACK_SIZE 3
+typedef struct TemporalMvRef {
+    /* Motion Filed MV */
+    IntMv_dec   mf_mv0;
+    uint8_t     ref_frame_offset;
+} TemporalMvRef;
 
 typedef struct FilterIntraModeInfo {
     /*!< Specifies the type of intra filtering, and can represent any of the following:
@@ -210,6 +218,8 @@ typedef struct ModeInfo_t {
     MvReferenceFrame    ref_frame[2];
     IntMv_dec           mv[2];
 
+    uint16_t            ref_mv_idx;
+
     // interinter members
 
     InterIntraMode_t    interintra_mode;
@@ -289,6 +299,9 @@ typedef struct PartitionInfo {
     /*!< Indicates if the information from the block to the left can be used on the luma plane. */
     uint8_t left_available;
 
+    // TO-DO bhavna Verify if this is necessary. Can this info be accessed from elsewhere
+    uint8_t neighbors_ref_counts[REF_FRAMES];
+
     /*!< Indicates if the information from the block above cab be used on the chroma plane. */
     uint8_t chroma_up_available;
 
@@ -318,7 +331,7 @@ typedef struct PartitionInfo {
 
     //BlockPlane plane[MAX_MB_PLANE];
 
-    const EbWarpedMotionParams *global_motion;
+    //const EbWarpedMotionParams *global_motion;
 
     WienerInfo wiener_info[MAX_MB_PLANE];
 
@@ -335,6 +348,10 @@ typedef struct PartitionInfo {
 
     /* CFL ctxt */
     void    *pv_cfl_ctxt;
+
+    int     is_sec_rect;
+
+    int     num_samples;
 } PartitionInfo_t;
 
 #endif //EbDecBlock_h

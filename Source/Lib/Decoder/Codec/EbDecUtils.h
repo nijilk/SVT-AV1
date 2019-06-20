@@ -22,6 +22,8 @@ static INLINE int get_relative_dist(OrderHintInfo *ps_order_hint_info,
     return diff;
 }
 
+EbErrorType check_add_tplmv_buf(EbDecHandle *dec_handle_ptr);
+
 #ifdef __cplusplus
 }
 #endif
