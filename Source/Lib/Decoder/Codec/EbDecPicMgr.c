@@ -32,6 +32,8 @@
 
 #include "EbDecPicMgr.h"
 
+#define NUM_REF_FRAMES 8 // TODO: remove (reuse EbObuParse.h macro)
+
 /**
 *******************************************************************************
 *
@@ -52,7 +54,7 @@
 */
 
 EbErrorType dec_pic_mgr_init(EbDecPicMgr **pps_pic_mgr) {
-    
+
     EbErrorType return_error = EB_ErrorNone;
     int32_t i;
 
@@ -224,11 +226,14 @@ void dec_pic_mgr_update_ref_pic(EbDecHandle *dec_handle_ptr, int32_t frame_decod
     for (ref_index = 0; ref_index < INTER_REFS_PER_FRAME; ref_index++) {
         dec_handle_ptr->remapped_ref_idx[ref_index] = INVALID_IDX;
     }
+    for (int i = 0; i < NUM_REF_FRAMES; i++)
+        if ((dec_handle_ptr->frame_header.refresh_frame_flags >> i) & 1)
+            dec_handle_ptr->frame_header.ref_order_hint[i] = dec_handle_ptr->frame_header.order_hint;
 }
 
 // Generate next_ref_frame_map.
 void generate_next_ref_frame_map(EbDecHandle *dec_handle_ptr) {
-    
+
     /* TODO: Add lock and unlock for MT */
 
     // next_ref_frame_map holds references to frame buffers. After storing a
@@ -239,10 +244,10 @@ void generate_next_ref_frame_map(EbDecHandle *dec_handle_ptr) {
             mask; mask >>= 1)
     {
         if (mask & 1)
-            dec_handle_ptr->next_ref_frame_map[ref_index] = 
+            dec_handle_ptr->next_ref_frame_map[ref_index] =
                                     dec_handle_ptr->cur_pic_buf[0];
         else
-            dec_handle_ptr->next_ref_frame_map[ref_index] = 
+            dec_handle_ptr->next_ref_frame_map[ref_index] =
                         dec_handle_ptr->ref_frame_map[ref_index];
 
         if (dec_handle_ptr->next_ref_frame_map[ref_index] != NULL)
@@ -251,7 +256,7 @@ void generate_next_ref_frame_map(EbDecHandle *dec_handle_ptr) {
     }
 
     for (; ref_index < REF_FRAMES; ++ref_index) {
-        dec_handle_ptr->next_ref_frame_map[ref_index] = 
+        dec_handle_ptr->next_ref_frame_map[ref_index] =
                     dec_handle_ptr->ref_frame_map[ref_index];
         if (dec_handle_ptr->next_ref_frame_map[ref_index] != NULL)
             ++dec_handle_ptr->next_ref_frame_map[ref_index]->ref_count;

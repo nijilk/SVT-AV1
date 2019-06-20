@@ -114,7 +114,9 @@ typedef struct ParseCtxt {
 
     ParseNbr4x4Ctxt parse_nbr4x4_ctxt;
 
-    FRAME_CONTEXT   frm_ctx[DEC_MAX_NUM_FRM_PRLL];
+    //FRAME_CONTEXT   frm_ctx[DEC_MAX_NUM_FRM_PRLL];
+    FRAME_CONTEXT   cur_tile_ctx;
+    FRAME_CONTEXT   init_frm_ctx;
 
     TileInfo        cur_tile_info;
 
@@ -137,19 +139,30 @@ typedef struct ParseCtxt {
     /* TODO: Points to the cur chroma_coeff_buf in SB. Should be moved out */
     int32_t *cur_chroma_coeff_buf;
 
+    /* Points to the cur luma_trans_info in a block */
+    TransformInfo_t *cur_luma_trans_info;
+
+    /* Count of cur luma_trans_info */
+    uint16_t cur_blk_luma_count;
+#if !FRAME_MI_MAP
     /* Left and above SBInfo pointers */
     SBInfo  *left_sb_info;
     SBInfo  *above_sb_info;
-
+#endif
     /*!< Chroma mode indo state acroos sub 8x8 blocks
      * if Prev block does not have chroma info then this state is remembered in this variable to be used in next block
     */
     int32_t  prev_blk_has_chroma;
+
+    TransformInfo_t *inter_trans_chroma;
+
 } ParseCtxt;
 
 int get_qindex(SegmentationParams *seg_params, int segment_id, int base_q_idx);
 void parse_super_block(EbDecHandle *dec_handle,
     uint32_t blk_row, uint32_t blk_col, SBInfo *sbInfo);
+
+void svt_setup_motion_field(EbDecHandle *dec_handle);
 
 EbErrorType decode_obu(EbDecHandle *dec_handle_ptr, uint8_t *data, uint32_t data_size);
 EbErrorType decode_multiple_obu(EbDecHandle *dec_handle_ptr, const uint8_t *data, uint32_t data_size);

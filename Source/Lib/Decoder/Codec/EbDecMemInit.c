@@ -99,17 +99,16 @@ static EbErrorType init_master_frame_ctxt(EbDecHandle  *dec_handle_ptr) {
 
     int32_t i, num_sb;
     CurFrameBuf *cur_frame_buf;
-
+    MasterFrameBuf  *master_frame_buf = &dec_handle_ptr->master_frame_buf;
     SeqHeader   *seq_header = &dec_handle_ptr->seq_header;
 
     ///* 8x8 alignment for various tools like CDEF */
-    //int32_t aligned_width   = ALIGN_POWER_OF_TWO(seq_header->max_frame_width, 3);
-    //int32_t aligned_height  = ALIGN_POWER_OF_TWO(seq_header->max_frame_height, 3);
-    //int32_t mi_cols = aligned_width >> MI_SIZE_LOG2;
-    //int32_t mi_rows = aligned_height >> MI_SIZE_LOG2;
+    int32_t aligned_width   = ALIGN_POWER_OF_TWO(seq_header->max_frame_width, 3);
+    int32_t aligned_height  = ALIGN_POWER_OF_TWO(seq_header->max_frame_height, 3);
+    int32_t mi_cols = aligned_width >> MI_SIZE_LOG2;
+    int32_t mi_rows = aligned_height >> MI_SIZE_LOG2;
 
-    int32_t sb_size_log2 = seq_header->use_128x128_superblock ?
-                                MAX_SB_SIZE_LOG2 : MIN_SB_SIZE_LOG2;
+    int32_t sb_size_log2 = seq_header->sb_size_log2;
     int32_t sb_aligned_width = ALIGN_POWER_OF_TWO(seq_header->max_frame_width,
                                 sb_size_log2);
     int32_t sb_aligned_height = ALIGN_POWER_OF_TWO(seq_header->max_frame_height,
@@ -121,16 +120,16 @@ static EbErrorType init_master_frame_ctxt(EbDecHandle  *dec_handle_ptr) {
 
     int32_t num_mis_in_sb = (1 << (sb_size_log2 - MI_SIZE_LOG2)) * (1 << (sb_size_log2 - MI_SIZE_LOG2));
 
-    dec_handle_ptr->master_frame_buf.num_mis_in_sb = num_mis_in_sb;
+    master_frame_buf->num_mis_in_sb = num_mis_in_sb;
 
-    //dec_handle_ptr->master_frame_buf.mi_cols = mi_cols;
-    //dec_handle_ptr->master_frame_buf.mi_rows = mi_rows;
+    //master_frame_buf->mi_cols = mi_cols;
+    //master_frame_buf->mi_rows = mi_rows;
 
-    dec_handle_ptr->master_frame_buf.sb_cols = sb_cols;
-    dec_handle_ptr->master_frame_buf.sb_rows = sb_rows;
+    master_frame_buf->sb_cols = sb_cols;
+    master_frame_buf->sb_rows = sb_rows;
 
     for (i = 0; i < dec_handle_ptr->num_frms_prll; i++) {
-        cur_frame_buf = &dec_handle_ptr->master_frame_buf.cur_frame_bufs[i];
+        cur_frame_buf = &master_frame_buf->cur_frame_bufs[i];
 
         /* SuperBlock str allocation at SB level */
         EB_MALLOC_DEC(SBInfo*, cur_frame_buf->sb_info,
@@ -187,11 +186,25 @@ static EbErrorType init_master_frame_ctxt(EbDecHandle  *dec_handle_ptr) {
         EB_MALLOC_DEC(uint8_t*, cur_frame_buf->tile_map_sb,
             (num_sb * sizeof(uint8_t)), EB_N_PTR);
     }
-
+#if FRAME_MI_MAP
+    FrameMiMap *frame_mi_map = &master_frame_buf->frame_mi_map;
+    frame_mi_map->sb_cols = sb_cols;
+    frame_mi_map->sb_rows = sb_rows;
+    frame_mi_map->mi_cols_algnsb = sb_cols * (1 << (sb_size_log2 - MI_SIZE_LOG2));
+    frame_mi_map->mi_rows_algnsb = sb_cols * (1 << (sb_size_log2 - MI_SIZE_LOG2));
+    /* SBInfo pointers for entire frame */
+    EB_MALLOC_DEC(SBInfo**, frame_mi_map->pps_sb_info,
+        sb_rows * sb_cols * sizeof(SBInfo *), EB_N_PTR);
+    /* ModeInfo offset wrt it's SB start for entire frame at 4x4 lvl */
+    EB_MALLOC_DEC(uint16_t*, frame_mi_map->p_mi_offset, frame_mi_map->
+    mi_rows_algnsb * frame_mi_map->mi_cols_algnsb * sizeof(uint16_t), EB_N_PTR);
+    frame_mi_map->sb_size_log2 = sb_size_log2;
+#else
     /* Top SB 4x4 row MI map */
-    EB_MALLOC_DEC(int16_t*, dec_handle_ptr->master_frame_buf.frame_mi_map.top_sbrow_mi_map,
+    EB_MALLOC_DEC(int16_t*, frame_mi_map->top_sbrow_mi_map,
         (sb_cols * (1 << (sb_size_log2 - MI_SIZE_LOG2)) * sizeof(int16_t)), EB_N_PTR);
-    dec_handle_ptr->master_frame_buf.frame_mi_map.num_mis_in_sb_wd = (1 << (sb_size_log2 - MI_SIZE_LOG2));
+#endif
+    frame_mi_map->num_mis_in_sb_wd = (1 << (sb_size_log2 - MI_SIZE_LOG2));
 #if 0
     /* TODO: Recon Pic Buf. Should be generalized! */
     EbPictureBufferDescInitData input_picture_buffer_desc_init_data;
@@ -216,6 +229,10 @@ static EbErrorType init_master_frame_ctxt(EbDecHandle  *dec_handle_ptr) {
         (EbPtr*) &(dec_handle_ptr->recon_picture_buf[0]),
         (EbPtr)&input_picture_buffer_desc_init_data);
 #endif
+
+    master_frame_buf->tpl_mvs = NULL;
+    master_frame_buf->tpl_mvs_size = 0;
+
     return return_error;
 }
 
