@@ -42,6 +42,8 @@ void dec_pic_mgr_update_ref_pic(EbDecHandle *dec_handle_ptr, int32_t frame_decod
 
 void generate_next_ref_frame_map(EbDecHandle *dec_handle_ptr);
 
+EbDecPicBuf *get_ref_frame_buf(EbDecHandle *dec_handle_ptr, const MvReferenceFrame ref_frame);
+
 #ifdef __cplusplus
 }
 #endif

@@ -112,7 +112,8 @@ uint32_t get_position(bitstrm_t *bs) {
 uint8_t * get_bitsteam_buf(bitstrm_t *bs) {
     uint8_t *bitsteam_buf = (uint8_t *)bs->buf;
     bitsteam_buf -= ((WORD_SIZE/*nxt_word*/ >> 3) + ((WORD_SIZE - bs->bit_ofst)/*cur_word*/ >> 3));
-
+   /* printf("bit_buf: %p \t buf_base: %p \t Pos: %d \t Diff: %d",
+        bitsteam_buf, bs->buf_base, (get_position(bs) >> 3), bitsteam_buf - (bs->buf_base + (get_position(bs) >> 3)));*/
     assert(bitsteam_buf == (bs->buf_base + (get_position(bs) >> 3) ) );
 
     return bitsteam_buf;
