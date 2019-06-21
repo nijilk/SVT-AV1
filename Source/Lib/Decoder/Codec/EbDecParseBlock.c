@@ -2865,7 +2865,7 @@ int find_warp_samples(EbDecHandle *dec_handle, PartitionInfo_t *pi,
                     mv_row, mv_col, pi->sb_info);
 
             if (mbmi->ref_frame[0] == ref_frame && mbmi->ref_frame[1] == NONE_FRAME) {
-                add_samples(mbmi, pts, pts_inref, 0, -1, b4_h, 1);
+                add_samples(mbmi, pts, pts_inref, 0, -1, b4_w, 1);
                 np++;
                 if (np >= LEAST_SQUARES_SAMPLES_MAX) return LEAST_SQUARES_SAMPLES_MAX;
             }
@@ -3539,32 +3539,34 @@ static INLINE TxSize av1_get_max_uv_txsize(BlockSize bsize, int subsampling_x,
 }
 
 /* Update Chroma Transform Info for Inter Case! */
-void update_chroma_trans_info(EbDecHandle *dec_handle,
-    PartitionInfo_t *part_info, BlockSize bsize)
+void update_chroma_trans_info(EbDecHandle *dec_handle, PartitionInfo_t *part_info,
+                              BlockSize bsize)
 {
     ParseCtxt *parse_ctx = (ParseCtxt*)dec_handle->pv_parse_ctxt;
     ModeInfo_t *mbmi = part_info->mi;
     SBInfo     *sb_info = part_info->sb_info;
     EbColorConfig color_config = dec_handle->seq_header.color_config;
 
-    int num_chroma_tus = 0, step_r, step_c;
-
+    int num_chroma_tus = 0, step_r, step_c, force_split_cnt = 0, total_chroma_tus = 0;
     int sx = color_config.subsampling_x;
     int sy = color_config.subsampling_y;
+    TransformInfo_t *chroma_trans_info = sb_info->sb_trans_info[AOM_PLANE_U] +
+                                         mbmi->first_chroma_tu_offset;
 
-    TransformInfo_t *chroma_trans_info = sb_info->sb_chroma_trans_info +
-        mbmi->first_chroma_tu_offset;
-
-    const TxSize max_tx_size = max_txsize_rect_lookup[bsize];
-    const int bh = tx_size_high_unit[max_tx_size];
-    const int bw = tx_size_wide_unit[max_tx_size];
-    const int width = block_size_wide[bsize] >> tx_size_wide_log2[0];
-    const int height = block_size_high[bsize] >> tx_size_high_log2[0];
+    const int max_blocks_wide = max_block_wide(part_info, bsize, 0);
+    const int max_blocks_high = max_block_high(part_info, bsize, 0);
+    const BlockSize max_unit_bsize = BLOCK_64X64;
+    int width = block_size_wide[max_unit_bsize] >> tx_size_wide_log2[0];
+    int height = block_size_high[max_unit_bsize] >> tx_size_high_log2[0];
+    width = AOMMIN(width, max_blocks_wide);
+    height = AOMMIN(height, max_blocks_high);
 
     TxSize tx_size_uv = av1_get_max_uv_txsize(bsize, sx, sy);
     /* TODO: Make plane loop and avoid the unroll */
-    for (int idy = 0; idy < height; idy += bh) {
-        for (int idx = 0; idx < width; idx += bw) {
+    for (int idy = 0; idy < max_blocks_high; idy += height) {
+        for (int idx = 0; idx < max_blocks_wide; idx += width) {
+
+            num_chroma_tus = 0;
 
             if (color_config.mono_chrome)
                 continue;
@@ -3578,26 +3580,41 @@ void update_chroma_trans_info(EbDecHandle *dec_handle,
             step_c = tx_size_wide_unit[tx_size_uv];
 
             /* UV dim. of 4 special case! */
-            const int unit_height = ROUND_POWER_OF_TWO(
-                AOMMIN(bh + idy, bh), sy);
-            const int unit_width = ROUND_POWER_OF_TWO(
-                AOMMIN(bw + idx, bw), sx);
+            int unit_height = ROUND_POWER_OF_TWO(AOMMIN(height + idy, max_blocks_high), sy);
+            int unit_width = ROUND_POWER_OF_TWO(AOMMIN(width + idx, max_blocks_wide), sx);
+
             /* TODO : Can cause prblm for incomplete SBs. Fix! */
-            for (int blk_row = 0; blk_row < unit_height; blk_row += step_r) {
-                for (int blk_col = 0; blk_col < unit_width; blk_col += step_c) {
-                    chroma_trans_info->tx_size = tx_size_uv; // Chroma Cb
+            for (int blk_row = idy >> sy; blk_row < unit_height; blk_row += step_r) {
+                for (int blk_col = idx >> sx; blk_col < unit_width; blk_col += step_c) {
+                    // Chroma Cb
+                    chroma_trans_info->tx_size = tx_size_uv;
+                    chroma_trans_info->tu_x_offset = blk_col;
+                    chroma_trans_info->tu_y_offset = blk_row;
                     chroma_trans_info++;
                     num_chroma_tus++;
-
-                    chroma_trans_info->tx_size = tx_size_uv; // Chroma Cr
-                    chroma_trans_info++;
                 }
             }
+
+            parse_ctx->num_tus[AOM_PLANE_U][force_split_cnt] = num_chroma_tus;
+            parse_ctx->num_tus[AOM_PLANE_V][force_split_cnt] = num_chroma_tus;
+
+            force_split_cnt++;
         }
     }
 
-    mbmi->num_chroma_tus = num_chroma_tus;
-    parse_ctx->first_chroma_tu_offset += 2 * num_chroma_tus;
+    total_chroma_tus =
+        parse_ctx->num_tus[AOM_PLANE_U][0] + parse_ctx->num_tus[AOM_PLANE_U][1] +
+        parse_ctx->num_tus[AOM_PLANE_U][2] + parse_ctx->num_tus[AOM_PLANE_U][3];
+
+    /* Cr Transform Info Update from Cb */
+    if (total_chroma_tus) {
+        assert((chroma_trans_info - total_chroma_tus) ==
+            sb_info->sb_trans_info[AOM_PLANE_U] + mbmi->first_chroma_tu_offset);
+        memcpy(chroma_trans_info, chroma_trans_info - total_chroma_tus,
+               total_chroma_tus * sizeof(*chroma_trans_info));
+    }
+    mbmi->num_chroma_tus = total_chroma_tus;
+    parse_ctx->first_chroma_tu_offset += 2 * total_chroma_tus;
 }
 
 TxSize find_tx_size(w, h) {
@@ -3625,8 +3642,8 @@ int get_txfm_split_ctx(PartitionInfo_t *pi, ParseCtxt *parse_ctx,
 }
 
 void read_var_tx_size(EbDecHandle *dec_handle, PartitionInfo_t *pi, SvtReader *r,
-    TxSize tx_size, int blk_row, int blk_col, int depth)
-{
+    TxSize tx_size, int blk_row, int blk_col, int depth, int *num_luma_tus) {
+
     ModeInfo_t *mbmi = pi->mi;
     ParseCtxt *parse_ctx = (ParseCtxt*)dec_handle->pv_parse_ctxt;
     const BlockSize bsize = mbmi->sb_type;
@@ -3641,7 +3658,7 @@ void read_var_tx_size(EbDecHandle *dec_handle, PartitionInfo_t *pi, SvtReader *r
     else {
         int ctx = get_txfm_split_ctx(pi, parse_ctx, tx_size, blk_row, blk_col);
         txfm_split = svt_read_symbol(r, parse_ctx->cur_tile_ctx.txfm_partition_cdf[ctx],
-            2, ACCT_STR);
+                                     2, ACCT_STR);
     }
 
     int w4 = tx_size_wide_unit[tx_size];
@@ -3654,12 +3671,15 @@ void read_var_tx_size(EbDecHandle *dec_handle, PartitionInfo_t *pi, SvtReader *r
         for (i = 0; i < h4; i += step_h)
             for (j = 0; j < w4; j += step_w)
                 read_var_tx_size(dec_handle, pi, r, sub_tx_sz, blk_row + i,
-                    blk_col + j, depth + 1);
+                                 blk_col + j, depth + 1, num_luma_tus);
     }
     else {
         parse_ctx->cur_luma_trans_info->tx_size = tx_size;
+        parse_ctx->cur_luma_trans_info->tu_x_offset = blk_col;
+        parse_ctx->cur_luma_trans_info->tu_y_offset = blk_row;
         parse_ctx->cur_luma_trans_info++;
         parse_ctx->cur_blk_luma_count++;
+        *num_luma_tus += 1;
         update_tx_context(parse_ctx, pi, bsize, tx_size, blk_row, blk_col);
     }
 }
@@ -3673,39 +3693,51 @@ void update_flat_trans_info(EbDecHandle *dec_handle, PartitionInfo_t *part_info,
     SBInfo     *sb_info = part_info->sb_info;
     EbColorConfig color_config = dec_handle->seq_header.color_config;
 
-    int num_luma_tus = 0;
-    int num_chroma_tus = 0;
-
     int sx = color_config.subsampling_x;
     int sy = color_config.subsampling_y;
+    int num_luma_tus, num_chroma_tus, force_split_cnt = 0, total_luma_tus = 0,
+        total_chroma_tus = 0;
 
-    TransformInfo_t *luma_trans_info = sb_info->sb_luma_trans_info +
-                                    mbmi->first_luma_tu_offset;
-    TransformInfo_t *chroma_trans_info = sb_info->sb_chroma_trans_info +
-                                     mbmi->first_chroma_tu_offset;
+    TransformInfo_t *luma_trans_info = sb_info->sb_trans_info[AOM_PLANE_Y] +
+                                       mbmi->first_luma_tu_offset;
+    TransformInfo_t *chroma_trans_info = sb_info->sb_trans_info[AOM_PLANE_U] +
+                                         mbmi->first_chroma_tu_offset;
 
-    const TxSize max_tx_size = max_txsize_rect_lookup[bsize];
-    const int bh = tx_size_high_unit[max_tx_size];
-    const int bw = tx_size_wide_unit[max_tx_size];
-    const int width = block_size_wide[bsize] >> tx_size_wide_log2[0];
-    const int height = block_size_high[bsize] >> tx_size_high_log2[0];
+    const int max_blocks_wide = max_block_wide(part_info, bsize, 0);
+    const int max_blocks_high = max_block_high(part_info, bsize, 0);
+    const BlockSize max_unit_bsize = BLOCK_64X64;
+    int width = block_size_wide[max_unit_bsize] >> tx_size_wide_log2[0];
+    int height = block_size_high[max_unit_bsize] >> tx_size_high_log2[0];
+    width = AOMMIN(width, max_blocks_wide);
+    height = AOMMIN(height, max_blocks_high);
 
     TxSize tx_size_uv = av1_get_max_uv_txsize(bsize, sx, sy);
     /* TODO: Make plane loop and avoid the unroll */
-    for (int idy = 0; idy < height; idy += bh) {
-        for (int idx = 0; idx < width; idx += bw) {
+    for (int idy = 0; idy < max_blocks_high; idy += height) {
+        for (int idx = 0; idx < max_blocks_wide; idx += width) {
+
+            num_luma_tus = 0;
+            num_chroma_tus = 0;
+
             /* Update Luma Transform Info */
-            int stepr = tx_size_high_unit[tx_size];
-            int stepc = tx_size_wide_unit[tx_size];
+            int step_r = tx_size_high_unit[tx_size];
+            int step_c = tx_size_wide_unit[tx_size];
+
+            /* Y dim. of 4 special case! */
+            int unit_height = ROUND_POWER_OF_TWO( AOMMIN(height + idy, max_blocks_high), 0);
+            int unit_width = ROUND_POWER_OF_TWO(AOMMIN(width + idx, max_blocks_wide), 0);
 
             /* TODO : Can cause prblm for incomplete SBs. Fix! */
-            for (int blk_row = idy; blk_row < (idy + bh); blk_row += stepr) {
-                for (int blk_col = idx; blk_col < (idx + bw); blk_col += stepc) {
+            for (int blk_row = idy; blk_row < unit_height; blk_row += step_r) {
+                for (int blk_col = idx; blk_col < unit_width; blk_col += step_c) {
                     luma_trans_info->tx_size = tx_size;
+                    luma_trans_info->tu_x_offset = blk_col;
+                    luma_trans_info->tu_y_offset = blk_row;
                     luma_trans_info++;
                     num_luma_tus++;
                 }
             }
+            parse_ctx->num_tus[AOM_PLANE_Y][force_split_cnt] = num_luma_tus;
 
             if(color_config.mono_chrome)
                 continue;
@@ -3715,36 +3747,50 @@ void update_flat_trans_info(EbDecHandle *dec_handle, PartitionInfo_t *part_info,
                 bsize, sx, sy))
                 continue;
 
-            stepr = tx_size_high_unit[tx_size_uv];
-            stepc = tx_size_wide_unit[tx_size_uv];
+            step_r = tx_size_high_unit[tx_size_uv];
+            step_c = tx_size_wide_unit[tx_size_uv];
 
             /* UV dim. of 4 special case! */
-            const int unit_height = ROUND_POWER_OF_TWO(
-                AOMMIN(bh + idy, bh), sy);
-            const int unit_width = ROUND_POWER_OF_TWO(
-                AOMMIN(bw + idx, bw), sx);
+            unit_height = ROUND_POWER_OF_TWO(AOMMIN(height + idy, max_blocks_high), sy);
+            unit_width = ROUND_POWER_OF_TWO(AOMMIN(width + idx, max_blocks_wide), sx);
             /* TODO : Can cause prblm for incomplete SBs. Fix! */
-            for (int blk_row = 0; blk_row < unit_height; blk_row += stepr) {
-                for (int blk_col = 0; blk_col < unit_width; blk_col += stepc) {
+            for (int blk_row = idy >> sy; blk_row < unit_height; blk_row += step_r) {
+                for (int blk_col = idx >> sx; blk_col < unit_width; blk_col += step_c) {
                     chroma_trans_info->tx_size = tx_size_uv;
+                    chroma_trans_info->tu_x_offset = blk_col;
+                    chroma_trans_info->tu_y_offset = blk_row;
                     chroma_trans_info++;
                     num_chroma_tus++;
                 }
             }
-            for (int blk_row = 0; blk_row < unit_height; blk_row += stepr) {
-                for (int blk_col = 0; blk_col < unit_width; blk_col += stepc) {
-                    chroma_trans_info->tx_size = tx_size_uv;
-                    chroma_trans_info++;
-                }
-            }
+
+            parse_ctx->num_tus[AOM_PLANE_U][force_split_cnt] = num_chroma_tus;
+            parse_ctx->num_tus[AOM_PLANE_V][force_split_cnt] = num_chroma_tus;
+
+            force_split_cnt++;
         }
     }
 
-    mbmi->num_luma_tus = num_luma_tus;
-    mbmi->num_chroma_tus = num_chroma_tus;
+    total_luma_tus =
+        parse_ctx->num_tus[AOM_PLANE_Y][0] + parse_ctx->num_tus[AOM_PLANE_Y][1] +
+        parse_ctx->num_tus[AOM_PLANE_Y][2] + parse_ctx->num_tus[AOM_PLANE_Y][3];
+    total_chroma_tus =
+        parse_ctx->num_tus[AOM_PLANE_U][0] + parse_ctx->num_tus[AOM_PLANE_U][1] +
+        parse_ctx->num_tus[AOM_PLANE_U][2] + parse_ctx->num_tus[AOM_PLANE_U][3];
 
-    parse_ctx->first_luma_tu_offset += num_luma_tus;
-    parse_ctx->first_chroma_tu_offset += 2 * num_chroma_tus;
+    /* Cr Transform Info Update from Cb */
+    if (total_chroma_tus) {
+        assert((chroma_trans_info - total_chroma_tus) ==
+            sb_info->sb_trans_info[AOM_PLANE_U] + mbmi->first_chroma_tu_offset);
+        memcpy(chroma_trans_info, chroma_trans_info - total_chroma_tus,
+               total_chroma_tus * sizeof(*chroma_trans_info));
+    }
+
+    mbmi->num_luma_tus = total_luma_tus;
+    mbmi->num_chroma_tus = total_chroma_tus;
+
+    parse_ctx->first_luma_tu_offset += total_luma_tus;
+    parse_ctx->first_chroma_tu_offset += 2 * total_chroma_tus;
 }
 
 static INLINE void set_txfm_ctxs(ParseCtxt *parse_ctx, TxSize tx_size,
@@ -3784,16 +3830,22 @@ void read_block_tx_size(EbDecHandle *dec_handle, SvtReader *r,
         const int bw = tx_size_wide_unit[max_tx_size];
         const int width = block_size_wide[bsize] >> tx_size_wide_log2[0];
         const int height = block_size_high[bsize] >> tx_size_high_log2[0];
+        int force_split_cnt = 0, num_luma_tus = 0;
 
         // Current luma trans_info and offset initialization
-        parse_ctx->cur_luma_trans_info = sb_info->sb_luma_trans_info +
+        parse_ctx->cur_luma_trans_info = sb_info->sb_trans_info[AOM_PLANE_Y] +
                                          mbmi->first_luma_tu_offset;
         parse_ctx->cur_blk_luma_count = 0;
 
         // Luma trans_info update
         for (int idy = 0; idy < height; idy += bh)
             for (int idx = 0; idx < width; idx += bw)
-                read_var_tx_size(dec_handle, part_info, r, max_tx_size, idy, idx, 0);
+            {
+                num_luma_tus = 0;
+                read_var_tx_size(dec_handle, part_info, r, max_tx_size, idy, idx, 0, &num_luma_tus);
+                parse_ctx->num_tus[AOM_PLANE_Y][force_split_cnt] = num_luma_tus;
+                force_split_cnt++;
+            }
 
         // Chroma trans_info update
         update_chroma_trans_info(dec_handle, part_info, bsize);
@@ -4680,11 +4732,10 @@ uint16_t parse_transform_block(EbDecHandle *dec_handle,
 
 /* Gives the pointer to current block's transform info. Will work only for Intra */
 static INLINE TransformInfo_t* get_cur_trans_info_intra(int plane,
-    SBInfo  *sb_info, ModeInfo_t *mi)
-{
-    return (plane == 0) ? (sb_info->sb_luma_trans_info + mi->first_luma_tu_offset) :
-                          (sb_info->sb_chroma_trans_info +
-                           mi->first_chroma_tu_offset + (plane-1));
+    SBInfo  *sb_info, ModeInfo_t *mi) {
+    return (plane == 0) ? 
+        (sb_info->sb_trans_info[plane] + mi->first_luma_tu_offset) :
+        (sb_info->sb_trans_info[plane] + mi->first_chroma_tu_offset + (plane-1));
 }
 
 /* TODO: Clean the logic! */
@@ -4702,11 +4753,14 @@ void parse_residual(EbDecHandle *dec_handle, PartitionInfo_t *pi, SvtReader *r,
     ParseCtxt   *parse_ctx = (ParseCtxt*)dec_handle->pv_parse_ctxt;
     TxSize      tx_size;
     EbColorConfig *color_info = &dec_handle->seq_header.color_config;
+    SBInfo *sb_info = pi->sb_info;
     int num_planes = color_info->mono_chrome ? 1 : MAX_MB_PLANE;
     ModeInfo_t *mode = pi->mi;
 
     int skip     = mode->skip;
     int lossless = (&dec_handle->frame_header.lossless_array[0])[mode->segment_id];
+    int tx_wide, tx_high, force_split_cnt = 0;
+    uint8_t num_tu, total_num_tu;
 
     const int max_blocks_wide = max_block_wide(pi, mi_size, 0);
     const int max_blocks_high = max_block_high(pi, mi_size, 0);
@@ -4715,8 +4769,14 @@ void parse_residual(EbDecHandle *dec_handle, PartitionInfo_t *pi, SvtReader *r,
     int mu_blocks_high = block_size_high[max_unit_bsize] >> tx_size_high_log2[0];
     mu_blocks_wide = AOMMIN(max_blocks_wide, mu_blocks_wide);
     mu_blocks_high = AOMMIN(max_blocks_high, mu_blocks_high);
-    TransformInfo_t *trans_info = NULL, *next_trans_chroma = NULL,
-        *next_trans_luma = NULL;
+
+    TransformInfo_t *trans_info[MAX_MB_PLANE];
+    trans_info[AOM_PLANE_Y] = (sb_info->sb_trans_info[AOM_PLANE_Y] +
+                               mode->first_luma_tu_offset);
+    trans_info[AOM_PLANE_U] = (sb_info->sb_trans_info[AOM_PLANE_U] +
+                               mode->first_chroma_tu_offset);
+    trans_info[AOM_PLANE_V] = (sb_info->sb_trans_info[AOM_PLANE_U] +
+                                mode->first_chroma_tu_offset) + mode->num_chroma_tus;
 
     for (int row = 0; row < max_blocks_high; row += mu_blocks_high) {
         for (int col = 0; col < max_blocks_wide; col += mu_blocks_wide) {
@@ -4726,74 +4786,57 @@ void parse_residual(EbDecHandle *dec_handle, PartitionInfo_t *pi, SvtReader *r,
 
                 if (!dec_is_chroma_reference(mi_row, mi_col, mi_size, sub_x, sub_y))
                     continue;
-                if (plane == 0 || !dec_is_inter_block(mode)) {
-                    if (row == 0 && col == 0)
-                        trans_info = get_cur_trans_info_intra(plane, pi->sb_info, mode);
-                    else
-                        trans_info = plane ? next_trans_chroma : next_trans_luma;
-                }
 
-                if(dec_is_inter_block(mode) && !plane)
-                    parse_ctx->inter_trans_chroma = trans_info;
+                if (dec_is_inter_block(mode) && !plane)
+                    parse_ctx->inter_trans_chroma = trans_info[plane];
 
+                total_num_tu = plane ? mode->num_chroma_tus : mode->num_luma_tus;
+                num_tu = parse_ctx->num_tus[plane][force_split_cnt];
 
-                if (lossless)
-                    tx_size = TX_4X4;
-                else
-                    tx_size = av1_get_tx_size(plane, pi, sub_x, sub_y);
+                assert(num_tu != 0 && total_num_tu != 0);
+                assert(total_num_tu ==
+                    (parse_ctx->num_tus[plane][0] + parse_ctx->num_tus[plane][1] +
+                     parse_ctx->num_tus[plane][2] + parse_ctx->num_tus[plane][3]));
 
-                int step_x = tx_size_high[tx_size] >> 2;
-                int step_y = tx_size_wide[tx_size] >> 2;
-
-                const int unit_height = ROUND_POWER_OF_TWO(
-                    AOMMIN(mu_blocks_high + row, max_blocks_high), sub_y);
-                const int unit_width = ROUND_POWER_OF_TWO(
-                    AOMMIN(mu_blocks_wide + col, max_blocks_wide), sub_x);
-
-                for (int blk_row = row >> sub_y; blk_row < unit_height;
-                    blk_row += step_x)
+                for(uint8_t tu = 0; tu < num_tu; tu++)
                 {
-                    for (int blk_col = col >> sub_x; blk_col < unit_width;
-                        blk_col += step_y)
-                    {
-                        int32_t *coeff = plane ? parse_ctx->cur_chroma_coeff_buf :
-                                                    parse_ctx->cur_luma_coeff_buf;
+                    if (lossless)
+                        tx_size = TX_4X4;
+                    else
+                        tx_size = trans_info[plane]->tx_size;
+
+                    assert(trans_info[plane]->tu_x_offset <= max_blocks_wide);
+                    assert(trans_info[plane]->tu_y_offset <= max_blocks_high);
+
+                    int32_t *coeff = parse_ctx->cur_coeff_buf[plane];
 #if SVT_DEC_COEFF_DEBUG
-                        {
-                        uint8_t  *cur_coeff = (uint8_t*)coeff;
-                        uint8_t  cur_loc = (mi_row + blk_row) & 0xFF;
-                        cur_coeff[0] = cur_loc;
-                        cur_loc = (mi_col + blk_col) & 0xFF;
-                        cur_coeff[1] = cur_loc;
-                        }
+                    {
+                    uint8_t  *cur_coeff = (uint8_t*)coeff;
+                    uint8_t  cur_loc = (mi_row + trans_info[plane]->tu_y_offset) & 0xFF;
+                    cur_coeff[0] = cur_loc;
+                    cur_loc = (mi_col + trans_info[plane]->tu_x_offset) & 0xFF;
+                    cur_coeff[1] = cur_loc;
+                    }
 #endif
-                        int32_t eob = parse_transform_block(dec_handle, pi, r, coeff,
-                            trans_info, plane,
-                            blk_col, blk_row, mi_row, mi_col,
-                            tx_size, skip);
+                    int32_t eob = parse_transform_block(dec_handle, pi, r, coeff,
+                        trans_info[plane], plane,
+                        trans_info[plane]->tu_x_offset, trans_info[plane]->tu_y_offset,
+                        mi_row, mi_col, trans_info[plane]->tx_size, skip);
 
-                        if (eob != 0) {
-                            plane ? (parse_ctx->cur_chroma_coeff_buf += (eob + 1))
-                                  : (parse_ctx->cur_luma_coeff_buf += (eob + 1));
-                            trans_info->cbf = 1;
-                            }
-                        else
-                            trans_info->cbf = 0;
+                    if (eob != 0) {
+                        parse_ctx->cur_coeff_buf[plane] += (eob + 1);
+                        trans_info[plane]->cbf = 1;
+                        }
+                    else
+                        trans_info[plane]->cbf = 0;
 
-                        // increment transform pointer
-                        trans_info++;
-                    } //for blk_col
-                } //for blk_row
-
-                /* Remembers trans_info for next transform block
-                   within a block of 128xH / Wx128 */
-                if (plane == 0)
-                    next_trans_luma = trans_info;
-                else
-                    next_trans_chroma = trans_info;
+                    // increment transform pointer
+                    trans_info[plane]++;
+                } //for tu
             }//for plane
+            force_split_cnt++;
         }
-    }//intra/inter
+    }
 }
 
 void parse_block(EbDecHandle *dec_handle, uint32_t mi_row, uint32_t mi_col,
@@ -4904,6 +4947,11 @@ void parse_block(EbDecHandle *dec_handle, uint32_t mi_row, uint32_t mi_col,
 
     /* current block's has_chroma info is stored for useage in next block */
     parse_ctx->prev_blk_has_chroma = part_info.has_chroma;
+
+    /* Initialize block or force splt block tu count to 0*/
+    ZERO_ARRAY(parse_ctx->num_tus[AOM_PLANE_Y], 4);
+    ZERO_ARRAY(parse_ctx->num_tus[AOM_PLANE_U], 4);
+    ZERO_ARRAY(parse_ctx->num_tus[AOM_PLANE_V], 4);
 
     if (!dec_is_inter_block(mode)) {
         for (int plane = 0;

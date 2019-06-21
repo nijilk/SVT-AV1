@@ -177,10 +177,8 @@ typedef struct ParseCtxt {
     /* TODO: cur SB col idx. Should be moved out */
     int32_t         sb_col_mi;
 
-    /* TODO: Points to the cur luma_coeff_buf in SB. Should be moved out */
-    int32_t *cur_luma_coeff_buf;
-    /* TODO: Points to the cur chroma_coeff_buf in SB. Should be moved out */
-    int32_t *cur_chroma_coeff_buf;
+    /* TODO: Points to the cur coeff_buf in SB. Should be moved out */
+    int32_t *cur_coeff_buf[MAX_MB_PLANE];
 
     /* Points to the cur luma_trans_info in a block */
     TransformInfo_t *cur_luma_trans_info;
@@ -198,6 +196,9 @@ typedef struct ParseCtxt {
     int32_t  prev_blk_has_chroma;
 
     TransformInfo_t *inter_trans_chroma;
+
+    /*!< Number of TUs in block or force split block */
+    uint8_t         num_tus[MAX_MB_PLANE][4 /*Max force TU split*/];
 
 } ParseCtxt;
 

@@ -47,6 +47,7 @@ typedef struct EbDecPicBuf {
     FRAME_CONTEXT       final_frm_ctx;
 
     GlobalMotionParams  global_motion[REF_FRAMES];
+
     /* MV at 8x8 lvl */
     /* seg map */
     /* order hint */
@@ -60,11 +61,9 @@ typedef struct CurFrameBuf {
 
     ModeInfo_t      *mode_info;
 
-    int32_t         *luma_coeff;
-    int32_t         *chroma_coeff;
+    int32_t         *coeff[MAX_MB_PLANE];
 
-    TransformInfo_t *luma_trans_info;
-    TransformInfo_t *chroma_trans_info;
+    TransformInfo_t *trans_info[MAX_MB_PLANE - 1];
 
     int8_t          *cdef_strength;
     int32_t         *delta_q;
@@ -72,6 +71,10 @@ typedef struct CurFrameBuf {
 
     /* Tile Map at SB level : TODO. Can be removed? */
     uint8_t         *tile_map_sb;
+
+    /*!< Global warp params of current frame */
+    EbWarpedMotionParams global_motion_warp[REF_FRAMES];
+
 } CurFrameBuf;
 
 #define FRAME_MI_MAP 1
