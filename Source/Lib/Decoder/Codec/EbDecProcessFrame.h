@@ -27,10 +27,8 @@ typedef struct DecModCtxt {
     SBInfo  *left_sb_info;
     SBInfo  *above_sb_info;
 #endif
-    /* TODO: Points to the cur luma_coeff_buf in SB */
-    int32_t *cur_luma_coeff;
-    /* TODO: Points to the cur chroma_coeff_buf in SB  */
-    int32_t *cur_chroma_coeff;
+    /* TODO: Points to the cur coeff_buf in SB */
+    int32_t *cur_coeff[MAX_MB_PLANE];
 
     /* Current tile info */
     TileInfo    *cur_tile_info;

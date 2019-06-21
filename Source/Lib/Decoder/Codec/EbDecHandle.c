@@ -349,6 +349,7 @@ EB_API EbErrorType eb_init_decoder(
 
     assert(0 == dec_handle_ptr->dec_config.asm_type);
     setup_rtcd_internal(dec_handle_ptr->dec_config.asm_type);
+    asmSetConvolveAsmTable();
 
     init_intra_dc_predictors_c_internal();
 

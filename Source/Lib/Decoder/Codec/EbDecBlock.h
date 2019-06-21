@@ -175,7 +175,15 @@ typedef struct TransformInfo {
     /*!< Specifies the transform type for the TU. */
     TxType txk_type;
 
+    /*!< Code Block Flag, 0: No residual for the block
+                          1: Residual exists for the block */
     int8_t  cbf;
+
+    /*!< x offset for a block in mi unit*/
+    uint8_t tu_x_offset;
+    /*!< y offset for a block in mi unit */
+    uint8_t tu_y_offset;
+
 } TransformInfo_t;
 
 typedef struct ModeInfo_t {
@@ -261,11 +269,9 @@ typedef struct SBInfo {
     int32_t     *sb_delta_q; /*!< At SB level */
     int32_t     *sb_delta_lf; /*!< At SB level */
 
-    TransformInfo_t *sb_luma_trans_info;
-    TransformInfo_t *sb_chroma_trans_info;
+    TransformInfo_t *sb_trans_info[MAX_MB_PLANE - 1];
 
-    int32_t         *sb_luma_coeff;
-    int32_t         *sb_chroma_coeff;
+    int32_t         *sb_coeff[MAX_MB_PLANE];
 
     ModeInfo_t      *sb_mode_info;
 
@@ -331,7 +337,11 @@ typedef struct PartitionInfo {
 
     //BlockPlane plane[MAX_MB_PLANE];
 
-    //const EbWarpedMotionParams *global_motion;
+    /*!< Pointer to global warp params of current frame */
+    const EbWarpedMotionParams *ps_global_motion;
+
+    /*!< Pointer to local warp params based on nieghbour mv sample projection */
+    EbWarpedMotionParams local_warp_params;
 
     WienerInfo wiener_info[MAX_MB_PLANE];
 
@@ -352,6 +362,10 @@ typedef struct PartitionInfo {
     int     is_sec_rect;
 
     int     num_samples;
+
+    /*!< chroma sub-sampling format */
+    uint8_t subsampling_x; 
+    uint8_t subsampling_y;
 } PartitionInfo_t;
 
 #endif //EbDecBlock_h
