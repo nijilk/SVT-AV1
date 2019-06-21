@@ -140,7 +140,7 @@ static EbErrorType init_master_frame_ctxt(EbDecHandle  *dec_handle_ptr) {
                     (num_sb * num_mis_in_sb * sizeof(ModeInfo_t)), EB_N_PTR);
 
         /* TransformInfo str allocation at 4x4 level */
-        EB_MALLOC_DEC(TransformInfo_t*, cur_frame_buf->luma_trans_info,
+        EB_MALLOC_DEC(TransformInfo_t*, cur_frame_buf->trans_info[AOM_PLANE_Y],
             (num_sb * num_mis_in_sb * sizeof(TransformInfo_t)), EB_N_PTR);
 
         /* Coeff buf (1D compact) allocation for entire frame
@@ -148,14 +148,14 @@ static EbErrorType init_master_frame_ctxt(EbDecHandle  *dec_handle_ptr) {
             dynammically allocate if needed */
             /*TODO : Change to macro */
             /* (16+1) : 1 for Length and 16 for all coeffs in 4x4 */
-        EB_MALLOC_DEC(int32_t*, cur_frame_buf->luma_coeff,
+        EB_MALLOC_DEC(int32_t*, cur_frame_buf->coeff[AOM_PLANE_Y],
             (num_sb * num_mis_in_sb * sizeof(int32_t) * (16 + 1)), EB_N_PTR);
 
         if(seq_header->color_config.subsampling_x == 1 &&
            seq_header->color_config.subsampling_y == 1)
         {
             /*TODO : Change to macro */
-            EB_MALLOC_DEC(TransformInfo_t*, cur_frame_buf->chroma_trans_info,
+            EB_MALLOC_DEC(TransformInfo_t*, cur_frame_buf->trans_info[AOM_PLANE_U],
                 (num_sb * num_mis_in_sb * sizeof(TransformInfo_t) * 2), EB_N_PTR);
 
             /* Coeff buf (1D compact) allocation for entire frame
@@ -163,8 +163,10 @@ static EbErrorType init_master_frame_ctxt(EbDecHandle  *dec_handle_ptr) {
             dynammically allocate if needed */
             /*TODO : Change to macro */
             /* (16+1) : 1 for Length and 16 for all coeffs in 4x4 */
-            EB_MALLOC_DEC(int32_t*, cur_frame_buf->chroma_coeff,
-            (num_sb * num_mis_in_sb * sizeof(int32_t) * (16+1) >> 1), EB_N_PTR);
+            EB_MALLOC_DEC(int32_t*, cur_frame_buf->coeff[AOM_PLANE_U],
+            (num_sb * num_mis_in_sb * sizeof(int32_t) * (16+1) >> 2), EB_N_PTR);
+            EB_MALLOC_DEC(int32_t*, cur_frame_buf->coeff[AOM_PLANE_V],
+            (num_sb * num_mis_in_sb * sizeof(int32_t) * (16+1) >> 2), EB_N_PTR);
         }
         else
             assert(0);
