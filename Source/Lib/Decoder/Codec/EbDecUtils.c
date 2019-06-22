@@ -92,7 +92,7 @@ void derive_blk_pointers(EbPictureBufferDesc *recon_picture_buf, int32_t plane,
 }
 
 void pad_pic(EbPictureBufferDesc *recon_picture_buf) {
-    
+
     int32_t sx, sy;
 
     switch (recon_picture_buf->color_format) {

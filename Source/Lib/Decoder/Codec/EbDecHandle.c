@@ -48,10 +48,11 @@ uint32_t                         lib_malloc_count = 0;
 uint32_t                         lib_semaphore_count = 0;
 uint32_t                         lib_mutex_count = 0;
 
+void asmSetConvolveAsmTable(void);
 void init_intra_dc_predictors_c_internal(void);
 void init_intra_predictors_internal(void);
 EbErrorType decode_multiple_obu(EbDecHandle *dec_handle_ptr,
-            const uint8_t *data, uint32_t data_size);
+            const uint8_t *data, size_t data_size);
 
 void SwitchToRealTime(){
 #if defined(__linux__) || defined(__APPLE__)
@@ -101,7 +102,7 @@ int svt_dec_out_buf(
 {
     EbPictureBufferDesc *recon_picture_buf = dec_handle_ptr->cur_pic_buf[0]->ps_pic_buf;
     EbSvtIOFormat       *out_img = (EbSvtIOFormat*)p_buffer->p_buffer;
-    
+
     /* TODO: Should add logic for show_existing_frame */
     if (0 == dec_handle_ptr->show_frame) {
         assert(0 == dec_handle_ptr->show_existing_frame);
@@ -380,7 +381,7 @@ __attribute__((visibility("default")))
 EB_API EbErrorType eb_svt_decode_frame(
     EbComponentType     *svt_dec_component,
     const uint8_t       *data,
-    const uint32_t       data_size)
+    const size_t       data_size)
 {
     EbErrorType return_error = EB_ErrorNone;
     if (svt_dec_component == NULL)

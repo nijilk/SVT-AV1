@@ -529,7 +529,7 @@ EbErrorType read_obu_size(bitstrm_t *bs, size_t bytes_available,
 }
 
 /** Reads OBU header and size */
-EbErrorType open_bistream_unit(bitstrm_t *bs, ObuHeader *header, uint32_t size,
+EbErrorType open_bistream_unit(bitstrm_t *bs, ObuHeader *header, size_t size,
     size_t *const length_size)
 {
     EbErrorType status;
@@ -1259,6 +1259,7 @@ void read_global_motion_params(bitstrm_t *bs, EbDecHandle *dec_handle,
                 sizeof(cur_buf->global_motion[ref].gm_params));
             int return_val = get_shear_params(wm_global);
             assert(1 == return_val);
+            (void)return_val;
         }
     }
 }
@@ -1276,7 +1277,7 @@ void read_skip_mode_params(bitstrm_t *bs, FrameHeader *frame_info, int FrameIsIn
     SeqHeader *seq_header, int reference_select)
 {
     int forwardIdx = -1, backwardIdx = -1, secondForwardIdx = -1;
-    int ref_hint, forwardHint = -1, 
+    int ref_hint, forwardHint = -1,
         backwardHint = INT_MAX , secondForwardHint = -1;
     int i;
     if (FrameIsIntra || !reference_select ||
@@ -1382,7 +1383,6 @@ void read_film_grain_params(bitstrm_t *bs, FilmGrainParams *grain_params,
         temp_grain_seed = grain_params->grain_seed;
         // TODO: Handle while implementing Inter
         // load_grain_params( film_grain_params_ref_idx );
-        (void)film_grain_params_ref_idx;
         grain_params->grain_seed = temp_grain_seed;
         return;
     }
@@ -1511,7 +1511,7 @@ int get_qindex(SegmentationParams *seg_params, int segment_id, int base_q_idx)
         return base_q_idx;
 }
 
-EbErrorType reset_parse_ctx(FRAME_CONTEXT *frm_ctx, int32_t base_qp) {
+EbErrorType reset_parse_ctx(FRAME_CONTEXT *frm_ctx, uint8_t base_qp) {
     EbErrorType return_error = EB_ErrorNone;
 
     av1_default_coef_probs(frm_ctx, base_qp);
@@ -2120,7 +2120,7 @@ EbErrorType parse_tile(bitstrm_t *bs, EbDecHandle *dec_handle_ptr,
                 + sb_col * num_mis_in_sb* (16 + 1);
             /*TODO : Change to macro */
             sb_info->sb_coeff[AOM_PLANE_U] = frame_buf->coeff[AOM_PLANE_U] +
-                (sb_row * num_mis_in_sb * master_frame_buf->sb_cols * (16 + 1) 
+                (sb_row * num_mis_in_sb * master_frame_buf->sb_cols * (16 + 1)
                     >> (sy + sx))
                 + (sb_col * num_mis_in_sb * (16 + 1) >> (sy + sx));
             sb_info->sb_coeff[AOM_PLANE_V] = frame_buf->coeff[AOM_PLANE_V] +
@@ -2249,7 +2249,8 @@ EbErrorType read_tile_group_obu(bitstrm_t *bs, EbDecHandle *dec_handle_ptr,
     ParseCtxt   *parse_ctxt = (ParseCtxt *)dec_handle_ptr->pv_parse_ctxt;
 
     int num_tiles, tg_start, tg_end, tile_bits, tile_start_and_end_present_flag = 0;
-    int tile_row, tile_col, tile_size;
+    int tile_row, tile_col;
+    size_t tile_size;
     uint32_t start_position, end_position, header_bytes;
     num_tiles = tiles_info->tile_cols * tiles_info->tile_rows;
 
@@ -2339,7 +2340,7 @@ EbErrorType decode_obu(EbDecHandle *dec_handle_ptr, unsigned char *data, unsigne
 }
 
 // Decode all OBUs in a Frame
-EbErrorType decode_multiple_obu(EbDecHandle *dec_handle_ptr, const uint8_t *data, uint32_t data_size)
+EbErrorType decode_multiple_obu(EbDecHandle *dec_handle_ptr, const uint8_t *data, size_t data_size)
 {
     bitstrm_t bs;
     EbErrorType status = EB_ErrorNone;

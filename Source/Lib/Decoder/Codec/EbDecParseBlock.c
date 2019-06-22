@@ -44,12 +44,6 @@ int enable_dump;
 typedef AomCdfProb(*base_cdf_arr)[CDF_SIZE(4)];
 typedef AomCdfProb(*br_cdf_arr)[CDF_SIZE(BR_CDF_SIZE)];
 
-static const TxSize tx_mode_to_biggest_tx_size[TX_MODES] = {
-  TX_4X4,    // ONLY_4X4
-  TX_64X64,  // TX_MODE_LARGEST
-  TX_64X64,  // TX_MODE_SELECT
-};
-
 typedef struct txb_ctx {
     int txb_skip_ctx;
     int dc_sign_ctx;
@@ -672,7 +666,7 @@ int read_inter_segment_id(EbDecHandle *dec_handle, PartitionInfo_t *xd,
     return segment_id;
 }
 
-//static void get_mv_projection(MV_dec *output, MV_dec ref, int num, int den) {
+//static void get_mv_projection(MV *output, MV ref, int num, int den) {
 //    den = AOMMIN(den, MAX_FRAME_DISTANCE);
 //    num = num > 0 ? AOMMIN(num, MAX_FRAME_DISTANCE)
 //        : AOMMAX(num, -MAX_FRAME_DISTANCE);
@@ -969,18 +963,6 @@ TxSize read_tx_size(EbDecHandle *dec_handle, PartitionInfo_t *xd,
     assert(IMPLIES(tx_mode == ONLY_4X4, bsize == BLOCK_4X4));
     TxSize tx_size = max_txsize_rect_lookup[bsize];
     return tx_size;
-}
-
-static INLINE void txfm_nbr_update(uint8_t *above_ctx,
-    uint8_t *left_ctx, TxSize tx_size, TxSize txb_size)
-{
-    BlockSize bsize = txsize_to_bsize[txb_size];
-    int bh = mi_size_high[bsize];
-    int bw = mi_size_wide[bsize];
-    uint8_t txw = tx_size_wide[tx_size];
-    uint8_t txh = tx_size_high[tx_size];
-    memset(above_ctx, txw, bw);
-    memset(left_ctx, txh, bh);
 }
 
 static INLINE TxSize av1_get_max_uv_txsize(BlockSize bsize, int subsampling_x,
@@ -1410,7 +1392,7 @@ TxType compute_tx_type(PlaneType plane_type,
     const TxSetType tx_set_type =
         get_ext_tx_set_type(tx_size, dec_is_inter_block(mbmi), reduced_tx_set);
 
-    TxType tx_type;
+    TxType tx_type = DCT_DCT;
     if (lossless_array[mbmi->segment_id] || txsize_sqr_up_map[tx_size] > TX_32X32)
         tx_type = DCT_DCT;
     else {
@@ -1838,7 +1820,7 @@ uint16_t parse_coeffs(EbDecHandle *dec_handle, PartitionInfo_t *xd, SvtReader *r
 
 void palette_tokens(int plane) {
     assert(plane == 0 || plane == 1);
-
+    (void)plane;
     // TO-DO
 }
 
@@ -2035,7 +2017,7 @@ static INLINE void dec_get_txb_ctx(int plane_bsize, const TxSize tx_size,
 uint16_t parse_transform_block(EbDecHandle *dec_handle,
     PartitionInfo_t *pi, SvtReader *r, int32_t *coeff,
     TransformInfo_t *trans_info, int plane, int blk_col,
-    int blk_row, BlockSize mi_row, BlockSize mi_col,
+    int blk_row, int mi_row, int mi_col,
     TxSize tx_size, int skip)
 {
     uint16_t eob = 0 , sub_x, sub_y;
@@ -2073,7 +2055,7 @@ uint16_t parse_transform_block(EbDecHandle *dec_handle,
 /* Gives the pointer to current block's transform info. Will work only for Intra */
 static INLINE TransformInfo_t* get_cur_trans_info_intra(int plane,
     SBInfo  *sb_info, ModeInfo_t *mi) {
-    return (plane == 0) ? 
+    return (plane == 0) ?
         (sb_info->sb_trans_info[plane] + mi->first_luma_tu_offset) :
         (sb_info->sb_trans_info[plane] + mi->first_chroma_tu_offset + (plane-1));
 }
@@ -2091,15 +2073,13 @@ void parse_residual(EbDecHandle *dec_handle, PartitionInfo_t *pi, SvtReader *r,
                     int mi_row, int mi_col, BlockSize mi_size)
 {
     ParseCtxt   *parse_ctx = (ParseCtxt*)dec_handle->pv_parse_ctxt;
-    TxSize      tx_size;
     EbColorConfig *color_info = &dec_handle->seq_header.color_config;
     SBInfo *sb_info = pi->sb_info;
     int num_planes = color_info->mono_chrome ? 1 : MAX_MB_PLANE;
     ModeInfo_t *mode = pi->mi;
 
     int skip     = mode->skip;
-    int lossless = (&dec_handle->frame_header.lossless_array[0])[mode->segment_id];
-    int tx_wide, tx_high, force_split_cnt = 0;
+    int force_split_cnt = 0;
     uint8_t num_tu, total_num_tu;
 
     const int max_blocks_wide = max_block_wide(pi, mi_size, 0);
@@ -2137,14 +2117,10 @@ void parse_residual(EbDecHandle *dec_handle, PartitionInfo_t *pi, SvtReader *r,
                 assert(total_num_tu ==
                     (parse_ctx->num_tus[plane][0] + parse_ctx->num_tus[plane][1] +
                      parse_ctx->num_tus[plane][2] + parse_ctx->num_tus[plane][3]));
+                (void)total_num_tu;
 
                 for(uint8_t tu = 0; tu < num_tu; tu++)
                 {
-                    if (lossless)
-                        tx_size = TX_4X4;
-                    else
-                        tx_size = trans_info[plane]->tx_size;
-
                     assert(trans_info[plane]->tu_x_offset <= max_blocks_wide);
                     assert(trans_info[plane]->tu_y_offset <= max_blocks_high);
 

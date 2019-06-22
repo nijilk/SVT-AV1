@@ -648,7 +648,7 @@ static int has_top_right(EbDecHandle *dec_handle, PartitionInfo_t *pi,
     return has_tr;
 }
 
-static INLINE void integer_mv_precision(MV_dec *mv) {
+static INLINE void integer_mv_precision(MV *mv) {
     int mod = (mv->row % 8);
     if (mod != 0) {
         mv->row -= mod;
@@ -676,7 +676,7 @@ static INLINE void integer_mv_precision(MV_dec *mv) {
     }
 }
 
-static INLINE void lower_mv_precision(MV_dec *mv, int allow_hp, int is_integer) {
+static INLINE void lower_mv_precision(MV *mv, int allow_hp, int is_integer) {
     if (is_integer)
         integer_mv_precision(mv);
     else {
@@ -1418,9 +1418,9 @@ int read_mv_component(SvtReader *r, NmvComponent *mvcomp, int use_subpel, int us
     return sign ? -mag : mag;
 }
 
-void read_mv(SvtReader *r, MV_dec *mv, MV_dec *ref, NmvContext *ctx,
+void read_mv(SvtReader *r, MV *mv, MV *ref, NmvContext *ctx,
     int intra_bc, MvSubpelPrecision precision) {
-    MV_dec diff = kZeroMv;
+    MV diff = kZeroMv;
 
     const MvJointType joint_type =
         (MvJointType)svt_read_symbol(r, &ctx->joints_cdf[intra_bc], MV_JOINTS, ACCT_STR);
@@ -1437,7 +1437,7 @@ void read_mv(SvtReader *r, MV_dec *mv, MV_dec *ref, NmvContext *ctx,
     mv->col = ref->col + diff.col;
 }
 
-static INLINE int is_mv_valid(MV_dec *mv) {
+static INLINE int is_mv_valid(MV *mv) {
     return mv->row > MV_LOW && mv->row < MV_UPP && mv->col > MV_LOW &&
         mv->col < MV_UPP;
 }
