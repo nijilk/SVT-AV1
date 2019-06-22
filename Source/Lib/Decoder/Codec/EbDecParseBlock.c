@@ -869,7 +869,7 @@ void intra_block_mode_info(EbDecHandle *dec_handle, int mi_row,
         }
         mbmi->angle_delta[PLANE_TYPE_UV] = intra_angle_info(r,
             &parse_ctxt->cur_tile_ctx.angle_delta_cdf[mbmi->uv_mode - V_PRED][0],
-            mbmi->uv_mode, bsize);
+            dec_get_uv_mode(mbmi->uv_mode), bsize);
     }
 
     if (allow_palette(dec_handle->frame_header.allow_screen_content_tools, bsize))
@@ -1364,24 +1364,8 @@ void parse_transform_type(EbDecHandle *dec_handle, PartitionInfo_t *xd,
     }
 }
 
-const ScanOrder* get_scan(TxSize tx_size, TxSize tx_type) {
+const ScanOrder* get_scan(TxSize tx_size, TxType tx_type) {
     return &av1_scan_orders[tx_size][tx_type];
-}
-
-static INLINE int av1_get_txk_type_index(BlockSize bsize,
-    int blk_row, int blk_col)
-{
-    TxSize txs = max_txsize_rect_lookup[bsize];
-    for (int level = 0; level < MAX_VARTX_DEPTH; ++level)
-        txs = sub_tx_size_map[txs];
-    const int tx_w_log2 = tx_size_wide_log2[txs] - MI_SIZE_LOG2;
-    const int tx_h_log2 = tx_size_high_log2[txs] - MI_SIZE_LOG2;
-    const int bw_uint_log2 = mi_size_wide_log2[bsize];
-    const int stride_log2 = bw_uint_log2 - tx_w_log2;
-    const int index =
-        ((blk_row >> tx_h_log2) << stride_log2) + (blk_col >> tx_w_log2);
-    assert(index < TXK_TYPE_BUF_LEN);
-    return index;
 }
 
 TxType compute_tx_type(PlaneType plane_type,
@@ -2050,23 +2034,6 @@ uint16_t parse_transform_block(EbDecHandle *dec_handle,
             start_y, start_x, blk_col, blk_row, 0, 0);
     }
     return eob;
-}
-
-/* Gives the pointer to current block's transform info. Will work only for Intra */
-static INLINE TransformInfo_t* get_cur_trans_info_intra(int plane,
-    SBInfo  *sb_info, ModeInfo_t *mi) {
-    return (plane == 0) ?
-        (sb_info->sb_trans_info[plane] + mi->first_luma_tu_offset) :
-        (sb_info->sb_trans_info[plane] + mi->first_chroma_tu_offset + (plane-1));
-}
-
-/* TODO: Clean the logic! */
-static INLINE TxSize av1_get_tx_size(int plane, PartitionInfo_t *pi,
-    int sub_x, int sub_y)
-{
-    /*const */ModeInfo_t *mbmi = pi->mi;
-    if (plane == 0) return (get_cur_trans_info_intra(plane, pi->sb_info,mbmi)->tx_size);
-    return av1_get_max_uv_txsize(mbmi->sb_type, sub_x, sub_y);
 }
 
 void parse_residual(EbDecHandle *dec_handle, PartitionInfo_t *pi, SvtReader *r,
