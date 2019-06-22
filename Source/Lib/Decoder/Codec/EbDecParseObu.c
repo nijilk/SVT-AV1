@@ -1259,6 +1259,7 @@ void read_global_motion_params(bitstrm_t *bs, EbDecHandle *dec_handle,
                 sizeof(cur_buf->global_motion[ref].gm_params));
             int return_val = get_shear_params(wm_global);
             assert(1 == return_val);
+            (void)return_val;
         }
     }
 }
@@ -1276,7 +1277,7 @@ void read_skip_mode_params(bitstrm_t *bs, FrameHeader *frame_info, int FrameIsIn
     SeqHeader *seq_header, int reference_select)
 {
     int forwardIdx = -1, backwardIdx = -1, secondForwardIdx = -1;
-    int ref_hint, forwardHint = -1, 
+    int ref_hint, forwardHint = -1,
         backwardHint = INT_MAX , secondForwardHint = -1;
     int i;
     if (FrameIsIntra || !reference_select ||
@@ -1510,7 +1511,7 @@ int get_qindex(SegmentationParams *seg_params, int segment_id, int base_q_idx)
         return base_q_idx;
 }
 
-EbErrorType reset_parse_ctx(FRAME_CONTEXT *frm_ctx, int32_t base_qp) {
+EbErrorType reset_parse_ctx(FRAME_CONTEXT *frm_ctx, uint8_t base_qp) {
     EbErrorType return_error = EB_ErrorNone;
 
     av1_default_coef_probs(frm_ctx, base_qp);
@@ -2119,7 +2120,7 @@ EbErrorType parse_tile(bitstrm_t *bs, EbDecHandle *dec_handle_ptr,
                 + sb_col * num_mis_in_sb* (16 + 1);
             /*TODO : Change to macro */
             sb_info->sb_coeff[AOM_PLANE_U] = frame_buf->coeff[AOM_PLANE_U] +
-                (sb_row * num_mis_in_sb * master_frame_buf->sb_cols * (16 + 1) 
+                (sb_row * num_mis_in_sb * master_frame_buf->sb_cols * (16 + 1)
                     >> (sy + sx))
                 + (sb_col * num_mis_in_sb * (16 + 1) >> (sy + sx));
             sb_info->sb_coeff[AOM_PLANE_V] = frame_buf->coeff[AOM_PLANE_V] +

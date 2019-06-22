@@ -48,6 +48,7 @@ uint32_t                         lib_malloc_count = 0;
 uint32_t                         lib_semaphore_count = 0;
 uint32_t                         lib_mutex_count = 0;
 
+void asmSetConvolveAsmTable(void);
 void init_intra_dc_predictors_c_internal(void);
 void init_intra_predictors_internal(void);
 EbErrorType decode_multiple_obu(EbDecHandle *dec_handle_ptr,
@@ -101,7 +102,7 @@ int svt_dec_out_buf(
 {
     EbPictureBufferDesc *recon_picture_buf = dec_handle_ptr->cur_pic_buf[0]->ps_pic_buf;
     EbSvtIOFormat       *out_img = (EbSvtIOFormat*)p_buffer->p_buffer;
-    
+
     /* TODO: Should add logic for show_existing_frame */
     if (0 == dec_handle_ptr->show_frame) {
         assert(0 == dec_handle_ptr->show_existing_frame);

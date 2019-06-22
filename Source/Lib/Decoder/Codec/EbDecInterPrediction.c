@@ -21,13 +21,24 @@
 
 #include "EbSvtAv1Dec.h"
 #include "EbDecHandle.h"
+
+#include "EbObuParse.h"
+#include "EbDecParseHelper.h"
+
 #include "EbDecPicMgr.h"
 #include "EbDecNbr.h"
+#include "EbDecUtils.h"
 
-static INLINE MV_dec dec_clamp_mv_to_umv_border_sb (
+static INLINE void dec_clamp_mv(MV *mv, int32_t min_col, int32_t max_col, int32_t min_row,
+    int32_t max_row) {
+    mv->col = (int16_t)clamp(mv->col, min_col, max_col);
+    mv->row = (int16_t)clamp(mv->row, min_row, max_row);
+}
+
+static INLINE MV dec_clamp_mv_to_umv_border_sb (
     int32_t mb_to_left_edge, int32_t mb_to_right_edge, int32_t mb_to_top_edge,
-    int32_t mb_to_bottom_edge, const MV_dec *src_mv, int32_t bw, int32_t bh,
-    int32_t ss_x, int32_t ss_y) 
+    int32_t mb_to_bottom_edge, const MV *src_mv, int32_t bw, int32_t bh,
+    int32_t ss_x, int32_t ss_y)
 {
     // If the MV points so far into the UMV border that no visible pixels
     // are used for reconstruction, the subpel part of the MV can be
@@ -36,12 +47,12 @@ static INLINE MV_dec dec_clamp_mv_to_umv_border_sb (
     const int32_t spel_right = spel_left - SUBPEL_SHIFTS;
     const int32_t spel_top = (AOM_INTERP_EXTEND + bh) << SUBPEL_BITS;
     const int32_t spel_bottom = spel_top - SUBPEL_SHIFTS;
-    MV_dec clamped_mv = { (int16_t)(src_mv->row * (1 << (1 - ss_y))),
+    MV clamped_mv = { (int16_t)(src_mv->row * (1 << (1 - ss_y))),
         (int16_t)(src_mv->col * (1 << (1 - ss_x))) };
     assert(ss_x <= 1);
     assert(ss_y <= 1);
 
-    clamp_mv(&clamped_mv,
+    dec_clamp_mv(&clamped_mv,
         mb_to_left_edge   * (1 << (1 - ss_x)) - spel_left,
         mb_to_right_edge  * (1 << (1 - ss_x)) + spel_right,
         mb_to_top_edge    * (1 << (1 - ss_y)) - spel_top,
@@ -52,7 +63,7 @@ static INLINE MV_dec dec_clamp_mv_to_umv_border_sb (
 
 
 void svtav1_predict_inter_block_plane(
-    EbDecHandle *dec_hdl, PartitionInfo_t *part_info, int32_t plane, 
+    EbDecHandle *dec_hdl, PartitionInfo_t *part_info, int32_t plane,
     int32_t build_for_obmc, int32_t mi_x, int32_t mi_y,
     void *dst, int32_t dst_stride,
     int32_t some_use_intra, int32_t bit_depth)
@@ -64,8 +75,8 @@ void svtav1_predict_inter_block_plane(
     const int32_t is_intrabc = is_intrabc_block(mi);
 
     //temporary buffer for joint compound, move this to context if stack does not hold.
-    DECLARE_ALIGNED(32, uint16_t, tmp_dst[128 * 128]);     
-    
+    DECLARE_ALIGNED(32, uint16_t, tmp_dst[128 * 128]);
+
     int32_t highbd = bit_depth > EB_8BIT;
 
     const BlockSize bsize = mi->sb_type;
@@ -109,11 +120,11 @@ void svtav1_predict_inter_block_plane(
     void *dst_mod = (void *)((uint8_t *)dst + (dst_offset << highbd));
 
     assert(IMPLIES(is_intrabc, !is_compound));
-    {   
-        
-        ConvolveParams conv_params = get_conv_params_no_round(0, 0, 
+    {
+
+        ConvolveParams conv_params = get_conv_params_no_round(0, 0,
             plane, tmp_dst, MAX_SB_SIZE, is_compound, bit_depth);
-        
+
         /* TODO: support Distantance WTD compound inter prediction later
         av1_dist_wtd_comp_weight_assign(
             cm, mi, 0, &conv_params.fwd_offset, &conv_params.bck_offset,
@@ -124,10 +135,10 @@ void svtav1_predict_inter_block_plane(
             ScaleFactors *const sf = NULL; //TODO: Add reference scaling support later
                 /* is_intrabc ? &cm->sf_identity : xd->block_ref_scale_factors[ref]; */
             const int32_t mode = mi->mode;
-            const MV_dec mv = mi->mv[ref].as_mv;
-            MV_dec mv_q4;
+            const MV mv = mi->mv[ref].as_mv;
+            MV mv_q4;
             const EbWarpedMotionParams *const wm_global =
-                &part_info->ps_global_motion[mi->ref_frame[ref]];  
+                &part_info->ps_global_motion[mi->ref_frame[ref]];
             const EbWarpedMotionParams *const wm_local =
                 &part_info->local_warp_params;
             EbDecPicBuf *ref_buf  = get_ref_frame_buf(dec_hdl, mi->ref_frame[ref]);
@@ -149,14 +160,14 @@ void svtav1_predict_inter_block_plane(
                     part_info->mb_to_left_edge,
                     part_info->mb_to_right_edge,
                     part_info->mb_to_top_edge,
-                    part_info->mb_to_bottom_edge, 
+                    part_info->mb_to_bottom_edge,
                     &mv, bw, bh, ss_x, ss_y);
 
             subpel_params.xs = 0;
             subpel_params.ys = 0;
             subpel_params.subpel_x = mv_q4.col & SUBPEL_MASK;
-            subpel_params.subpel_y = mv_q4.row & SUBPEL_MASK;           
-            
+            subpel_params.subpel_y = mv_q4.row & SUBPEL_MASK;
+
             conv_params.do_average = ref;
             /* TODO: support masked inter prediction based on WEDGE / DIFFWTD compound type later
             if (is_masked_compound_type(mi->inter_compound.type)) {
@@ -176,11 +187,12 @@ void svtav1_predict_inter_block_plane(
             assert(IMPLIES(is_intrabc, !do_warp));
 
             if (do_warp) {
-                EbWarpedMotionParams *wm_params = &default_warp_params;             
+                const EbWarpedMotionParams *wm_params = &default_warp_params;
 
                 wm_params = (mi->motion_mode == WARPED_CAUSAL) ? wm_local : wm_global;
-                
-                av1_warp_plane(wm_params, highbd, bit_depth,
+
+                av1_warp_plane((EbWarpedMotionParams *)wm_params,
+                    highbd, bit_depth,
                     src, ref_buf->ps_pic_buf->width >> ss_x,
                     ref_buf->ps_pic_buf->height >> ss_y,
                     src_stride, dst_mod, pre_x, pre_y, bw, bh, dst_stride,
@@ -192,7 +204,7 @@ void svtav1_predict_inter_block_plane(
                     (pre_x) + (mv_q4.col >> SUBPEL_BITS);
 
                 svt_highbd_inter_predictor(src16, src_stride, dst_mod, dst_stride,
-                    &subpel_params, sf, bw, bh, &conv_params, 
+                    &subpel_params, sf, bw, bh, &conv_params,
                     mi->interp_filters, is_intrabc, bit_depth);
             }
             else {
@@ -201,7 +213,7 @@ void svtav1_predict_inter_block_plane(
                     (pre_x) + (mv_q4.col >> SUBPEL_BITS);
 
                 svt_inter_predictor(src8, src_stride, dst_mod, dst_stride,
-                    &subpel_params, sf, bw, bh, &conv_params, 
+                    &subpel_params, sf, bw, bh, &conv_params,
                     mi->interp_filters, is_intrabc);
             }
         }

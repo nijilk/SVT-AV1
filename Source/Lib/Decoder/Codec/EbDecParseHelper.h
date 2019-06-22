@@ -74,4 +74,6 @@ void update_tx_context(ParseCtxt *parse_ctxt, PartitionInfo_t *pi,
 int seg_feature_active(SegmentationParams *seg, int segment_id,
     SEG_LVL_FEATURES feature_id);
 
+int find_warp_samples(EbDecHandle *dec_handle, PartitionInfo_t *pi,
+    int mi_row, int mi_col, int *pts, int *pts_inref);
 #endif  // EbDecParseHelper_h

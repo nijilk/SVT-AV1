@@ -141,7 +141,7 @@ typedef struct ParseCtxt {
     TransformInfo_t *cur_luma_trans_info;
 
     /* Count of cur luma_trans_info */
-    uint16_t cur_blk_luma_count;
+    uint8_t cur_blk_luma_count;
 #if !FRAME_MI_MAP
     /* Left and above SBInfo pointers */
     SBInfo  *left_sb_info;

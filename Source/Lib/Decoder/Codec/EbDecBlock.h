@@ -102,13 +102,9 @@ enum {
 } UENUM1BYTE(COMPOUND_MASK_TYPE);
 
 /*TODO: Harmonize with encoder structure */
-typedef struct MV_decs {
-    int16_t row;
-    int16_t col;
-} MV_dec;
 typedef union  IntMv_dec {
     uint32_t as_int;
-    MV_dec as_mv;
+    MV as_mv;
 } IntMv_dec; /* facilitates faster equality tests and copies */
 typedef struct CandidateMv_dec {
     IntMv_dec this_mv;
@@ -275,9 +271,6 @@ typedef struct SBInfo {
 
     ModeInfo_t      *sb_mode_info;
 
-    //Add buffer for coeff storage
-
-    //Add buffer for coeff storage
 } SBInfo;
 
 typedef struct PartitionInfo {
@@ -364,7 +357,7 @@ typedef struct PartitionInfo {
     int     num_samples;
 
     /*!< chroma sub-sampling format */
-    uint8_t subsampling_x; 
+    uint8_t subsampling_x;
     uint8_t subsampling_y;
 } PartitionInfo_t;
 

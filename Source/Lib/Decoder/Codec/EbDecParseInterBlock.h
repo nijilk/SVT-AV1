@@ -33,7 +33,7 @@
 #define MAX_DIFFWTD_MASK_BITS 1
 #define NELEMENTS(x) (int)(sizeof(x) / sizeof(x[0]))
 
-static const MV_dec kZeroMv = { 0, 0 };
+static const MV kZeroMv = { 0, 0 };
 
 extern  int8_t av1_ref_frame_type(const MvReferenceFrame *const rf);
 extern void av1_set_ref_frame(MvReferenceFrame *rf, int8_t ref_frame_type);

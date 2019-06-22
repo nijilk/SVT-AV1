@@ -25,8 +25,16 @@
 #include "EbDecInterPrediction.h"
 
 #include "EbDecNbr.h"
+#include "EbDecUtils.h"
 
 #include "EbTransforms.h"
+
+extern int select_samples(
+    MV *mv,
+    int *pts,
+    int *pts_inref,
+    int len,
+    BlockSize bsize);
 
 CflAllowedType store_cfl_required(const EbColorConfig *cc,
                                   const PartitionInfo_t  *xd)
@@ -153,7 +161,7 @@ void decode_block(DecModCtxt *dec_mod_ctxt, int32_t mi_row, int32_t mi_col,
     int32_t bw4 = mi_size_wide[bsize];
     int32_t bh4 = mi_size_high[bsize];
 
-    int sub_x, sub_y, row, col, n_coeffs;
+    int sub_x, sub_y, n_coeffs;
     sub_x = color_config->subsampling_x;
     sub_y = color_config->subsampling_y;
     int is_chroma_reference = dec_is_chroma_reference(mi_row, mi_col, bsize,
@@ -242,11 +250,11 @@ void decode_block(DecModCtxt *dec_mod_ctxt, int32_t mi_row, int32_t mi_col,
         int32_t pts[SAMPLES_ARRAY_SIZE], pts_inref[SAMPLES_ARRAY_SIZE];
         int32_t nsamples = 0;
         int32_t apply_wm = 0;
-        
+
         nsamples = find_warp_samples(dec_handle, &part_info, mi_row, mi_col, pts, pts_inref);
         assert(nsamples > 0);
 
-        MV_dec mv = mode_info->mv[REF_LIST_0].as_mv;       
+        MV mv = mode_info->mv[REF_LIST_0].as_mv;
         part_info.local_warp_params.wmtype = DEFAULT_WMTYPE;
         part_info.local_warp_params.invalid = 0;
 
@@ -330,6 +338,7 @@ void decode_block(DecModCtxt *dec_mod_ctxt, int32_t mi_row, int32_t mi_col,
                     assert(mi_row_der == cur_loc);
                     cur_loc = (mi_col + trans_info->tu_x_offset) & 0xFF;
                     assert(mi_col_der == cur_loc);
+                    (void)mi_row_der; (void)mi_col_der; (void)cur_loc;
                 }
 #endif
                 tx_type = trans_info->txk_type;
