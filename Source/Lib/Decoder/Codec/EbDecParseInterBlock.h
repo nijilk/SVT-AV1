@@ -14,6 +14,13 @@
 * PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 */
 
+#ifndef EbDecParseInterBlock_h
+#define EbDecParseInterBlock_h
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include "EbDefinitions.h"
 #include "EbPictureBufferDesc.h"
 
@@ -45,3 +52,8 @@ void av1_find_mv_refs(EbDecHandle *dec_handle, PartitionInfo_t *pi,
     MvReferenceFrame ref_frame, CandidateMv_dec ref_mv_stack[][MAX_REF_MV_STACK_SIZE],
     IntMv_dec mv_ref_list[][MAX_MV_REF_CANDIDATES], IntMv_dec global_mvs[2],
     int mi_row, int mi_col, int16_t *mode_context, MvCount *mv_cnt);
+
+#ifdef __cplusplus
+}
+#endif
+#endif // EbDecParseInterBlock_h
