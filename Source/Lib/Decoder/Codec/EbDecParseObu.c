@@ -37,6 +37,7 @@
 #include "EbDecUtils.h"
 
 #define CONFIG_MAX_DECODE_PROFILE 2
+#define INT_MAX       2147483647    // maximum (signed) int value
 
 int Remap_Lr_Type[4] = {
     RESTORE_NONE, RESTORE_SWITCHABLE, RESTORE_WIENER, RESTORE_SGRPROJ };
@@ -1272,8 +1273,10 @@ uint8_t read_frame_reference_mode(bitstrm_t *bs, int FrameIsIntra)
 void read_skip_mode_params(bitstrm_t *bs, FrameHeader *frame_info, int FrameIsIntra,
     SeqHeader *seq_header, int reference_select)
 {
-    int forwardIdx, backwardIdx, secondForwardIdx, ref_hint, i, forwardHint,
-        backwardHint, secondForwardHint;
+    int forwardIdx = -1, backwardIdx = -1, secondForwardIdx = -1;
+    int ref_hint, forwardHint = -1, 
+        backwardHint = INT_MAX , secondForwardHint = -1;
+    int i;
     if (FrameIsIntra || !reference_select ||
         !seq_header->order_hint_info.enable_order_hint)
         frame_info->skip_mode_params.skip_mode_allowed = 0;
@@ -1286,7 +1289,7 @@ void read_skip_mode_params(bitstrm_t *bs, FrameHeader *frame_info, int FrameIsIn
                                     frame_info->order_hint) < 0)
             {
                     if (forwardIdx < 0 || get_relative_dist(&seq_header->
-                        order_hint_info, ref_hint, forwardIdx) > 0)
+                        order_hint_info, ref_hint, forwardHint) > 0)
                 {
                         forwardIdx = i;
                         forwardHint = ref_hint;
@@ -1296,7 +1299,7 @@ void read_skip_mode_params(bitstrm_t *bs, FrameHeader *frame_info, int FrameIsIn
                 frame_info->order_hint) > 0)
             {
                     if (backwardIdx < 0 || get_relative_dist(&seq_header->order_hint_info,
-                        ref_hint, backwardIdx) < 0)
+                        ref_hint, backwardHint) < 0)
                 {
                         backwardIdx = i;
                         backwardHint = ref_hint;
@@ -1377,6 +1380,7 @@ void read_film_grain_params(bitstrm_t *bs, FilmGrainParams *grain_params,
         temp_grain_seed = grain_params->grain_seed;
         // TODO: Handle while implementing Inter
         // load_grain_params( film_grain_params_ref_idx );
+        (void)film_grain_params_ref_idx;
         grain_params->grain_seed = temp_grain_seed;
         return;
     }
@@ -1505,6 +1509,16 @@ int get_qindex(SegmentationParams *seg_params, int segment_id, int base_q_idx)
         return base_q_idx;
 }
 
+EbErrorType reset_parse_ctx(FRAME_CONTEXT *frm_ctx, int32_t base_qp) {
+    EbErrorType return_error = EB_ErrorNone;
+
+    av1_default_coef_probs(frm_ctx, base_qp);
+    init_mode_probs(frm_ctx);
+
+    return return_error;
+}
+
+
 void read_uncompressed_header(bitstrm_t *bs, EbDecHandle *dec_handle_ptr,
                               ObuHeader *obu_header, int num_planes)
 {
@@ -1590,7 +1604,7 @@ void read_uncompressed_header(bitstrm_t *bs, EbDecHandle *dec_handle_ptr,
             // TODO: Need to differentate RefOrderHint and ref_order_hint
             frame_info->ref_order_hint[i] = 0;
         }
-        for (i = 0; i < TOTAL_REFS_PER_FRAME; i++)
+        for (i = 0; i < REFS_PER_FRAME; i++)
             frame_info->order_hints[LAST_FRAME + i] = 0;
     }
     frame_info->disable_cdf_update = dec_get_bits(bs, 1);
@@ -1724,7 +1738,7 @@ void read_uncompressed_header(bitstrm_t *bs, EbDecHandle *dec_handle_ptr,
                     seq_header->order_hint_info.order_hint_bits);
                 PRINT_FRAME("ref_order_hint[i]", frame_info->ref_order_hint);
 
-                if (ref_order_hint != frame_info->ref_order_hint[i])
+                if (ref_order_hint != (int)frame_info->ref_order_hint[i])
                     frame_info->ref_valid[i] = 0;
             }
         }
@@ -1753,6 +1767,8 @@ void read_uncompressed_header(bitstrm_t *bs, EbDecHandle *dec_handle_ptr,
                 gold_frame_idx = dec_get_bits(bs, 3);
                 PRINT_FRAME("last_frame_idx", last_frame_idx);
                 PRINT_FRAME("gold_frame_idx", gold_frame_idx);
+                (void)last_frame_idx;
+                (void)gold_frame_idx;
                 assert(0); //svt_set_frame_refs();
             }
         }
@@ -1895,6 +1911,10 @@ void read_uncompressed_header(bitstrm_t *bs, EbDecHandle *dec_handle_ptr,
     read_global_motion_params(bs, dec_handle_ptr, frame_info, FrameIsIntra);
     read_film_grain_params(bs, &frame_info->film_grain_params, seq_header, frame_info);
 
+    dec_handle_ptr->show_existing_frame = frame_info->show_existing_frame;
+    dec_handle_ptr->show_frame          = frame_info->show_frame;
+    dec_handle_ptr->showable_frame      = frame_info->showable_frame;
+
     /* TODO: Should be moved to caller */
     if(!frame_info->show_existing_frame)
         svt_setup_motion_field(dec_handle_ptr);
@@ -2019,15 +2039,6 @@ void clear_loop_restoration(int num_planes, PartitionInfo_t *part_info)
     }
 }
 
-EbErrorType reset_parse_ctx(FRAME_CONTEXT *frm_ctx, int32_t base_qp) {
-    EbErrorType return_error = EB_ErrorNone;
-
-    av1_default_coef_probs(frm_ctx, base_qp);
-    init_mode_probs(frm_ctx);
-
-    return return_error;
-}
-
 EbErrorType parse_tile(bitstrm_t *bs, EbDecHandle *dec_handle_ptr,
                        TilesInfo *tile_info, int32_t tile_row, int32_t tile_col)
 {
@@ -2083,6 +2094,8 @@ EbErrorType parse_tile(bitstrm_t *bs, EbDecHandle *dec_handle_ptr,
             if (mi_row != tile_info->tile_row_start_sb[tile_row])
                 above_sb_info = frame_buf->sb_info +
                     ((sb_row-1) * master_frame_buf->sb_cols) + sb_col;
+            (void)above_sb_info;
+            (void)left_sb_info;
 #if FRAME_MI_MAP
             *(master_frame_buf->frame_mi_map.pps_sb_info + sb_row *
                 master_frame_buf->frame_mi_map.sb_cols + sb_col) = sb_info;

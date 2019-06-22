@@ -17,6 +17,7 @@
 #include "EbSvtAv1Dec.h"
 #include "EbDecHandle.h"
 #include "EbDecMemInit.h"
+#include "EbDecPicMgr.h"
 
 #if defined(__linux__) || defined(__APPLE__)
 #include <pthread.h>
@@ -106,6 +107,12 @@ int svt_dec_out_buf(
 {
     EbPictureBufferDesc *recon_picture_buf = dec_handle_ptr->cur_pic_buf[0]->ps_pic_buf;
     EbSvtIOFormat       *out_img = (EbSvtIOFormat*)p_buffer->p_buffer;
+    
+    /* TODO: Should add logic for show_existing_frame */
+    if (0 == dec_handle_ptr->show_frame) {
+        assert(0 == dec_handle_ptr->show_existing_frame);
+        return 0;
+    }
 
     int wd = dec_handle_ptr->frame_header.frame_size.frame_width;
     int ht = dec_handle_ptr->frame_header.frame_size.frame_height;
@@ -350,8 +357,10 @@ EB_API EbErrorType eb_init_decoder(
     dec_handle_ptr->seq_header_done = 0;
     dec_handle_ptr->mem_init_done   = 0;
 
-    dec_handle_ptr->seen_frame_header = 0;
+    dec_handle_ptr->seen_frame_header   = 0;
     dec_handle_ptr->show_existing_frame = 0;
+    dec_handle_ptr->show_frame          = 0;
+    dec_handle_ptr->showable_frame      = 0;
 
     assert(0 == dec_handle_ptr->dec_config.asm_type);
     setup_rtcd_internal(dec_handle_ptr->dec_config.asm_type);
