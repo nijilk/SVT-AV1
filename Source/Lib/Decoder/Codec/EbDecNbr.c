@@ -82,6 +82,7 @@ ModeInfo_t* get_cur_mode_info(void *pv_dec_handle,
     FrameMiMap  *frame_mi_map   = &dec_handle->master_frame_buf.frame_mi_map;
 
     ModeInfo_t *cur_mi = NULL;
+    (void)sb_info;
 #if FRAME_MI_MAP
     int32_t cur_sb_row = mi_row >> (frame_mi_map->sb_size_log2 - MI_SIZE_LOG2);
     int32_t cur_sb_col = mi_col >> (frame_mi_map->sb_size_log2 - MI_SIZE_LOG2);
@@ -113,6 +114,7 @@ ModeInfo_t* get_cur_mode_info(void *pv_dec_handle,
 ModeInfo_t * get_left_mode_info(EbDecHandle *dec_handle,
     int mi_row, int mi_col, SBInfo *sb_info)
 {
+    (void)sb_info;
 #if FRAME_MI_MAP
     return get_cur_mode_info(dec_handle, mi_row, mi_col - 1, NULL);
 #else
@@ -145,6 +147,7 @@ ModeInfo_t * get_left_mode_info(EbDecHandle *dec_handle,
 ModeInfo_t* get_top_mode_info(EbDecHandle *dec_handle,
     int mi_row, int mi_col, SBInfo *sb_info)
 {
+    (void)sb_info;
 #if FRAME_MI_MAP
     return get_cur_mode_info(dec_handle, mi_row - 1, mi_col, NULL);
 #else

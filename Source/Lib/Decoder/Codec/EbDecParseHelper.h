@@ -71,5 +71,7 @@ int is_interintra_allowed(const ModeInfo_t *mbmi);
 MotionMode dec_motion_mode_allowed();
 void update_tx_context(ParseCtxt *parse_ctxt, PartitionInfo_t *pi,
     BlockSize bsize, TxSize txSize, int blk_row, int blk_col);
+int seg_feature_active(SegmentationParams *seg, int segment_id,
+    SEG_LVL_FEATURES feature_id);
 
 #endif  // EbDecParseHelper_h
