@@ -198,7 +198,7 @@ static INLINE int aom_daala_read(DaalaReader_t *r, int prob) {
       fflush(temp_fp);
   }
 #else
-  if (first_frame) {
+  if (enable_dump) {
       printf("\n *** p %d \t", p);
       printf("symb : %d \t", bit);
       fflush(stdout);
@@ -263,7 +263,7 @@ static INLINE int daala_read_symbol(DaalaReader_t *r, const AomCdfProb *cdf,
       fflush(temp_fp);
   }
 #else
-  if (first_frame) {
+  if (enable_dump) {
       printf("\n *** nsymbs %d \t", nsymbs);
       for (int i = 0; i < nsymbs; ++i) printf("cdf[%d] : %d \t", i, cdf[i]);
       printf("symb : %d \t", symb);

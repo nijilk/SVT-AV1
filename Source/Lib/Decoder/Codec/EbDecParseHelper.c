@@ -603,3 +603,9 @@ int is_interintra_allowed(const ModeInfo_t *mbmi) {
 MotionMode dec_motion_mode_allowed() {
     return SIMPLE_TRANSLATION;
 }
+
+int seg_feature_active(SegmentationParams *seg, int segment_id,
+    SEG_LVL_FEATURES feature_id)
+{
+    return seg->segmentation_enabled && seg->feature_data[segment_id][feature_id];
+}

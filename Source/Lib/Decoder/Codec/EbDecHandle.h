@@ -147,7 +147,10 @@ typedef struct EbDecHandle {
     FrameHeader frame_header;
 
     uint8_t seen_frame_header;
+    /* TODO: Move to frmae ctxt ? */
     uint8_t show_existing_frame;
+    uint8_t show_frame;
+    uint8_t showable_frame;  // frame can be used as show existing frame in future
 
     // Thread Handles
 

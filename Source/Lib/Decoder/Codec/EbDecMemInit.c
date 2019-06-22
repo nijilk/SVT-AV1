@@ -103,10 +103,10 @@ static EbErrorType init_master_frame_ctxt(EbDecHandle  *dec_handle_ptr) {
     SeqHeader   *seq_header = &dec_handle_ptr->seq_header;
 
     ///* 8x8 alignment for various tools like CDEF */
-    int32_t aligned_width   = ALIGN_POWER_OF_TWO(seq_header->max_frame_width, 3);
-    int32_t aligned_height  = ALIGN_POWER_OF_TWO(seq_header->max_frame_height, 3);
-    int32_t mi_cols = aligned_width >> MI_SIZE_LOG2;
-    int32_t mi_rows = aligned_height >> MI_SIZE_LOG2;
+    //int32_t aligned_width   = ALIGN_POWER_OF_TWO(seq_header->max_frame_width, 3);
+    //int32_t aligned_height  = ALIGN_POWER_OF_TWO(seq_header->max_frame_height, 3);
+    /*int32_t mi_cols = aligned_width >> MI_SIZE_LOG2;
+    int32_t mi_rows = aligned_height >> MI_SIZE_LOG2;*/
 
     int32_t sb_size_log2 = seq_header->sb_size_log2;
     int32_t sb_aligned_width = ALIGN_POWER_OF_TWO(seq_header->max_frame_width,
