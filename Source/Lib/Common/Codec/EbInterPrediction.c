@@ -129,7 +129,7 @@ void av1_setup_scale_factors_for_frame(ScaleFactors *sf, int other_w,
     else {
         sf->scale_value_x = unscaled_value;
         sf->scale_value_y = unscaled_value;
-    }   
+    }
 }
 
 static INLINE int32_t has_scale(int32_t xs, int32_t ys) {
@@ -1097,7 +1097,7 @@ void svt_inter_predictor(const uint8_t *src, int32_t src_stride,
     }
     else {
         SubpelParams sp = *subpel_params;
-        //revert_scale_extra_bits(&sp); TODO: Add suppport for scaling 
+        //revert_scale_extra_bits(&sp); TODO: Add suppport for scaling
 
         if (is_intrabc && (sp.subpel_x != 0 || sp.subpel_y != 0)) {
             convolve_2d_for_intrabc(src, src_stride, dst, dst_stride, w, h, sp.subpel_x,
@@ -1135,7 +1135,7 @@ void svt_highbd_inter_predictor(const uint16_t *src, int32_t src_stride,
     }
     else {
         SubpelParams sp = *subpel_params;
-        //revert_scale_extra_bits(&sp); TODO: Add suppport for scaling 
+        //revert_scale_extra_bits(&sp); TODO: Add suppport for scaling
 
         if (is_intrabc && (sp.subpel_x != 0 || sp.subpel_y != 0)) {
             highbd_convolve_2d_for_intrabc(src, src_stride, dst, dst_stride, w, h, sp.subpel_x,
