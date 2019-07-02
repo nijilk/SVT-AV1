@@ -52,7 +52,7 @@ void asmSetConvolveAsmTable(void);
 void init_intra_dc_predictors_c_internal(void);
 void init_intra_predictors_internal(void);
 EbErrorType decode_multiple_obu(EbDecHandle *dec_handle_ptr,
-            const uint8_t *data, size_t data_size);
+                                uint8_t **data, size_t data_size);
 
 void SwitchToRealTime(){
 #if defined(__linux__) || defined(__APPLE__)
@@ -388,14 +388,32 @@ EB_API EbErrorType eb_svt_decode_frame(
         return EB_ErrorBadParameter;
 
     EbDecHandle *dec_handle_ptr = (EbDecHandle *)svt_dec_component->p_component_private;
-    /*TODO : Remove or move. For Test purpose only */
-    dec_handle_ptr->dec_cnt++;
-    printf("\n SVT-AV1 Dec : Decoding Pic #%d", dec_handle_ptr->dec_cnt);
+    uint8_t *data_start = (uint8_t *)data;
+    uint8_t *data_end = (uint8_t *)data + data_size;
 
-    return_error = decode_multiple_obu(dec_handle_ptr, data, data_size);
+    while (data_start < (data + data_size))
+    {
+        /*TODO : Remove or move. For Test purpose only */
+        dec_handle_ptr->dec_cnt++;
+        printf("\n SVT-AV1 Dec : Decoding Pic #%d", dec_handle_ptr->dec_cnt);
 
-    dec_pic_mgr_update_ref_pic(dec_handle_ptr, (EB_ErrorNone == return_error) ? 1 : 0,
-                                dec_handle_ptr->frame_header.refresh_frame_flags);
+        uint64_t frame_size = 0;
+        /*if (ctx->is_annexb) {
+        }
+        else*/
+        frame_size = data_end - data_start;
+        return_error = decode_multiple_obu(dec_handle_ptr, &data_start, frame_size);
+
+        dec_pic_mgr_update_ref_pic(dec_handle_ptr, (EB_ErrorNone == return_error)
+                    ? 1 : 0, dec_handle_ptr->frame_header.refresh_frame_flags);
+
+        // Allow extra zero bytes after the frame end
+        while (data < data_end) {
+            const uint8_t marker = data[0];
+            if (marker) break;
+            ++data;
+        }
+    }
 
     return return_error;
 }

@@ -30,6 +30,8 @@
 #include "convolve.h"
 #include "aom_dsp_rtcd.h"
 
+#define SCALE_REF_FRAME 0 //TODO: Add Support for scaling of reference frame
+
 #define MVBOUNDLOW    36    //  (80-71)<<2 // 80 = ReferencePadding ; minus 71 is derived from the expression -64 + 1 - 8, and plus 7 is derived from expression -1 + 8
 #define MVBOUNDHIGH   348   //  (80+7)<<2
 #define REFPADD_QPEL  320   //  (16+64)<<2
@@ -60,7 +62,8 @@
 #define ROUND0_BITS 3
 #define COMPOUND_ROUND1_BITS 7
 
-/* TODO: Add scaling of reference frame support later
+#if SCALE_REF_FRAME
+/* TODO: Add scaling of reference frame support later */
 // Note: Expect val to be in q4 precision
 static INLINE int32_t scaled_x(int32_t val, ScaleFactors *sf) {
     const int off =
@@ -146,7 +149,7 @@ static INLINE void revert_scale_extra_bits(SubpelParams *sp) {
     assert(sp->xs <= SUBPEL_SHIFTS);
     assert(sp->ys <= SUBPEL_SHIFTS);
 }
-*/
+#endif //SCALE_REF_FRAME
 
 //extern INLINE void clamp_mv(MV *mv, int32_t min_col, int32_t max_col, int32_t min_row,int32_t max_row);
 
@@ -1079,9 +1082,11 @@ void svt_inter_predictor(const uint8_t *src, int32_t src_stride,
     InterpFilters interp_filters, int32_t is_intrabc) {
 
     InterpFilterParams filter_params_x, filter_params_y;
-    /* TODO: Add suppport for scaling later */
-    const int32_t is_scaled = 0; // has_scale(subpel_params->xs, subpel_params->ys);
-
+#if SCALE_REF_FRAME
+    const int32_t is_scaled = has_scale(subpel_params->xs, subpel_params->ys);
+#else
+    const int32_t is_scaled = 0;
+#endif
     av1_get_convolve_filter_params(interp_filters, &filter_params_x,
         &filter_params_y, w, h);
 
@@ -1089,16 +1094,19 @@ void svt_inter_predictor(const uint8_t *src, int32_t src_stride,
     //assert(sf);
     //assert(IMPLIES(is_intrabc, !is_scaled));
     if (is_scaled) {
+#if SCALE_REF_FRAME
         /* TODO: Add suppport for scaling later */
-        /*av1_convolve_2d_scale(src, src_stride, dst, dst_stride, w, h,
+        av1_convolve_2d_scale(src, src_stride, dst, dst_stride, w, h,
             interp_filters, subpel_params->subpel_x,
             subpel_params->xs, subpel_params->subpel_y,
-            subpel_params->ys, 1, conv_params, sf, is_intrabc);*/
+            subpel_params->ys, 1, conv_params, sf, is_intrabc);
+#endif
     }
     else {
         SubpelParams sp = *subpel_params;
-        //revert_scale_extra_bits(&sp); TODO: Add suppport for scaling
-
+#if SCALE_REF_FRAME
+        revert_scale_extra_bits(&sp);
+#endif
         if (is_intrabc && (sp.subpel_x != 0 || sp.subpel_y != 0)) {
             convolve_2d_for_intrabc(src, src_stride, dst, dst_stride, w, h, sp.subpel_x,
                 sp.subpel_y, conv_params);
@@ -1117,9 +1125,11 @@ void svt_highbd_inter_predictor(const uint16_t *src, int32_t src_stride,
     InterpFilters interp_filters, int32_t is_intrabc, int32_t bd) {
 
     InterpFilterParams filter_params_x, filter_params_y;
-    /* TODO: Add suppport for scaling later */
-    const int32_t is_scaled = 0; // has_scale(subpel_params->xs, subpel_params->ys);
-
+#if SCALE_REF_FRAME
+    const int32_t is_scaled = has_scale(subpel_params->xs, subpel_params->ys);
+#else
+    const int32_t is_scaled = 0;
+#endif
     av1_get_convolve_filter_params(interp_filters, &filter_params_x,
         &filter_params_y, w, h);
 
@@ -1127,15 +1137,19 @@ void svt_highbd_inter_predictor(const uint16_t *src, int32_t src_stride,
     //assert(sf);
     //assert(IMPLIES(is_intrabc, !is_scaled));
     if (is_scaled) {
+#if SCALE_REF_FRAME
         /* TODO: Add suppport for scaling later */
-        /*av1_highbd_convolve_2d_scale(src, src_stride, dst, dst_stride, w, h,
+        av1_highbd_convolve_2d_scale(src, src_stride, dst, dst_stride, w, h,
         interp_filters, subpel_params->subpel_x,
         subpel_params->xs, subpel_params->subpel_y,
-        subpel_params->ys, 1, conv_params, sf, is_intrabc, bd);*/
+        subpel_params->ys, 1, conv_params, sf, is_intrabc, bd);
+#endif
     }
     else {
         SubpelParams sp = *subpel_params;
-        //revert_scale_extra_bits(&sp); TODO: Add suppport for scaling
+#if SCALE_REF_FRAME
+        revert_scale_extra_bits(&sp);
+#endif
 
         if (is_intrabc && (sp.subpel_x != 0 || sp.subpel_y != 0)) {
             highbd_convolve_2d_for_intrabc(src, src_stride, dst, dst_stride, w, h, sp.subpel_x,

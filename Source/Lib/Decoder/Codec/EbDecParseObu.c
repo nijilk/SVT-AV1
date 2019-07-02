@@ -312,14 +312,14 @@ EbErrorType read_sequence_header_obu(bitstrm_t *bs, SeqHeader   *seq_header)
         seq_header->operating_point[i].op_idc =
             dec_get_bits(bs, OP_POINTS_IDC_BITS);
         PRINT("operating_point_idc",
-            seq_header->operating_point_prms[i].op_idc);
+            seq_header->operating_point[i].op_idc);
         seq_header->operating_point[i].seq_level_idx = dec_get_bits(bs, LEVEL_BITS);
         PRINT("seq_level_idx", seq_header->operating_point[i].seq_level_idx);
         if (!is_valid_seq_level_idx(seq_header->operating_point[i].seq_level_idx))
             return EB_Corrupt_Frame;
         if (seq_header->operating_point[i].seq_level_idx > 7) {
             seq_header->operating_point[i].seq_tier = dec_get_bits(bs, 1);
-            PRINT("seq_tier", seq_header->operating_point_prms[i].seq_tier);
+            PRINT("seq_tier", seq_header->operating_point[i].seq_tier);
         }
         else
             seq_header->operating_point[i].seq_tier = 0;
@@ -1215,7 +1215,7 @@ void read_global_motion_params(bitstrm_t *bs, EbDecHandle *dec_handle,
         }
     }
     if (FrameIsIntra) return;
-    for (ref = LAST_FRAME - 1; ref < ALTREF_FRAME; ref++) {
+    for (ref = LAST_FRAME; ref <= ALTREF_FRAME; ref++) {
         PRINT_NAME("Some read");
         if (dec_get_bits(bs, 1)) {
             PRINT_NAME("Some read");
@@ -1520,6 +1520,24 @@ EbErrorType reset_parse_ctx(FRAME_CONTEXT *frm_ctx, uint8_t base_qp) {
     return return_error;
 }
 
+void setup_frame_sign_bias(EbDecHandle *dec_handle) {
+    MvReferenceFrame ref_frame;
+    for (ref_frame = LAST_FRAME; ref_frame <= ALTREF_FRAME; ++ref_frame) {
+        const EbDecPicBuf *const buf = get_ref_frame_buf(dec_handle, ref_frame);
+        if (dec_handle->seq_header.order_hint_info.enable_order_hint && buf != NULL) {
+            const int ref_order_hint = buf->order_hint;
+            dec_handle->frame_header.ref_frame_sign_bias[ref_frame] =
+                (get_relative_dist(&dec_handle->seq_header.order_hint_info, ref_order_hint,
+                (int)dec_handle->cur_pic_buf[0]->order_hint) <= 0)
+                ? 0
+                : 1;
+        }
+        else {
+            dec_handle->frame_header.ref_frame_sign_bias[ref_frame] = 0;
+        }
+    }
+}
+
 
 void read_uncompressed_header(bitstrm_t *bs, EbDecHandle *dec_handle_ptr,
                               ObuHeader *obu_header, int num_planes)
@@ -1782,6 +1800,9 @@ void read_uncompressed_header(bitstrm_t *bs, EbDecHandle *dec_handle_ptr,
                 PRINT_FRAME("ref_frame_idx", frame_info->ref_frame_idx[i]);
                 dec_handle_ptr->remapped_ref_idx[i] = frame_info->ref_frame_idx[i];
             }
+
+            frame_info->ref_frame_sign_bias[LAST_FRAME + i] = 0;
+
             if (seq_header->frame_id_numbers_present_flag) {
                 delta_frame_id_length_minus_1 = dec_get_bits(bs,
                     seq_header->delta_frame_id_length);
@@ -1828,6 +1849,8 @@ void read_uncompressed_header(bitstrm_t *bs, EbDecHandle *dec_handle_ptr,
     dec_handle_ptr->cur_pic_buf[0]->order_hint = dec_handle_ptr->frame_header.order_hint;
     /*Temporal MVs allocation */
     check_add_tplmv_buf(dec_handle_ptr);
+
+    setup_frame_sign_bias(dec_handle_ptr);
 
     if (seq_header->reduced_still_picture_header || frame_info->disable_cdf_update)
         frame_info->disable_frame_end_update_cdf = 1;
@@ -2285,7 +2308,7 @@ EbErrorType read_tile_group_obu(bitstrm_t *bs, EbDecHandle *dec_handle_ptr,
         tile_col = tile_num % tiles_info->tile_cols;
 
         if (tile_num == tg_end)
-            tile_size = (int)obu_header->payload_size;
+            tile_size = obu_header->payload_size;
         else {
             tile_size = dec_get_bits_le(bs, tiles_info->tile_size_bytes) + 1;
             obu_header->payload_size -= (tiles_info->tile_size_bytes + tile_size);
@@ -2313,8 +2336,11 @@ EbErrorType read_tile_group_obu(bitstrm_t *bs, EbDecHandle *dec_handle_ptr,
         /* Save CDF */
         if (!dec_handle_ptr->frame_header.disable_frame_end_update_cdf &&
             (tile_num == tiles_info->context_update_tile_id))
+        {
             dec_handle_ptr->cur_pic_buf[0]->final_frm_ctx =
-                                                parse_ctxt->cur_tile_ctx;
+                                        parse_ctxt->cur_tile_ctx;
+            av1_reset_cdf_symbol_counters(&dec_handle_ptr->cur_pic_buf[0]->final_frm_ctx);
+        }
 
         dec_bits_init(bs, (uint8_t *)parse_ctxt->r.ec.bptr, obu_header->payload_size);
 
@@ -2340,7 +2366,7 @@ EbErrorType decode_obu(EbDecHandle *dec_handle_ptr, unsigned char *data, unsigne
 }
 
 // Decode all OBUs in a Frame
-EbErrorType decode_multiple_obu(EbDecHandle *dec_handle_ptr, const uint8_t *data, size_t data_size)
+EbErrorType decode_multiple_obu(EbDecHandle *dec_handle_ptr, uint8_t **data, size_t data_size)
 {
     bitstrm_t bs;
     EbErrorType status = EB_ErrorNone;
@@ -2356,20 +2382,20 @@ EbErrorType decode_multiple_obu(EbDecHandle *dec_handle_ptr, const uint8_t *data
             status = dec_mem_init(dec_handle_ptr);
         if (status != EB_ErrorNone) return status;
 
-        dec_bits_init(&bs, data, data_size);
+        dec_bits_init(&bs, *data, data_size);
 
         status = open_bistream_unit(&bs, &obu_header, data_size, &length_size);
         if (status != EB_ErrorNone) return status;
 
         payload_size = obu_header.payload_size;
 
-        data += (obu_header.size + length_size);
-        data_size -= (uint32_t)(obu_header.size + length_size);
+        *data += (obu_header.size + length_size);
+        data_size -= (obu_header.size + length_size);
 
         if (data_size < payload_size)
             return EB_Corrupt_Frame;
 
-        dec_bits_init(&bs, data, (uint32_t)payload_size);
+        dec_bits_init(&bs, *data, payload_size);
 
         switch (obu_header.obu_type) {
         case OBU_TEMPORAL_DELIMITER:
@@ -2406,6 +2432,7 @@ EbErrorType decode_multiple_obu(EbDecHandle *dec_handle_ptr, const uint8_t *data
                 dec_handle_ptr->seen_frame_header = 1;
                 status = read_frame_header_obu(&bs, dec_handle_ptr, &obu_header,
                                                obu_header.obu_type != OBU_FRAME);
+                frame_decoding_finished = 1;
             }
             /*else {
                  For OBU_REDUNDANT_FRAME_HEADER, previous frame_header is taken from dec_handle_ptr->frame_header
@@ -2421,6 +2448,8 @@ EbErrorType decode_multiple_obu(EbDecHandle *dec_handle_ptr, const uint8_t *data
             status = read_tile_group_obu(&bs, dec_handle_ptr,
                 &dec_handle_ptr->frame_header.tiles_info, &obu_header);
             if (status != EB_ErrorNone) return status;
+            if (frame_decoding_finished)
+                dec_handle_ptr->seen_frame_header = 0;
             break;
 
         default:
@@ -2428,8 +2457,8 @@ EbErrorType decode_multiple_obu(EbDecHandle *dec_handle_ptr, const uint8_t *data
             break;
         }
 
-        data += payload_size;
-        data_size -= (uint32_t)payload_size;
+        *data += payload_size;
+        data_size -= payload_size;
         if (!data_size)
             frame_decoding_finished = 1;
     }

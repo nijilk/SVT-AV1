@@ -999,6 +999,8 @@ void update_chroma_trans_info(EbDecHandle *dec_handle,
     height = AOMMIN(height, max_blocks_high);
 
     TxSize tx_size_uv = av1_get_max_uv_txsize(bsize, sx, sy);
+    assert(dec_handle->frame_header.lossless_array[mbmi->segment_id] != 1);
+
     /* TODO: Make plane loop and avoid the unroll */
     for (int idy = 0; idy < max_blocks_high; idy += height) {
         for (int idx = 0; idx < max_blocks_wide; idx += width) {
@@ -1148,7 +1150,9 @@ void update_flat_trans_info(EbDecHandle *dec_handle, PartitionInfo_t *part_info,
     width = AOMMIN(width, max_blocks_wide);
     height = AOMMIN(height, max_blocks_high);
 
-    TxSize tx_size_uv = av1_get_max_uv_txsize(bsize, sx, sy);
+    TxSize tx_size_uv = dec_handle->frame_header.lossless_array[mbmi->segment_id] ?
+                        TX_4X4 : av1_get_max_uv_txsize(bsize, sx, sy);
+
     /* TODO: Make plane loop and avoid the unroll */
     for (int idy = 0; idy < max_blocks_high; idy += height) {
         for (int idx = 0; idx < max_blocks_wide; idx += width) {
@@ -1172,6 +1176,7 @@ void update_flat_trans_info(EbDecHandle *dec_handle, PartitionInfo_t *part_info,
                     luma_trans_info->tu_y_offset = blk_row;
                     luma_trans_info++;
                     num_luma_tus++;
+                    total_luma_tus++;
                 }
             }
             parse_ctx->num_tus[AOM_PLANE_Y][force_split_cnt] = num_luma_tus;
@@ -1198,22 +1203,17 @@ void update_flat_trans_info(EbDecHandle *dec_handle, PartitionInfo_t *part_info,
                     chroma_trans_info->tu_y_offset = blk_row;
                     chroma_trans_info++;
                     num_chroma_tus++;
+                    total_chroma_tus++;
                 }
             }
 
             parse_ctx->num_tus[AOM_PLANE_U][force_split_cnt] = num_chroma_tus;
             parse_ctx->num_tus[AOM_PLANE_V][force_split_cnt] = num_chroma_tus;
 
+            // TODO: Move to beginning because increment might be missed for monochrome case
             force_split_cnt++;
         }
     }
-
-    total_luma_tus =
-        parse_ctx->num_tus[AOM_PLANE_Y][0] + parse_ctx->num_tus[AOM_PLANE_Y][1] +
-        parse_ctx->num_tus[AOM_PLANE_Y][2] + parse_ctx->num_tus[AOM_PLANE_Y][3];
-    total_chroma_tus =
-        parse_ctx->num_tus[AOM_PLANE_U][0] + parse_ctx->num_tus[AOM_PLANE_U][1] +
-        parse_ctx->num_tus[AOM_PLANE_U][2] + parse_ctx->num_tus[AOM_PLANE_U][3];
 
     /* Cr Transform Info Update from Cb */
     if (total_chroma_tus) {
@@ -2047,7 +2047,7 @@ void parse_residual(EbDecHandle *dec_handle, PartitionInfo_t *pi, SvtReader *r,
 
     int skip     = mode->skip;
     int force_split_cnt = 0;
-    uint8_t num_tu, total_num_tu;
+    int num_tu, total_num_tu;
 
     const int max_blocks_wide = max_block_wide(pi, mi_size, 0);
     const int max_blocks_high = max_block_high(pi, mi_size, 0);
@@ -2058,12 +2058,17 @@ void parse_residual(EbDecHandle *dec_handle, PartitionInfo_t *pi, SvtReader *r,
     mu_blocks_high = AOMMIN(max_blocks_high, mu_blocks_high);
 
     TransformInfo_t *trans_info[MAX_MB_PLANE];
+    int num_chroma_tus = (dec_handle->frame_header.lossless_array[pi->mi->segment_id] &&
+        ((mi_size >= BLOCK_64X64) && (mi_size <= BLOCK_128X128)) ) ?
+        ((max_blocks_wide * max_blocks_high) >>
+        (color_info->subsampling_x + color_info->subsampling_y)) : mode->num_chroma_tus;
+
     trans_info[AOM_PLANE_Y] = (sb_info->sb_trans_info[AOM_PLANE_Y] +
                                mode->first_luma_tu_offset);
     trans_info[AOM_PLANE_U] = (sb_info->sb_trans_info[AOM_PLANE_U] +
                                mode->first_chroma_tu_offset);
     trans_info[AOM_PLANE_V] = (sb_info->sb_trans_info[AOM_PLANE_U] +
-                                mode->first_chroma_tu_offset) + mode->num_chroma_tus;
+                                mode->first_chroma_tu_offset) + num_chroma_tus;
 
     for (int row = 0; row < max_blocks_high; row += mu_blocks_high) {
         for (int col = 0; col < max_blocks_wide; col += mu_blocks_wide) {
@@ -2077,16 +2082,27 @@ void parse_residual(EbDecHandle *dec_handle, PartitionInfo_t *pi, SvtReader *r,
                 if (dec_is_inter_block(mode) && !plane)
                     parse_ctx->inter_trans_chroma = trans_info[plane];
 
-                total_num_tu = plane ? mode->num_chroma_tus : mode->num_luma_tus;
-                num_tu = parse_ctx->num_tus[plane][force_split_cnt];
+                if (dec_handle->frame_header.lossless_array[pi->mi->segment_id] &&
+                    ((mi_size >= BLOCK_64X64) && (mi_size <= BLOCK_128X128)) )
+                {
+                    assert(trans_info[plane]->tx_size == TX_4X4);
+                    num_tu = (mu_blocks_wide * mu_blocks_high) >> (sub_x + sub_y);
+                }
+                else
+                {
+                    total_num_tu = plane ? mode->num_chroma_tus : mode->num_luma_tus;
+                    num_tu = parse_ctx->num_tus[plane][force_split_cnt];
 
-                assert(num_tu != 0 && total_num_tu != 0);
-                assert(total_num_tu ==
-                    (parse_ctx->num_tus[plane][0] + parse_ctx->num_tus[plane][1] +
-                     parse_ctx->num_tus[plane][2] + parse_ctx->num_tus[plane][3]));
+                    assert(total_num_tu != 0);
+                    assert(total_num_tu ==
+                        (parse_ctx->num_tus[plane][0] + parse_ctx->num_tus[plane][1] +
+                            parse_ctx->num_tus[plane][2] + parse_ctx->num_tus[plane][3]));
+                }
+                assert(num_tu != 0);
+
                 (void)total_num_tu;
 
-                for(uint8_t tu = 0; tu < num_tu; tu++)
+                for(int tu = 0; tu < num_tu; tu++)
                 {
                     assert(trans_info[plane]->tu_x_offset <= max_blocks_wide);
                     assert(trans_info[plane]->tu_y_offset <= max_blocks_high);
@@ -2167,7 +2183,9 @@ void parse_block(EbDecHandle *dec_handle, uint32_t mi_row, uint32_t mi_col,
     part_info.chroma_up_available = part_info.up_available;
     part_info.chroma_left_available = part_info.left_available;
 
+    part_info.mb_to_left_edge = -(((int32_t)mi_col * MI_SIZE) * 8);
     part_info.mb_to_right_edge = ((int32_t)mi_cols - bw4 - mi_col) * MI_SIZE * 8;
+    part_info.mb_to_top_edge = -(((int32_t)mi_row * MI_SIZE) * 8);
     part_info.mb_to_bottom_edge = ((int32_t)mi_rows - bh4 - mi_row) * MI_SIZE * 8;
 
     part_info.is_sec_rect = 0;
@@ -2400,7 +2418,7 @@ void parse_super_block(EbDecHandle *dec_handle,
     ParseCtxt *parse_ctx = (ParseCtxt*)dec_handle->pv_parse_ctxt;
     SvtReader *reader = &parse_ctx->r;
 #if ENABLE_ENTROPY_TRACE
-    enable_dump =  1;
+    enable_dump = 1;
 #endif
     parse_partition(dec_handle, blk_row, blk_col, reader,
         dec_handle->seq_header.sb_size, sbInfo);

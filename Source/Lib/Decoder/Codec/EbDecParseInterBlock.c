@@ -786,7 +786,8 @@ static int check_sb_border(const int mi_row, const int mi_col,
     const int row = (mi_row & (sb_mi_size - 1)) + row_offset;
     const int col = (mi_col & (sb_mi_size - 1)) + col_offset;
 
-    return (row >= 0 || row < sb_mi_size || col >= 0 || col < sb_mi_size);
+    return ( (row >= 0) && (row < sb_mi_size) &&
+             (col >= 0) && (col < sb_mi_size) );
 }
 
 
@@ -849,24 +850,17 @@ static void process_single_ref_mv_candidate(ModeInfo_t * candidate,
     }
 }
 
-static int16_t clamp_mv_row(EbDecHandle *dec_handle, PartitionInfo_t *pi,
-    int mi_row, int row, int border)
-{
-    FrameHeader *frame_info = &dec_handle->frame_header;
-    int bh4 = mi_size_high[pi->mi->sb_type];
-    int mbToTopEdge = -((mi_row * MI_SIZE) * 8);
-    int mbToBottomEdge = ((frame_info->mi_rows - bh4 - mi_row) * MI_SIZE) * 8;
-    return CLIP3(mbToTopEdge - border, mbToBottomEdge + border, row);
+static INLINE void clamp_mv(MV *mv, int min_col, int max_col, int min_row,
+    int max_row) {
+    mv->col = clamp(mv->col, min_col, max_col);
+    mv->row = clamp(mv->row, min_row, max_row);
 }
 
-static int16_t clamp_mv_col(EbDecHandle *dec_handle, PartitionInfo_t *pi,
-    int mi_col, int col, int border)
-{
-    FrameHeader *frame_info = &dec_handle->frame_header;
-    int bw4 = mi_size_wide[pi->mi->sb_type];
-    int mbToLeftEdge = -((mi_col * MI_SIZE) * 8);
-    int mbToRightEdge = ((frame_info->mi_cols - bw4 - mi_col) * MI_SIZE) * 8;
-    return CLIP3(mbToLeftEdge - border, mbToRightEdge + border, col);
+static INLINE void clamp_mv_ref(MV *mv, int bw, int bh, PartitionInfo_t *pi) {
+    clamp_mv(mv, pi->mb_to_left_edge - bw * 8 - MV_BORDER,
+        pi->mb_to_right_edge + bw * 8 + MV_BORDER,
+        pi->mb_to_top_edge - bh * 8 - MV_BORDER,
+        pi->mb_to_bottom_edge + bh * 8 + MV_BORDER);
 }
 
 static void dec_setup_ref_mv_list(
@@ -971,7 +965,7 @@ static void dec_setup_ref_mv_list(
 
                 int ret = add_tpl_ref_mv(dec_handle, mi_row, mi_col,
                     ref_frame, blk_row, blk_col, gm_mv_candidates,
-                    mv_cnt->num_mv_found, ref_mv_stack, mode_context);
+                    &mv_cnt->num_mv_found[ref_frame], ref_mv_stack, mode_context);
                 if (blk_row == 0 && blk_col == 0) is_available = ret;
             }
         }
@@ -985,7 +979,7 @@ static void dec_setup_ref_mv_list(
 
                 if (check_sb_border(mi_row, mi_col, blk_row, blk_col)) {
                     add_tpl_ref_mv(dec_handle, mi_row, mi_col, ref_frame, blk_row,
-                        blk_col, gm_mv_candidates, mv_cnt->num_mv_found,
+                        blk_col, gm_mv_candidates, &mv_cnt->num_mv_found[ref_frame],
                         ref_mv_stack, mode_context);
                 }
             }
@@ -1137,26 +1131,42 @@ static void dec_setup_ref_mv_list(
                 }
             }
         }
-        else
+        /*else
         {
             for (int idx = mv_cnt->num_mv_found[ref_frame]; idx < 2; idx++) {
                 ref_mv_stack[ref_frame][idx].this_mv = gm_mv_candidates[0];
             }
-        }
+        }*/
     }
 
     /* context and clamping process */
-    int num_lists = rf[1] > NONE_FRAME ? 2 : 1;
-    for (int list = 0; list < num_lists; list++) {
-        for (int idx = 0; idx < mv_cnt->num_mv_found[ref_frame]; idx++) {
-            IntMv_dec refMv = ref_mv_stack[list][idx].this_mv;
-            refMv.as_mv.row = clamp_mv_row(dec_handle, pi, mi_row,
-                refMv.as_mv.row, MV_BORDER + n4_h * 8);
-            refMv.as_mv.col = clamp_mv_col(dec_handle, pi, mi_col,
-                refMv.as_mv.col, MV_BORDER + n4_w * 8);
-            ref_mv_stack[list][idx].this_mv = refMv;
+    //int num_lists = rf[1] > NONE_FRAME ? 2 : 1;
+    //for (int list = 0; list < num_lists; list++) {
+    //    for (int idx = 0; idx < mv_cnt->num_mv_found[ref_frame]; idx++) {
+    //        IntMv_dec refMv = ref_mv_stack[ref_frame][idx].this_mv;
+    //        refMv.as_mv.row = clamp_mv_row(dec_handle, pi, mi_row,
+    //            refMv.as_mv.row, MV_BORDER + n4_h * 8);
+    //        refMv.as_mv.col = clamp_mv_col(dec_handle, pi, mi_col,
+    //            refMv.as_mv.col, MV_BORDER + n4_w * 8);
+    //        ref_mv_stack[ref_frame][idx].this_mv = refMv;
+    //    }
+    //}
+
+    if (rf[1] > NONE_FRAME) {
+        for (int idx = 0; idx < mv_cnt->num_mv_found[ref_frame]; ++idx) {
+            clamp_mv_ref(&ref_mv_stack[ref_frame][idx].this_mv.as_mv,
+                n4_w << MI_SIZE_LOG2, n4_h << MI_SIZE_LOG2, pi);
+            clamp_mv_ref(&ref_mv_stack[ref_frame][idx].comp_mv.as_mv,
+                n4_w << MI_SIZE_LOG2, n4_h << MI_SIZE_LOG2, pi);
         }
     }
+    else {
+        for (int idx = 0; idx < mv_cnt->num_mv_found[ref_frame]; ++idx) {
+            clamp_mv_ref(&ref_mv_stack[ref_frame][idx].this_mv.as_mv,
+                n4_w << MI_SIZE_LOG2, n4_h << MI_SIZE_LOG2, pi);
+        }
+    }
+
 
     const uint8_t ref_match_count = (mv_cnt->found_above_match > 0) +
         (mv_cnt->found_left_match > 0);
@@ -1903,14 +1913,14 @@ int get_comp_index_context(EbDecHandle *dec_handle, PartitionInfo_t *pi) {
 
     if (above_mi != NULL) {
         if (has_second_ref(above_mi))
-            above_ctx = above_mi->compound_mode;
+            above_ctx = above_mi->inter_compound.compound_idx;
         else if (above_mi->ref_frame[0] == ALTREF_FRAME)
             above_ctx = 1;
     }
 
     if (left_mi != NULL) {
         if (has_second_ref(left_mi))
-            left_ctx = left_mi->compound_mode;
+            left_ctx = left_mi->inter_compound.compound_idx;
         else if (left_mi->ref_frame[0] == ALTREF_FRAME)
             left_ctx = 1;
     }
@@ -1929,7 +1939,7 @@ void read_compound_type(EbDecHandle *dec_handle, PartitionInfo_t *pi, SvtReader 
 
     if (mbmi->skip_mode) mbmi->inter_compound.type = COMPOUND_AVERAGE;
 
-    if (has_second_ref(mbmi)) {
+    if (has_second_ref(mbmi) && !mbmi->skip_mode) {
         // Read idx to indicate current compound inter prediction mode group
         const int masked_compound_used = is_any_masked_compound_used(bsize) &&
             dec_handle->seq_header.enable_masked_compound;
@@ -1962,8 +1972,8 @@ void read_compound_type(EbDecHandle *dec_handle, PartitionInfo_t *pi, SvtReader 
 
             // compound_diffwtd, wedge
             if (is_interinter_compound_used(COMPOUND_WEDGE, bsize))
-                mbmi->inter_compound.type = svt_read_symbol(r,
-                    frm_ctx->compound_type_cdf[bsize],
+                mbmi->inter_compound.type = COMPOUND_WEDGE +
+                svt_read_symbol(r, frm_ctx->compound_type_cdf[bsize],
                     MASKED_COMPOUND_TYPES, ACCT_STR);
             else
                 mbmi->inter_compound.type = COMPOUND_DIFFWTD;
@@ -1981,13 +1991,13 @@ void read_compound_type(EbDecHandle *dec_handle, PartitionInfo_t *pi, SvtReader 
             }
         }
     }
-    else {
+   /* else {
         if (mbmi->is_inter_intra)
             mbmi->inter_compound.type = mbmi->interintra_mode.wedge_interintra ?
             COMPOUND_WEDGE : COMPOUND_INTRA;
         else
             mbmi->inter_compound.type = COMPOUND_AVERAGE;
-    }
+    }*/
 }
 
 static INLINE int is_nontrans_global_motion(PartitionInfo_t *pi,

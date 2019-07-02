@@ -10,6 +10,10 @@
 - API - add option to calculate / report PSNR values
 - Support for segmentation
 
+## [0.6.0] - 2019-07-02
+- Inital decoder implementation
+- Decoder - Support for Tiles and 10bit
+
 ## [0.5.0] - 2019-05-17
 
 - 8 bit / 10 bit 4:2:0 up to 4k60p resolutions

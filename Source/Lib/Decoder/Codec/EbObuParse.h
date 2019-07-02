@@ -166,6 +166,6 @@ void parse_super_block(EbDecHandle *dec_handle,
 void svt_setup_motion_field(EbDecHandle *dec_handle);
 
 EbErrorType decode_obu(EbDecHandle *dec_handle_ptr, uint8_t *data, uint32_t data_size);
-EbErrorType decode_multiple_obu(EbDecHandle *dec_handle_ptr, const uint8_t *data, size_t data_size);
+EbErrorType decode_multiple_obu(EbDecHandle *dec_handle_ptr, uint8_t **data, size_t data_size);
 
 #endif  // EbDecObuParser_h
