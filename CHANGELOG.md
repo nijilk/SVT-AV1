@@ -2,7 +2,7 @@
 
 ## [upcoming]
 
-- Decoder Inter support
+- Decoder limited Inter support
 - Static library support
 - Alt-ref pictures - temporal filtering
 - Adaptive Transform Block for INTRA
