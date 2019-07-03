@@ -1756,7 +1756,7 @@ void read_uncompressed_header(bitstrm_t *bs, EbDecHandle *dec_handle_ptr,
             for (i = 0; i < NUM_REF_FRAMES; i++) {
                 ref_order_hint = dec_get_bits(bs,
                     seq_header->order_hint_info.order_hint_bits);
-                PRINT_FRAME("ref_order_hint[i]", frame_info->ref_order_hint);
+                PRINT_FRAME("ref_order_hint[i]", ref_order_hint);
 
                 if (ref_order_hint != (int)frame_info->ref_order_hint[i])
                     frame_info->ref_valid[i] = 0;
@@ -1846,7 +1846,7 @@ void read_uncompressed_header(bitstrm_t *bs, EbDecHandle *dec_handle_ptr,
     dec_handle_ptr->cur_pic_buf[0] = dec_pic_mgr_get_cur_pic(dec_handle_ptr->pv_pic_mgr,
         &dec_handle_ptr->seq_header, &dec_handle_ptr->frame_header,
         dec_handle_ptr->dec_config.max_color_format);
-    dec_handle_ptr->cur_pic_buf[0]->order_hint = dec_handle_ptr->frame_header.order_hint;
+    svt_setup_frame_buf_refs(dec_handle_ptr);
     /*Temporal MVs allocation */
     check_add_tplmv_buf(dec_handle_ptr);
 

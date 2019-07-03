@@ -316,7 +316,6 @@ void decode_block(DecModCtxt *dec_mod_ctxt, int32_t mi_row, int32_t mi_col,
         {
             assert(trans_info->tx_size == TX_4X4);
             num_tu = (max_blocks_wide * max_blocks_high) >> (sub_x + sub_y);
-
         }
         else
             num_tu = plane ? mode_info->num_chroma_tus : mode_info->num_luma_tus;
