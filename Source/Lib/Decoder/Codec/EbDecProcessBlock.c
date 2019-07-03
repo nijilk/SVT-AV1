@@ -288,6 +288,15 @@ void decode_block(DecModCtxt *dec_mod_ctxt, int32_t mi_row, int32_t mi_col,
     int32_t *coeffs;
     TransformInfo_t *trans_info = NULL;
     TxSize tx_size;
+    int num_tu;
+
+    const int max_blocks_wide = max_block_wide(&part_info, bsize, 0);
+    const int max_blocks_high = max_block_high(&part_info, bsize, 0);
+
+    int num_chroma_tus = (dec_handle->frame_header.lossless_array[part_info.mi->segment_id] &&
+        ((bsize >= BLOCK_64X64) && (bsize <= BLOCK_128X128)) ) ?
+        (max_blocks_wide * max_blocks_high) >>
+        (color_config->subsampling_x + color_config->subsampling_y) : mode_info->num_chroma_tus;
 
     for (int plane = 0; plane < num_planes; ++plane) {
         sub_x = (plane > 0) ? color_config->subsampling_x : 0;
@@ -296,13 +305,24 @@ void decode_block(DecModCtxt *dec_mod_ctxt, int32_t mi_row, int32_t mi_col,
         if (!dec_is_chroma_reference(mi_row, mi_col, bsize, sub_x, sub_y))
             continue;
 
-        int num_tu = plane ? mode_info->num_chroma_tus : mode_info->num_luma_tus;
-
         trans_info = (plane == 0) ?
             (sb_info->sb_trans_info[plane] + mode_info->first_luma_tu_offset) :
             (plane == 1) ?
             (sb_info->sb_trans_info[plane] + mode_info->first_chroma_tu_offset) :
-            (sb_info->sb_trans_info[plane - 1] + mode_info->first_chroma_tu_offset + num_tu);
+            (sb_info->sb_trans_info[plane - 1] + mode_info->first_chroma_tu_offset + num_chroma_tus);
+
+        if (dec_handle->frame_header.lossless_array[part_info.mi->segment_id] &&
+            (bsize >= BLOCK_64X64) && (bsize <= BLOCK_128X128) )
+        {
+            assert(trans_info->tx_size == TX_4X4);
+            num_tu = ( (block_size_wide[bsize] >> tx_size_wide_log2[TX_4X4]) *
+                       (block_size_high[bsize] >> tx_size_high_log2[TX_4X4]) ) >>
+                     ( sub_x + sub_y );
+        }
+        else
+            num_tu = plane ? mode_info->num_chroma_tus : mode_info->num_luma_tus;
+
+        assert(num_tu != 0);
 
         for (int tu = 0; tu < num_tu; tu++)
         {

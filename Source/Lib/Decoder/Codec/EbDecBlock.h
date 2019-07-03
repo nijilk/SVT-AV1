@@ -200,13 +200,17 @@ typedef struct ModeInfo_t {
     /*!< Equal to 1 specifies that the segment_id is taken from the segmentation map. */
     int8_t seg_id_predicted;
 
-    /*!< Number of Luma TUs in block */
+    /*!< For Lossy mode   : Specifies number of Luma TUs in a block
+         For Lossless mode: Specifies number of Luma TUs for a block of size other than
+                            128x128, 128x64, 64x128 and 64x64 - computed based on blocksize */
     uint8_t         num_luma_tus;
 
     /*!< Offset of first Luma transform info from strat of SB pointer */
     uint16_t        first_luma_tu_offset;
 
-    /*!< Number of Chroma TUs in block */
+    /*!< For Lossy mode   : Specifies number of Chroma TUs in a block
+         For Lossless mode: Specifies number of Chroma TUs for a block of size other than
+                            128x128, 128x64, 64x128 and 64x64 - computed based on blocksize */
     uint8_t         num_chroma_tus;
 
     /*!< Offset of first Chroma transform info from strat of SB pointer */

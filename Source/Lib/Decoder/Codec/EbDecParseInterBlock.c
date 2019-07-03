@@ -252,6 +252,7 @@ static void read_ref_frames(EbDecHandle *dec_handle, PartitionInfo_t *const pi,
     ParseCtxt *parse_ctxt = (ParseCtxt *)dec_handle->pv_parse_ctxt;
     AomCdfProb *cdf;
     SegmentationParams *seg_params = &dec_handle->frame_header.segmentation_params;
+
     if (pi->mi->skip_mode) {
         ref_frame[0] = (MvReferenceFrame)(LAST_FRAME +
             dec_handle->frame_header.skip_mode_params.skip_mode_frame[0]);
@@ -709,18 +710,23 @@ static int add_tpl_ref_mv(EbDecHandle *dec_handle, int mi_row, int mi_col,
     const TemporalMvRef *tpl_mvs = dec_handle->master_frame_buf.tpl_mvs +
         y8 * (frm_header->mi_stride >> 1) + x8;
     const IntMv_dec prev_frame_mvs = tpl_mvs->mf_mv0;
-
+    //&dec_handle->seq_header.order_hint_info, start_frame_order_hint, cur_order_hint
     if (rf[1] == NONE_FRAME) {
+        int cur_frame_index = dec_handle->cur_pic_buf[0]->order_hint;
+        const EbDecPicBuf *const buf_0 = get_ref_frame_buf(dec_handle, rf[0]);
+        int frame0_index = buf_0->order_hint;
+        int cur_offset_0 = get_relative_dist(&dec_handle->seq_header.order_hint_info,
+              cur_frame_index, frame0_index);
         CandidateMv_dec *ref_mv_stack = ref_mv_stacks[rf[0]];
 
-        if (prev_frame_mvs.as_int == INVALID_MV)
-            return 0;
+        if (prev_frame_mvs.as_int == INVALID_MV)  return 0;
 
         IntMv_dec this_refmv;
+            get_mv_projection(&this_refmv.as_mv, prev_frame_mvs.as_mv,
+                cur_offset_0, tpl_mvs->ref_frame_offset);
 
         lower_mv_precision(&this_refmv.as_mv, frm_header->allow_high_precision_mv,
             frm_header->force_integer_mv);
-
         if (blk_row == 0 && blk_col == 0) {
             if (abs(this_refmv.as_mv.row - gm_mv_candidates[0].as_mv.row) >= 16 ||
                 abs(this_refmv.as_mv.col - gm_mv_candidates[0].as_mv.col) >= 16)
@@ -739,21 +745,36 @@ static int add_tpl_ref_mv(EbDecHandle *dec_handle, int mi_row, int mi_col,
             ++(*num_mv_found);
         }
         return 1;
+
     }
     else {
         // Process compound inter mode
+        int cur_frame_index = dec_handle->cur_pic_buf[0]->order_hint;
+        const EbDecPicBuf *const buf_0 = get_ref_frame_buf(dec_handle, rf[0]);
+        int frame0_index = buf_0->order_hint;
+
+        int cur_offset_0 = get_relative_dist(&dec_handle->seq_header.order_hint_info,
+            cur_frame_index, frame0_index);
+        const EbDecPicBuf *const buf_1 = get_ref_frame_buf(dec_handle, rf[1]);
+        int frame1_index = buf_1->order_hint;
+        int cur_offset_1 = get_relative_dist(&dec_handle->seq_header.order_hint_info,
+            cur_frame_index, frame1_index);
         CandidateMv_dec *ref_mv_stack = ref_mv_stacks[ref_frame];
-        if (prev_frame_mvs.as_int == INVALID_MV)
-            return 0;
+
+        if (prev_frame_mvs.as_int == INVALID_MV) return 0;
+
 
         IntMv_dec this_refmv;
         IntMv_dec comp_refmv;
+        get_mv_projection(&this_refmv.as_mv, prev_frame_mvs.as_mv,
+            cur_offset_0, tpl_mvs->ref_frame_offset);
+        get_mv_projection(&comp_refmv.as_mv, prev_frame_mvs.as_mv,
+            cur_offset_1, tpl_mvs->ref_frame_offset);
 
         lower_mv_precision(&this_refmv.as_mv, frm_header->allow_high_precision_mv,
             frm_header->force_integer_mv);
         lower_mv_precision(&comp_refmv.as_mv, frm_header->allow_high_precision_mv,
             frm_header->force_integer_mv);
-
         if (blk_row == 0 && blk_col == 0) {
             if (abs(this_refmv.as_mv.row - gm_mv_candidates[0].as_mv.row) >= 16 ||
                 abs(this_refmv.as_mv.col - gm_mv_candidates[0].as_mv.col) >= 16 ||
@@ -786,7 +807,8 @@ static int check_sb_border(const int mi_row, const int mi_col,
     const int row = (mi_row & (sb_mi_size - 1)) + row_offset;
     const int col = (mi_col & (sb_mi_size - 1)) + col_offset;
 
-    return (row >= 0 || row < sb_mi_size || col >= 0 || col < sb_mi_size);
+    return ( (row >= 0) && (row < sb_mi_size) &&
+             (col >= 0) && (col < sb_mi_size) );
 }
 
 
@@ -867,6 +889,19 @@ static int16_t clamp_mv_col(EbDecHandle *dec_handle, PartitionInfo_t *pi,
     int mbToLeftEdge = -((mi_col * MI_SIZE) * 8);
     int mbToRightEdge = ((frame_info->mi_cols - bw4 - mi_col) * MI_SIZE) * 8;
     return CLIP3(mbToLeftEdge - border, mbToRightEdge + border, col);
+}
+
+static INLINE void clamp_mv(MV *mv, int min_col, int max_col, int min_row,
+    int max_row) {
+    mv->col = clamp(mv->col, min_col, max_col);
+    mv->row = clamp(mv->row, min_row, max_row);
+}
+
+static INLINE void clamp_mv_ref(MV *mv, int bw, int bh, PartitionInfo_t *pi) {
+    clamp_mv(mv, pi->mb_to_left_edge - bw * 8 - MV_BORDER,
+        pi->mb_to_right_edge + bw * 8 + MV_BORDER,
+        pi->mb_to_top_edge - bh * 8 - MV_BORDER,
+        pi->mb_to_bottom_edge + bh * 8 + MV_BORDER);
 }
 
 static void dec_setup_ref_mv_list(
@@ -971,7 +1006,7 @@ static void dec_setup_ref_mv_list(
 
                 int ret = add_tpl_ref_mv(dec_handle, mi_row, mi_col,
                     ref_frame, blk_row, blk_col, gm_mv_candidates,
-                    mv_cnt->num_mv_found, ref_mv_stack, mode_context);
+                    &mv_cnt->num_mv_found[ref_frame], ref_mv_stack, mode_context);
                 if (blk_row == 0 && blk_col == 0) is_available = ret;
             }
         }
@@ -985,7 +1020,7 @@ static void dec_setup_ref_mv_list(
 
                 if (check_sb_border(mi_row, mi_col, blk_row, blk_col)) {
                     add_tpl_ref_mv(dec_handle, mi_row, mi_col, ref_frame, blk_row,
-                        blk_col, gm_mv_candidates, mv_cnt->num_mv_found,
+                        blk_col, gm_mv_candidates, &mv_cnt->num_mv_found[ref_frame],
                         ref_mv_stack, mode_context);
                 }
             }
@@ -1013,6 +1048,7 @@ static void dec_setup_ref_mv_list(
                 &mv_cnt->found_left_match, &mv_cnt->newmv_count,
                 gm_mv_candidates, max_col_offset, &processed_cols);
         }
+
     }
 
     /* sorting process*/
@@ -1031,7 +1067,6 @@ static void dec_setup_ref_mv_list(
         }
         end = new_end;
     }
-
     start = num_nearest;
     end = mv_cnt->num_mv_found[ref_frame];
     while (end > start) {
@@ -1047,7 +1082,6 @@ static void dec_setup_ref_mv_list(
         }
         end = new_end;
     }
-
     /* extra search process */
     if (mv_cnt->num_mv_found[ref_frame] < MAX_MV_REF_CANDIDATES) {
         IntMv_dec ref_id[2][2], ref_diff[2][2];
@@ -1137,27 +1171,34 @@ static void dec_setup_ref_mv_list(
                 }
             }
         }
-        else
-        {
-            for (int idx = mv_cnt->num_mv_found[ref_frame]; idx < 2; idx++) {
-                ref_mv_stack[ref_frame][idx].this_mv = gm_mv_candidates[0];
-            }
-        }
     }
-
     /* context and clamping process */
-    int num_lists = rf[1] > NONE_FRAME ? 2 : 1;
-    for (int list = 0; list < num_lists; list++) {
-        for (int idx = 0; idx < mv_cnt->num_mv_found[ref_frame]; idx++) {
-            IntMv_dec refMv = ref_mv_stack[list][idx].this_mv;
-            refMv.as_mv.row = clamp_mv_row(dec_handle, pi, mi_row,
-                refMv.as_mv.row, MV_BORDER + n4_h * 8);
-            refMv.as_mv.col = clamp_mv_col(dec_handle, pi, mi_col,
-                refMv.as_mv.col, MV_BORDER + n4_w * 8);
-            ref_mv_stack[list][idx].this_mv = refMv;
+    //int num_lists = rf[1] > NONE_FRAME ? 2 : 1;
+    //for (int list = 0; list < num_lists; list++) {
+    //    for (int idx = 0; idx < mv_cnt->num_mv_found[ref_frame]; idx++) {
+    //        IntMv_dec refMv = ref_mv_stack[ref_frame][idx].this_mv;
+    //        refMv.as_mv.row = clamp_mv_row(dec_handle, pi, mi_row,
+    //            refMv.as_mv.row, MV_BORDER + n4_h * 8);
+    //        refMv.as_mv.col = clamp_mv_col(dec_handle, pi, mi_col,
+    //            refMv.as_mv.col, MV_BORDER + n4_w * 8);
+    //        ref_mv_stack[ref_frame][idx].this_mv = refMv;
+    //    }
+    //}
+
+    if (rf[1] > NONE_FRAME) {
+        for (int idx = 0; idx < mv_cnt->num_mv_found[ref_frame]; ++idx) {
+            clamp_mv_ref(&ref_mv_stack[ref_frame][idx].this_mv.as_mv,
+                n4_w << MI_SIZE_LOG2, n4_h << MI_SIZE_LOG2, pi);
+            clamp_mv_ref(&ref_mv_stack[ref_frame][idx].comp_mv.as_mv,
+                n4_w << MI_SIZE_LOG2, n4_h << MI_SIZE_LOG2, pi);
         }
     }
-
+    else {
+        for (int idx = 0; idx < mv_cnt->num_mv_found[ref_frame]; ++idx) {
+            clamp_mv_ref(&ref_mv_stack[ref_frame][idx].this_mv.as_mv,
+                n4_w << MI_SIZE_LOG2, n4_h << MI_SIZE_LOG2, pi);
+        }
+    }
     const uint8_t ref_match_count = (mv_cnt->found_above_match > 0) +
         (mv_cnt->found_left_match > 0);
     switch (nearest_match) {
@@ -1186,12 +1227,10 @@ static void dec_setup_ref_mv_list(
         mode_context[ref_frame] |= (5 << REFMV_OFFSET);
         break;
     }
-
     if (rf[1] == NONE_FRAME && mv_ref_list != NULL) {
         for (int idx = mv_cnt->num_mv_found[ref_frame];
             idx < MAX_MV_REF_CANDIDATES; ++idx)
             mv_ref_list[rf[0]][idx].as_int = gm_mv_candidates[0].as_int;
-
         for (int idx = 0; idx < AOMMIN(MAX_MV_REF_CANDIDATES,
             mv_cnt->num_mv_found[ref_frame]); ++idx)
         {
@@ -1435,6 +1474,7 @@ void read_mv(SvtReader *r, MV *mv, MV *ref, NmvContext *ctx,
 
     mv->row = ref->row + diff.row;
     mv->col = ref->col + diff.col;
+
 }
 
 static INLINE int is_mv_valid(MV *mv) {
@@ -1903,14 +1943,14 @@ int get_comp_index_context(EbDecHandle *dec_handle, PartitionInfo_t *pi) {
 
     if (above_mi != NULL) {
         if (has_second_ref(above_mi))
-            above_ctx = above_mi->compound_mode;
+            above_ctx = above_mi->inter_compound.compound_idx;
         else if (above_mi->ref_frame[0] == ALTREF_FRAME)
             above_ctx = 1;
     }
 
     if (left_mi != NULL) {
         if (has_second_ref(left_mi))
-            left_ctx = left_mi->compound_mode;
+            left_ctx = left_mi->inter_compound.compound_idx;
         else if (left_mi->ref_frame[0] == ALTREF_FRAME)
             left_ctx = 1;
     }
@@ -1975,7 +2015,7 @@ void read_compound_type(EbDecHandle *dec_handle, PartitionInfo_t *pi, SvtReader 
                 mbmi->inter_compound.wedge_sign = svt_read_bit(r, ACCT_STR);
             }
             else {
-                assert(mbmi->inter_compound.type == COMPOUND_DIFFWTD);
+                //assert(mbmi->inter_compound.type == COMPOUND_DIFFWTD);
                 mbmi->inter_compound.mask_type =
                     svt_read_literal(r, MAX_DIFFWTD_MASK_BITS, ACCT_STR);
             }
@@ -2097,15 +2137,10 @@ void inter_block_mode_info(EbDecHandle *dec_handle, PartitionInfo_t* pi,
     MvCount mv_cnt;
 
     /* TO-DO initialize palette info */
-
     svt_collect_neighbors_ref_counts(pi);
 
     read_ref_frames(dec_handle, pi, r);
-   /* if ((pi->mi->ref_frame[0] >= BWDREF_FRAME && pi->mi->ref_frame[0] <= ALTREF_FRAME) ||
-        (pi->mi->ref_frame[1] >= BWDREF_FRAME && pi->mi->ref_frame[1] <= ALTREF_FRAME)) {
-        printf("ALTREF found - frame : %d\n", dec_handle->dec_cnt);
-        exit(0);
-    }*/
+
     const int is_compound = has_second_ref(mbmi);
 
     MvReferenceFrame ref_frame = av1_ref_frame_type(mbmi->ref_frame);
@@ -2219,7 +2254,6 @@ void inter_block_mode_info(EbDecHandle *dec_handle, PartitionInfo_t* pi,
 
     assign_mv(dec_handle, pi, mbmi->mv, global_mvs,
         ref_mv, nearestmv, nearmv, is_compound, allow_hp, r);
-
 #if EXTRA_DUMP
     if (enable_dump) {
         printf("\n mode %d MV %d %d \n", mbmi->mode, mbmi->mv[0].as_mv.row, mbmi->mv[0].as_mv.col);

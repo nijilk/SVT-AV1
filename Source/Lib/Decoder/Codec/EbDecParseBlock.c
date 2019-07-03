@@ -31,6 +31,8 @@
 
 #include "EbDecParseInterBlock.h"
 
+
+
 #if ENABLE_ENTROPY_TRACE
 FILE* temp_fp;
 int enable_dump;
@@ -105,10 +107,10 @@ const int nz_map_ctx_offset_1d[32] = {
   NZ_MAP_CTX_10, NZ_MAP_CTX_10,
 };
 
-//static int div_mult[32] = { 0,    16384, 8192, 5461, 4096, 3276, 2730, 2340,
-//                            2048, 1820,  1638, 1489, 1365, 1260, 1170, 1092,
-//                            1024, 963,   910,  862,  819,  780,  744,  712,
-//                            682,  655,   630,  606,  585,  564,  546,  528 };
+static int div_mult[32] = { 0,    16384, 8192, 5461, 4096, 3276, 2730, 2340,
+                            2048, 1820,  1638, 1489, 1365, 1260, 1170, 1092,
+                            1024, 963,   910,  862,  819,  780,  744,  712,
+                            682,  655,   630,  606,  585,  564,  546,  528 };
 
 static INLINE int get_nz_mag(const uint8_t *const levels,
     const int bwl, const TxClass tx_class)
@@ -666,19 +668,51 @@ int read_inter_segment_id(EbDecHandle *dec_handle, PartitionInfo_t *xd,
     return segment_id;
 }
 
-//static void get_mv_projection(MV *output, MV ref, int num, int den) {
-//    den = AOMMIN(den, MAX_FRAME_DISTANCE);
-//    num = num > 0 ? AOMMIN(num, MAX_FRAME_DISTANCE)
-//        : AOMMAX(num, -MAX_FRAME_DISTANCE);
-//    const int mv_row =
-//        ROUND_POWER_OF_TWO_SIGNED(ref.row * num * div_mult[den], 14);
-//    const int mv_col =
-//        ROUND_POWER_OF_TWO_SIGNED(ref.col * num * div_mult[den], 14);
-//    const int clamp_max = MV_UPP - 1;
-//    const int clamp_min = MV_LOW + 1;
-//    output->row = (int16_t)clamp(mv_row, clamp_min, clamp_max);
-//    output->col = (int16_t)clamp(mv_col, clamp_min, clamp_max);
-//}
+void get_mv_projection(MV *output, MV ref, int num, int den) {
+    den = AOMMIN(den, MAX_FRAME_DISTANCE);
+    num = num > 0 ? AOMMIN(num, MAX_FRAME_DISTANCE)
+        : AOMMAX(num, -MAX_FRAME_DISTANCE);
+    const int mv_row =
+        ROUND_POWER_OF_TWO_SIGNED(ref.row * num * div_mult[den], 14);
+    const int mv_col =
+        ROUND_POWER_OF_TWO_SIGNED(ref.col * num * div_mult[den], 14);
+    const int clamp_max = MV_UPP - 1;
+    const int clamp_min = MV_LOW + 1;
+    output->row = (int16_t)clamp(mv_row, clamp_min, clamp_max);
+    output->col = (int16_t)clamp(mv_col, clamp_min, clamp_max);
+}
+
+static int get_block_position(FrameHeader *frame_info, int *mi_r, int *mi_c, int blk_row,
+    int blk_col, MV mv, int sign_bias) {
+    const int base_blk_row = (blk_row >> 3) << 3;
+    const int base_blk_col = (blk_col >> 3) << 3;
+
+    const int row_offset = (mv.row >= 0) ? (mv.row >> (4 + MI_SIZE_LOG2))
+        : -((-mv.row) >> (4 + MI_SIZE_LOG2));
+
+    const int col_offset = (mv.col >= 0) ? (mv.col >> (4 + MI_SIZE_LOG2))
+        : -((-mv.col) >> (4 + MI_SIZE_LOG2));
+
+    const int row =
+        (sign_bias == 1) ? blk_row - row_offset : blk_row + row_offset;
+    const int col =
+        (sign_bias == 1) ? blk_col - col_offset : blk_col + col_offset;
+
+    if (row < 0 || row >= (frame_info->mi_rows >> 1) || col < 0 ||
+        col >= (frame_info->mi_cols >> 1))
+        return 0;
+
+    if (row < base_blk_row - (MAX_OFFSET_HEIGHT >> 3) ||
+        row >= base_blk_row + 8 + (MAX_OFFSET_HEIGHT >> 3) ||
+        col < base_blk_col - (MAX_OFFSET_WIDTH >> 3) ||
+        col >= base_blk_col + 8 + (MAX_OFFSET_WIDTH >> 3))
+        return 0;
+
+    *mi_r = row;
+    *mi_c = col;
+
+    return 1;
+}
 
 // Note: motion_filed_projection finds motion vectors of current frame's
 // reference frame, and projects them to current frame. To make it clear,
@@ -689,71 +723,70 @@ int read_inter_segment_id(EbDecHandle *dec_handle, PartitionInfo_t *xd,
 static int motion_field_projection(EbDecHandle *dec_handle,
     MvReferenceFrame start_frame, int dir)
 {
-    (void)dir;
-    //TemporalMvRef *tpl_mvs_base = dec_handle->master_frame_buf.tpl_mvs;
-    //int ref_offset[REF_FRAMES] = { 0 };
 
-    const EbDecPicBuf *const start_frame_buf =
-        get_ref_frame_buf(dec_handle, start_frame);
+    FrameHeader *frame_info = &dec_handle->frame_header;
+
+    TemporalMvRef *tpl_mvs_base = dec_handle->master_frame_buf.tpl_mvs;
+    int ref_offset[REF_FRAMES] = { 0 };
+
+    const EbDecPicBuf *const start_frame_buf = get_ref_frame_buf(dec_handle,
+        start_frame);
+
     if (start_frame_buf == NULL) return 0;
 
-    /* TODO: add for 2nd frame onwards */
-    return 0;
-#if 0
-    if (start_frame_buf->frame_type == KEY_FRAME ||
-        start_frame_buf->frame_type == INTRA_ONLY_FRAME)
-        return 0;
-
-    if (start_frame_buf->mi_rows != cm->mi_rows ||
-        start_frame_buf->mi_cols != cm->mi_cols)
+    if (frame_info->frame_type == KEY_FRAME ||
+        frame_info->frame_type == INTRA_ONLY_FRAME)
         return 0;
 
     const int start_frame_order_hint = start_frame_buf->order_hint;
-    const unsigned int *const ref_order_hints =
-        &start_frame_buf->ref_order_hints[0];
-    const int cur_order_hint = cm->cur_frame->order_hint;
+
+    const unsigned int *const ref_order_hints = &start_frame_buf->ref_order_hints[0];
+
+    const int cur_order_hint = dec_handle->cur_pic_buf[0]->order_hint;
+
     int start_to_current_frame_offset = get_relative_dist(
-        &cm->seq_params.order_hint_info, start_frame_order_hint, cur_order_hint);
+        &dec_handle->seq_header.order_hint_info, start_frame_order_hint, cur_order_hint);
 
     for (MvReferenceFrame rf = LAST_FRAME; rf <= INTER_REFS_PER_FRAME; ++rf) {
-        ref_offset[rf] = get_relative_dist(&cm->seq_params.order_hint_info,
+        ref_offset[rf] = get_relative_dist(&dec_handle->seq_header.order_hint_info,
             start_frame_order_hint,
             ref_order_hints[rf - LAST_FRAME]);
-        }
+    }
 
     if (dir == 2) start_to_current_frame_offset = -start_to_current_frame_offset;
 
-    MV_REF *mv_ref_base = start_frame_buf->mvs;
-    const int mvs_rows = (cm->mi_rows + 1) >> 1;
-    const int mvs_cols = (cm->mi_cols + 1) >> 1;
+    TemporalMvRef *mv_ref_base = start_frame_buf->mvs;
+    const int mvs_rows = (frame_info->mi_rows + 1) >> 1;
+    const int mvs_cols = (frame_info->mi_cols + 1) >> 1;
 
     for (int blk_row = 0; blk_row < mvs_rows; ++blk_row) {
         for (int blk_col = 0; blk_col < mvs_cols; ++blk_col) {
-            MV_REF *mv_ref = &mv_ref_base[blk_row * mvs_cols + blk_col];
-            MV fwd_mv = mv_ref->mv.as_mv;
+            TemporalMvRef *mv_ref = &mv_ref_base[blk_row * mvs_cols + blk_col];
+            MV fwd_mv = mv_ref->mf_mv0.as_mv;
 
-            if (mv_ref->ref_frame > INTRA_FRAME) {
-                int_mv this_mv;
+            if (mv_ref->ref_frame_offset > INTRA_FRAME) {
+                IntMv_dec this_mv;
                 int mi_r, mi_c;
-                const int ref_frame_offset = ref_offset[mv_ref->ref_frame];
+                const int ref_frame_offset = ref_offset[mv_ref->ref_frame_offset];
 
-                int pos_valid =
-                    abs(ref_frame_offset) <= MAX_FRAME_DISTANCE &&
+                int pos_valid = abs(ref_frame_offset) <= MAX_FRAME_DISTANCE &&
                     ref_frame_offset > 0 &&
                     abs(start_to_current_frame_offset) <= MAX_FRAME_DISTANCE;
 
                 if (pos_valid) {
                     get_mv_projection(&this_mv.as_mv, fwd_mv,
-                        start_to_current_frame_offset, ref_frame_offset);
-                    pos_valid = get_block_position(cm, &mi_r, &mi_c, blk_row, blk_col,
-                        this_mv.as_mv, dir >> 1);
-                    }
+                                      start_to_current_frame_offset,
+                                      ref_frame_offset);
+
+                    pos_valid = get_block_position(frame_info, &mi_r, &mi_c,
+                        blk_row, blk_col, this_mv.as_mv, dir >> 1);
+                }
 
                 if (pos_valid) {
-                    const int mi_offset = mi_r * (cm->mi_stride >> 1) + mi_c;
+                    const int mi_offset = mi_r * (frame_info->mi_stride >> 1) + mi_c;
 
-                    tpl_mvs_base[mi_offset].mfmv0.as_mv.row = fwd_mv.row;
-                    tpl_mvs_base[mi_offset].mfmv0.as_mv.col = fwd_mv.col;
+                    tpl_mvs_base[mi_offset].mf_mv0.as_mv.row = fwd_mv.row;
+                    tpl_mvs_base[mi_offset].mf_mv0.as_mv.col = fwd_mv.col;
                     tpl_mvs_base[mi_offset].ref_frame_offset = ref_frame_offset;
                     }
                 }
@@ -761,7 +794,6 @@ static int motion_field_projection(EbDecHandle *dec_handle,
         }
 
     return 1;
-#endif
 }
 
 void svt_setup_motion_field(EbDecHandle *dec_handle) {
@@ -804,10 +836,9 @@ void svt_setup_motion_field(EbDecHandle *dec_handle) {
 
     int ref_stamp = MFMV_STACK_SIZE - 1;
 
-    return; /* TODO: Removed! */
+
 
     if (ref_buf[LAST_FRAME - LAST_FRAME] != NULL) {
-        assert(0); //add ref_order_hints population
         const int alt_of_lst_order_hint =
             ref_buf[LAST_FRAME - LAST_FRAME]
             ->ref_order_hints[ALTREF_FRAME - LAST_FRAME];
@@ -933,19 +964,83 @@ void inter_frame_mode_info(EbDecHandle *dec_handle, PartitionInfo_t * pi,
         intra_block_mode_info(dec_handle, mi_row, mi_col, pi, mbmi, r);
 }
 
+static void intra_copy_frame_mvs(EbDecHandle *decHandle, int mi_row, int mi_col,
+    int x_mis, int y_mis) {
+    FrameHeader *frame_info = &decHandle->frame_header;
+    const int frame_mvs_stride = ROUND_POWER_OF_TWO(frame_info->mi_cols, 1);
+    TemporalMvRef *frame_mvs =
+        decHandle->cur_pic_buf[0]->mvs + (mi_row >> 1) * frame_mvs_stride + (mi_col >> 1);
+    x_mis = ROUND_POWER_OF_TWO(x_mis, 1);
+    y_mis = ROUND_POWER_OF_TWO(y_mis, 1);
+
+    for (int h = 0; h < y_mis; h++) {
+        TemporalMvRef *mv = frame_mvs;
+        for (int w = 0; w < x_mis; w++) {
+            mv->ref_frame_offset = NONE_FRAME;
+            mv++;
+        }
+        frame_mvs += frame_mvs_stride;
+    }
+}
+
+void inter_copy_frame_mvs(EbDecHandle *decHandle, ModeInfo_t *mi,
+    int mi_row, int mi_col, int x_mis, int y_mis) {
+
+    FrameHeader *frame_info = &decHandle->frame_header;
+    const int frame_mvs_stride = ROUND_POWER_OF_TWO(frame_info->mi_cols, 1);
+    TemporalMvRef *frame_mvs =
+        decHandle->cur_pic_buf[0]->mvs + (mi_row >> 1) * frame_mvs_stride + (mi_col >> 1);
+    x_mis = ROUND_POWER_OF_TWO(x_mis, 1);
+    y_mis = ROUND_POWER_OF_TWO(y_mis, 1);
+
+    TemporalMvRef *mv;
+    TemporalMvRef cur_mv;
+    cur_mv.ref_frame_offset = NONE_FRAME;
+    cur_mv.mf_mv0.as_int = 0;
+
+    for (int idx = 0; idx < 2; ++idx) {
+        MvReferenceFrame ref_frame = mi->ref_frame[idx];
+        if (ref_frame > INTRA_FRAME) {
+            int8_t ref_idx = decHandle->master_frame_buf.ref_frame_side[ref_frame];
+            if (ref_idx) continue;
+            if ((abs(mi->mv[idx].as_mv.row) > REFMVS_LIMIT) ||
+                (abs(mi->mv[idx].as_mv.col) > REFMVS_LIMIT))
+                continue;
+            cur_mv.ref_frame_offset = ref_frame;
+            cur_mv.mf_mv0.as_int = mi->mv[idx].as_int;
+        }
+    }
+    for (int h = 0; h < y_mis; h++) {
+        mv = frame_mvs;
+        for (int w = 0; w < x_mis; w++) {
+            *mv = cur_mv;
+            mv++;
+        }
+        frame_mvs += frame_mvs_stride;
+    }
+}
+
+
 void mode_info(EbDecHandle *decHandle, PartitionInfo_t *part_info, uint32_t mi_row,
     uint32_t mi_col, SvtReader *r, int8_t *cdef_strength)
 {
     ModeInfo_t *mi = part_info->mi;
+    FrameHeader *frame_info = &decHandle->frame_header;
+    //BlockSize bsize = mi->sb_type
     mi->use_intrabc = 0;
+    const int bw = mi_size_wide[mi->sb_type];
+    const int bh = mi_size_high[mi->sb_type];
+    const int x_mis = AOMMIN(bw, frame_info->mi_cols - mi_col);
+    const int y_mis = AOMMIN(bh, frame_info->mi_rows - mi_row);
 
-    if (decHandle->frame_header.frame_type == KEY_FRAME
-        || decHandle->frame_header.frame_type == INTRA_ONLY_FRAME)
-    {
+    if (frame_info->frame_type == KEY_FRAME || frame_info->frame_type == INTRA_ONLY_FRAME) {
         intra_frame_mode_info(decHandle, part_info, mi_row, mi_col, r, cdef_strength);
+        intra_copy_frame_mvs(decHandle, mi_row, mi_col, x_mis, y_mis);
     }
-    else
+    else {
         inter_frame_mode_info(decHandle, part_info, mi_row, mi_col, r, cdef_strength);
+        inter_copy_frame_mvs(decHandle, mi, mi_row, mi_col, x_mis, y_mis);
+    }
 }
 
 TxSize read_tx_size(EbDecHandle *dec_handle, PartitionInfo_t *xd,
@@ -999,6 +1094,8 @@ void update_chroma_trans_info(EbDecHandle *dec_handle,
     height = AOMMIN(height, max_blocks_high);
 
     TxSize tx_size_uv = av1_get_max_uv_txsize(bsize, sx, sy);
+    assert(dec_handle->frame_header.lossless_array[mbmi->segment_id] != 1);
+
     /* TODO: Make plane loop and avoid the unroll */
     for (int idy = 0; idy < max_blocks_high; idy += height) {
         for (int idx = 0; idx < max_blocks_wide; idx += width) {
@@ -1148,7 +1245,9 @@ void update_flat_trans_info(EbDecHandle *dec_handle, PartitionInfo_t *part_info,
     width = AOMMIN(width, max_blocks_wide);
     height = AOMMIN(height, max_blocks_high);
 
-    TxSize tx_size_uv = av1_get_max_uv_txsize(bsize, sx, sy);
+    TxSize tx_size_uv = dec_handle->frame_header.lossless_array[mbmi->segment_id] ?
+                        TX_4X4 : av1_get_max_uv_txsize(bsize, sx, sy);
+
     /* TODO: Make plane loop and avoid the unroll */
     for (int idy = 0; idy < max_blocks_high; idy += height) {
         for (int idx = 0; idx < max_blocks_wide; idx += width) {
@@ -1172,6 +1271,7 @@ void update_flat_trans_info(EbDecHandle *dec_handle, PartitionInfo_t *part_info,
                     luma_trans_info->tu_y_offset = blk_row;
                     luma_trans_info++;
                     num_luma_tus++;
+                    total_luma_tus++;
                 }
             }
             parse_ctx->num_tus[AOM_PLANE_Y][force_split_cnt] = num_luma_tus;
@@ -1198,22 +1298,17 @@ void update_flat_trans_info(EbDecHandle *dec_handle, PartitionInfo_t *part_info,
                     chroma_trans_info->tu_y_offset = blk_row;
                     chroma_trans_info++;
                     num_chroma_tus++;
+                    total_chroma_tus++;
                 }
             }
 
             parse_ctx->num_tus[AOM_PLANE_U][force_split_cnt] = num_chroma_tus;
             parse_ctx->num_tus[AOM_PLANE_V][force_split_cnt] = num_chroma_tus;
 
+            // TODO: Move to beginning because increment might be missed for monochrome case
             force_split_cnt++;
         }
     }
-
-    total_luma_tus =
-        parse_ctx->num_tus[AOM_PLANE_Y][0] + parse_ctx->num_tus[AOM_PLANE_Y][1] +
-        parse_ctx->num_tus[AOM_PLANE_Y][2] + parse_ctx->num_tus[AOM_PLANE_Y][3];
-    total_chroma_tus =
-        parse_ctx->num_tus[AOM_PLANE_U][0] + parse_ctx->num_tus[AOM_PLANE_U][1] +
-        parse_ctx->num_tus[AOM_PLANE_U][2] + parse_ctx->num_tus[AOM_PLANE_U][3];
 
     /* Cr Transform Info Update from Cb */
     if (total_chroma_tus) {
@@ -2047,7 +2142,7 @@ void parse_residual(EbDecHandle *dec_handle, PartitionInfo_t *pi, SvtReader *r,
 
     int skip     = mode->skip;
     int force_split_cnt = 0;
-    uint8_t num_tu, total_num_tu;
+    int num_tu, total_num_tu;
 
     const int max_blocks_wide = max_block_wide(pi, mi_size, 0);
     const int max_blocks_high = max_block_high(pi, mi_size, 0);
@@ -2058,12 +2153,17 @@ void parse_residual(EbDecHandle *dec_handle, PartitionInfo_t *pi, SvtReader *r,
     mu_blocks_high = AOMMIN(max_blocks_high, mu_blocks_high);
 
     TransformInfo_t *trans_info[MAX_MB_PLANE];
+    int num_chroma_tus = (dec_handle->frame_header.lossless_array[pi->mi->segment_id] &&
+        ((mi_size >= BLOCK_64X64) && (mi_size <= BLOCK_128X128)) ) ?
+        ((max_blocks_wide * max_blocks_high) >>
+        (color_info->subsampling_x + color_info->subsampling_y)) : mode->num_chroma_tus;
+
     trans_info[AOM_PLANE_Y] = (sb_info->sb_trans_info[AOM_PLANE_Y] +
                                mode->first_luma_tu_offset);
     trans_info[AOM_PLANE_U] = (sb_info->sb_trans_info[AOM_PLANE_U] +
                                mode->first_chroma_tu_offset);
     trans_info[AOM_PLANE_V] = (sb_info->sb_trans_info[AOM_PLANE_U] +
-                                mode->first_chroma_tu_offset) + mode->num_chroma_tus;
+                                mode->first_chroma_tu_offset) + num_chroma_tus;
 
     for (int row = 0; row < max_blocks_high; row += mu_blocks_high) {
         for (int col = 0; col < max_blocks_wide; col += mu_blocks_wide) {
@@ -2077,16 +2177,27 @@ void parse_residual(EbDecHandle *dec_handle, PartitionInfo_t *pi, SvtReader *r,
                 if (dec_is_inter_block(mode) && !plane)
                     parse_ctx->inter_trans_chroma = trans_info[plane];
 
+                if (dec_handle->frame_header.lossless_array[pi->mi->segment_id] &&
+                    ((mi_size >= BLOCK_64X64) && (mi_size <= BLOCK_128X128)) )
+                {
+                    assert(trans_info[plane]->tx_size == TX_4X4);
+                    num_tu = (mu_blocks_wide * mu_blocks_high) >> (sub_x + sub_y);
+                }
+                else
+                {
                 total_num_tu = plane ? mode->num_chroma_tus : mode->num_luma_tus;
                 num_tu = parse_ctx->num_tus[plane][force_split_cnt];
 
-                assert(num_tu != 0 && total_num_tu != 0);
+                    assert(total_num_tu != 0);
                 assert(total_num_tu ==
                     (parse_ctx->num_tus[plane][0] + parse_ctx->num_tus[plane][1] +
                      parse_ctx->num_tus[plane][2] + parse_ctx->num_tus[plane][3]));
+                }
+                assert(num_tu != 0);
+
                 (void)total_num_tu;
 
-                for(uint8_t tu = 0; tu < num_tu; tu++)
+                for(int tu = 0; tu < num_tu; tu++)
                 {
                     assert(trans_info[plane]->tu_x_offset <= max_blocks_wide);
                     assert(trans_info[plane]->tu_y_offset <= max_blocks_high);
@@ -2167,7 +2278,9 @@ void parse_block(EbDecHandle *dec_handle, uint32_t mi_row, uint32_t mi_col,
     part_info.chroma_up_available = part_info.up_available;
     part_info.chroma_left_available = part_info.left_available;
 
+    part_info.mb_to_left_edge = -((mi_col * MI_SIZE) * 8);
     part_info.mb_to_right_edge = ((int32_t)mi_cols - bw4 - mi_col) * MI_SIZE * 8;
+    part_info.mb_to_top_edge = -((mi_row * MI_SIZE) * 8);
     part_info.mb_to_bottom_edge = ((int32_t)mi_rows - bh4 - mi_row) * MI_SIZE * 8;
 
     part_info.is_sec_rect = 0;
@@ -2400,7 +2513,7 @@ void parse_super_block(EbDecHandle *dec_handle,
     ParseCtxt *parse_ctx = (ParseCtxt*)dec_handle->pv_parse_ctxt;
     SvtReader *reader = &parse_ctx->r;
 #if ENABLE_ENTROPY_TRACE
-    enable_dump =  1;
+    enable_dump = 1; // dec_handle->dec_cnt == 2;
 #endif
     parse_partition(dec_handle, blk_row, blk_col, reader,
         dec_handle->seq_header.sb_size, sbInfo);

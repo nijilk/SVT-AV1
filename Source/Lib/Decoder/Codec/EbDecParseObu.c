@@ -312,14 +312,14 @@ EbErrorType read_sequence_header_obu(bitstrm_t *bs, SeqHeader   *seq_header)
         seq_header->operating_point[i].op_idc =
             dec_get_bits(bs, OP_POINTS_IDC_BITS);
         PRINT("operating_point_idc",
-            seq_header->operating_point_prms[i].op_idc);
+            seq_header->operating_point[i].op_idc);
         seq_header->operating_point[i].seq_level_idx = dec_get_bits(bs, LEVEL_BITS);
         PRINT("seq_level_idx", seq_header->operating_point[i].seq_level_idx);
         if (!is_valid_seq_level_idx(seq_header->operating_point[i].seq_level_idx))
             return EB_Corrupt_Frame;
         if (seq_header->operating_point[i].seq_level_idx > 7) {
             seq_header->operating_point[i].seq_tier = dec_get_bits(bs, 1);
-            PRINT("seq_tier", seq_header->operating_point_prms[i].seq_tier);
+            PRINT("seq_tier", seq_header->operating_point[i].seq_tier);
         }
         else
             seq_header->operating_point[i].seq_tier = 0;
@@ -1520,6 +1520,24 @@ EbErrorType reset_parse_ctx(FRAME_CONTEXT *frm_ctx, uint8_t base_qp) {
     return return_error;
 }
 
+void setup_frame_sign_bias(EbDecHandle *dec_handle) {
+    MvReferenceFrame ref_frame;
+    for (ref_frame = LAST_FRAME; ref_frame <= ALTREF_FRAME; ++ref_frame) {
+        const EbDecPicBuf *const buf = get_ref_frame_buf(dec_handle, ref_frame);
+        if (dec_handle->seq_header.order_hint_info.enable_order_hint && buf != NULL) {
+            const int ref_order_hint = buf->order_hint;
+            dec_handle->frame_header.ref_frame_sign_bias[ref_frame] =
+                (get_relative_dist(&dec_handle->seq_header.order_hint_info, ref_order_hint,
+                (int)dec_handle->cur_pic_buf[0]->order_hint) <= 0)
+                ? 0
+                : 1;
+        }
+        else {
+            dec_handle->frame_header.ref_frame_sign_bias[ref_frame] = 0;
+        }
+    }
+}
+
 
 void read_uncompressed_header(bitstrm_t *bs, EbDecHandle *dec_handle_ptr,
                               ObuHeader *obu_header, int num_planes)
@@ -1738,7 +1756,7 @@ void read_uncompressed_header(bitstrm_t *bs, EbDecHandle *dec_handle_ptr,
             for (i = 0; i < NUM_REF_FRAMES; i++) {
                 ref_order_hint = dec_get_bits(bs,
                     seq_header->order_hint_info.order_hint_bits);
-                PRINT_FRAME("ref_order_hint[i]", frame_info->ref_order_hint);
+                PRINT_FRAME("ref_order_hint[i]", ref_order_hint);
 
                 if (ref_order_hint != (int)frame_info->ref_order_hint[i])
                     frame_info->ref_valid[i] = 0;
@@ -1782,6 +1800,9 @@ void read_uncompressed_header(bitstrm_t *bs, EbDecHandle *dec_handle_ptr,
                 PRINT_FRAME("ref_frame_idx", frame_info->ref_frame_idx[i]);
                 dec_handle_ptr->remapped_ref_idx[i] = frame_info->ref_frame_idx[i];
             }
+
+            frame_info->ref_frame_sign_bias[LAST_FRAME + i] = 0;
+
             if (seq_header->frame_id_numbers_present_flag) {
                 delta_frame_id_length_minus_1 = dec_get_bits(bs,
                     seq_header->delta_frame_id_length);
@@ -1825,9 +1846,11 @@ void read_uncompressed_header(bitstrm_t *bs, EbDecHandle *dec_handle_ptr,
     dec_handle_ptr->cur_pic_buf[0] = dec_pic_mgr_get_cur_pic(dec_handle_ptr->pv_pic_mgr,
         &dec_handle_ptr->seq_header, &dec_handle_ptr->frame_header,
         dec_handle_ptr->dec_config.max_color_format);
-    dec_handle_ptr->cur_pic_buf[0]->order_hint = dec_handle_ptr->frame_header.order_hint;
+    svt_setup_frame_buf_refs(dec_handle_ptr);
     /*Temporal MVs allocation */
     check_add_tplmv_buf(dec_handle_ptr);
+
+    setup_frame_sign_bias(dec_handle_ptr);
 
     if (seq_header->reduced_still_picture_header || frame_info->disable_cdf_update)
         frame_info->disable_frame_end_update_cdf = 1;
