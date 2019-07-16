@@ -252,12 +252,11 @@ static void read_ref_frames(EbDecHandle *dec_handle, PartitionInfo_t *const pi,
     ParseCtxt *parse_ctxt = (ParseCtxt *)dec_handle->pv_parse_ctxt;
     AomCdfProb *cdf;
     SegmentationParams *seg_params = &dec_handle->frame_header.segmentation_params;
-
     if (pi->mi->skip_mode) {
-        ref_frame[0] = (MvReferenceFrame)(LAST_FRAME +
-            dec_handle->frame_header.skip_mode_params.skip_mode_frame[0]);
-        ref_frame[1] = (MvReferenceFrame)(LAST_FRAME +
-            dec_handle->frame_header.skip_mode_params.skip_mode_frame[1]);
+        ref_frame[0] = (MvReferenceFrame)(dec_handle->frame_header.
+            skip_mode_params.skip_mode_frame[0]);
+        ref_frame[1] = (MvReferenceFrame)(dec_handle->frame_header.
+            skip_mode_params.skip_mode_frame[1]);
     }
     else if (seg_feature_active(seg_params, segment_id, SEG_LVL_REF_FRAME)) {
         ref_frame[0] = (MvReferenceFrame)get_segdata(seg_params, segment_id,
@@ -716,17 +715,18 @@ static int add_tpl_ref_mv(EbDecHandle *dec_handle, int mi_row, int mi_col,
         const EbDecPicBuf *const buf_0 = get_ref_frame_buf(dec_handle, rf[0]);
         int frame0_index = buf_0->order_hint;
         int cur_offset_0 = get_relative_dist(&dec_handle->seq_header.order_hint_info,
-              cur_frame_index, frame0_index);
+                                             cur_frame_index, frame0_index);
         CandidateMv_dec *ref_mv_stack = ref_mv_stacks[rf[0]];
 
         if (prev_frame_mvs.as_int == INVALID_MV)  return 0;
 
         IntMv_dec this_refmv;
         get_mv_projection(&this_refmv.as_mv, prev_frame_mvs.as_mv,
-                cur_offset_0, tpl_mvs->ref_frame_offset);
+                          cur_offset_0, tpl_mvs->ref_frame_offset);
 
         lower_mv_precision(&this_refmv.as_mv, frm_header->allow_high_precision_mv,
-            frm_header->force_integer_mv);
+                           frm_header->force_integer_mv);
+
         if (blk_row == 0 && blk_col == 0) {
             if (abs(this_refmv.as_mv.row - gm_mv_candidates[0].as_mv.row) >= 16 ||
                 abs(this_refmv.as_mv.col - gm_mv_candidates[0].as_mv.col) >= 16)
@@ -745,7 +745,6 @@ static int add_tpl_ref_mv(EbDecHandle *dec_handle, int mi_row, int mi_col,
             ++(*num_mv_found);
         }
         return 1;
-
     }
     else {
         // Process compound inter mode
@@ -754,11 +753,11 @@ static int add_tpl_ref_mv(EbDecHandle *dec_handle, int mi_row, int mi_col,
         int frame0_index = buf_0->order_hint;
 
         int cur_offset_0 = get_relative_dist(&dec_handle->seq_header.order_hint_info,
-            cur_frame_index, frame0_index);
+                                             cur_frame_index, frame0_index);
         const EbDecPicBuf *const buf_1 = get_ref_frame_buf(dec_handle, rf[1]);
         int frame1_index = buf_1->order_hint;
         int cur_offset_1 = get_relative_dist(&dec_handle->seq_header.order_hint_info,
-            cur_frame_index, frame1_index);
+                                             cur_frame_index, frame1_index);
         CandidateMv_dec *ref_mv_stack = ref_mv_stacks[ref_frame];
 
         if (prev_frame_mvs.as_int == INVALID_MV) return 0;
@@ -767,14 +766,15 @@ static int add_tpl_ref_mv(EbDecHandle *dec_handle, int mi_row, int mi_col,
         IntMv_dec this_refmv;
         IntMv_dec comp_refmv;
         get_mv_projection(&this_refmv.as_mv, prev_frame_mvs.as_mv,
-            cur_offset_0, tpl_mvs->ref_frame_offset);
+                          cur_offset_0, tpl_mvs->ref_frame_offset);
         get_mv_projection(&comp_refmv.as_mv, prev_frame_mvs.as_mv,
-            cur_offset_1, tpl_mvs->ref_frame_offset);
+                          cur_offset_1, tpl_mvs->ref_frame_offset);
 
         lower_mv_precision(&this_refmv.as_mv, frm_header->allow_high_precision_mv,
-            frm_header->force_integer_mv);
+                           frm_header->force_integer_mv);
         lower_mv_precision(&comp_refmv.as_mv, frm_header->allow_high_precision_mv,
-            frm_header->force_integer_mv);
+                           frm_header->force_integer_mv);
+
         if (blk_row == 0 && blk_col == 0) {
             if (abs(this_refmv.as_mv.row - gm_mv_candidates[0].as_mv.row) >= 16 ||
                 abs(this_refmv.as_mv.col - gm_mv_candidates[0].as_mv.col) >= 16 ||
@@ -1028,7 +1028,6 @@ static void dec_setup_ref_mv_list(
                 &mv_cnt->found_left_match, &mv_cnt->newmv_count,
                 gm_mv_candidates, max_col_offset, &processed_cols);
         }
-
     }
 
     /* sorting process*/
@@ -1047,6 +1046,7 @@ static void dec_setup_ref_mv_list(
         }
         end = new_end;
     }
+
     start = num_nearest;
     end = mv_cnt->num_mv_found[ref_frame];
     while (end > start) {
@@ -1062,6 +1062,7 @@ static void dec_setup_ref_mv_list(
         }
         end = new_end;
     }
+
     /* extra search process */
     if (mv_cnt->num_mv_found[ref_frame] < MAX_MV_REF_CANDIDATES) {
         IntMv_dec ref_id[2][2], ref_diff[2][2];
@@ -1152,6 +1153,7 @@ static void dec_setup_ref_mv_list(
             }
         }
     }
+
     /* context and clamping process */
     //int num_lists = rf[1] > NONE_FRAME ? 2 : 1;
     //for (int list = 0; list < num_lists; list++) {
@@ -1179,6 +1181,7 @@ static void dec_setup_ref_mv_list(
                 n4_w << MI_SIZE_LOG2, n4_h << MI_SIZE_LOG2, pi);
         }
     }
+
 
     const uint8_t ref_match_count = (mv_cnt->found_above_match > 0) +
         (mv_cnt->found_left_match > 0);
@@ -1208,10 +1211,12 @@ static void dec_setup_ref_mv_list(
         mode_context[ref_frame] |= (5 << REFMV_OFFSET);
         break;
     }
+
     if (rf[1] == NONE_FRAME && mv_ref_list != NULL) {
         for (int idx = mv_cnt->num_mv_found[ref_frame];
             idx < MAX_MV_REF_CANDIDATES; ++idx)
             mv_ref_list[rf[0]][idx].as_int = gm_mv_candidates[0].as_int;
+
         for (int idx = 0; idx < AOMMIN(MAX_MV_REF_CANDIDATES,
             mv_cnt->num_mv_found[ref_frame]); ++idx)
         {
@@ -1455,7 +1460,6 @@ void read_mv(SvtReader *r, MV *mv, MV *ref, NmvContext *ctx,
 
     mv->row = ref->row + diff.row;
     mv->col = ref->col + diff.col;
-
 }
 
 static INLINE int is_mv_valid(MV *mv) {
@@ -1996,7 +2000,7 @@ void read_compound_type(EbDecHandle *dec_handle, PartitionInfo_t *pi, SvtReader 
                 mbmi->inter_compound.wedge_sign = svt_read_bit(r, ACCT_STR);
             }
             else {
-                //assert(mbmi->inter_compound.type == COMPOUND_DIFFWTD);
+                assert(mbmi->inter_compound.type == COMPOUND_DIFFWTD);
                 mbmi->inter_compound.mask_type =
                     svt_read_literal(r, MAX_DIFFWTD_MASK_BITS, ACCT_STR);
             }
@@ -2118,10 +2122,15 @@ void inter_block_mode_info(EbDecHandle *dec_handle, PartitionInfo_t* pi,
     MvCount mv_cnt;
 
     /* TO-DO initialize palette info */
+
     svt_collect_neighbors_ref_counts(pi);
 
     read_ref_frames(dec_handle, pi, r);
-
+   /* if ((pi->mi->ref_frame[0] >= BWDREF_FRAME && pi->mi->ref_frame[0] <= ALTREF_FRAME) ||
+        (pi->mi->ref_frame[1] >= BWDREF_FRAME && pi->mi->ref_frame[1] <= ALTREF_FRAME)) {
+        printf("ALTREF found - frame : %d\n", dec_handle->dec_cnt);
+        exit(0);
+    }*/
     const int is_compound = has_second_ref(mbmi);
 
     MvReferenceFrame ref_frame = av1_ref_frame_type(mbmi->ref_frame);
@@ -2235,6 +2244,7 @@ void inter_block_mode_info(EbDecHandle *dec_handle, PartitionInfo_t* pi,
 
     assign_mv(dec_handle, pi, mbmi->mv, global_mvs,
         ref_mv, nearestmv, nearmv, is_compound, allow_hp, r);
+
 #if EXTRA_DUMP
     if (enable_dump) {
         printf("\n mode %d MV %d %d \n", mbmi->mode, mbmi->mv[0].as_mv.row, mbmi->mv[0].as_mv.col);

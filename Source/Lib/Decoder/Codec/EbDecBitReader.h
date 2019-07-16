@@ -42,6 +42,8 @@ extern "C" {
   aom_read_cdf_(r, cdf, nsymbs ACCT_STR_ARG(ACCT_STR_NAME))
 #define svt_read_symbol(r, cdf, nsymbs, ACCT_STR_NAME) \
   aom_read_symbol_(r, cdf, nsymbs ACCT_STR_ARG(ACCT_STR_NAME))
+#define svt_read_NS(r, nsymbs, ACCT_STR_NAME)\
+  aom_read_NS_(r, nsymbs ACCT_STR_ARG(ACCT_STR_NAME))
 
 typedef DaalaReader_t SvtReader;
 
@@ -66,6 +68,8 @@ int aom_read_cdf_(SvtReader *r,
 int aom_read_symbol_(SvtReader   *r,
     AomCdfProb *cdf,
     int          nsymbs ACCT_STR_PARAM);
+
+int aom_read_NS_(SvtReader   *r, int nsymbs ACCT_STR_PARAM);
 
 #ifdef __cplusplus
 }

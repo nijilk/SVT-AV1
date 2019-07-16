@@ -216,7 +216,7 @@ typedef struct LRParams {
 
     /*!< Specifies the size of loop restoration units in units of samples in
      * the current plane */
-    uint8_t             loop_restoration_size;
+    uint16_t            loop_restoration_size;
 } LRParams;
 
 typedef struct SkipModeParams {

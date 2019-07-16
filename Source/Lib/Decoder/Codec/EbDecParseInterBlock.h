@@ -66,3 +66,4 @@ void get_mv_projection(MV *output, MV ref, int num, int den);
 }
 #endif
 #endif // EbDecParseInterBlock_h
+

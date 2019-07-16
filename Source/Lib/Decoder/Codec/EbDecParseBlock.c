@@ -31,8 +31,6 @@
 
 #include "EbDecParseInterBlock.h"
 
-
-
 #if ENABLE_ENTROPY_TRACE
 FILE* temp_fp;
 int enable_dump;
@@ -111,6 +109,22 @@ static int div_mult[32] = { 0,    16384, 8192, 5461, 4096, 3276, 2730, 2340,
                             2048, 1820,  1638, 1489, 1365, 1260, 1170, 1092,
                             1024, 963,   910,  862,  819,  780,  744,  712,
                             682,  655,   630,  606,  585,  564,  546,  528 };
+
+
+int wiener_taps_min[3] = { -5, -23, -17 };
+int wiener_taps_max[3] = { 10, 8, 46 };
+int wiener_taps_k[3] = { 1, 2, 3 };
+int sgrproj_xqd_min[2] = { -96, -32 };
+int sgrproj_xqd_max[2] = { 31, 95 };
+
+int Sgr_Params[(1 << SGRPROJ_PARAMS_BITS)][4] = {
+    { 2, 12, 1, 4 }, { 2, 15, 1, 6 }, { 2, 18, 1, 8 }, { 2, 21, 1, 9 },
+    { 2, 24, 1, 10 }, { 2, 29, 1, 11 }, { 2, 36, 1, 12 }, { 2, 45, 1, 13 },
+    { 2, 56, 1, 14 }, { 2, 68, 1, 15 }, { 0, 0, 1, 5 }, { 0, 0, 1, 8 },
+    { 0, 0, 1, 11 }, { 0, 0, 1, 14 }, { 2, 30, 0, 0 }, { 2, 75, 0, 0 }
+};
+
+
 
 static INLINE int get_nz_mag(const uint8_t *const levels,
     const int bwl, const TxClass tx_class)
@@ -219,18 +233,30 @@ void read_cdef(EbDecHandle *dec_handle, SvtReader *r, PartitionInfo_t *xd,
     int mi_col, int mi_row, int8_t *cdef_strength)
 {
     ModeInfo_t *const mbmi = xd->mi;
-    if (mbmi->skip_mode || dec_handle->frame_header.coded_lossless ||
-        !dec_handle->seq_header.enable_cdef || dec_handle->frame_header.allow_intrabc)
-    {
+    if (dec_handle->frame_header.coded_lossless) return;
+    if (dec_handle->frame_header.allow_intrabc) {
+        assert(dec_handle->frame_header.CDEF_params.cdef_bits == 0);
         return;
+    }
+
+    int cdef_preset[4];
+    if (!(mi_col & (dec_handle->seq_header.sb_mi_size - 1)) &&
+        !(mi_row & (dec_handle->seq_header.sb_mi_size - 1))) {  // Top left?
+        cdef_preset[0] = cdef_preset[1] = cdef_preset[2] =
+            cdef_preset[3] = -1;
+    }
+    else {
+        for (int i = 0; i < 4; i++)
+            cdef_preset[i] = cdef_strength[i];
     }
 
     int cdf_size = block_size_wide[BLOCK_64X64] >> 2;
     const int mask = ~(cdf_size - 1);
     const int index = dec_handle->seq_header.sb_size == BLOCK_128X128
         ? !!(mi_col & mask) + 2 * !!(mi_row & mask) : 0;
-    if (cdef_strength[index] == -1)
-        svt_read_literal(r, dec_handle->frame_header.CDEF_params.cdef_bits, ACCT_STR);
+    cdef_strength[index] = (cdef_preset[index] == -1  && !mbmi->skip)
+        ? svt_read_literal(r, dec_handle->frame_header.CDEF_params.cdef_bits,
+            ACCT_STR) : cdef_preset[index];
 }
 
 int read_delta_qindex(EbDecHandle *dec_handle, SvtReader *r,
@@ -721,16 +747,15 @@ static int get_block_position(FrameHeader *frame_info, int *mi_r, int *mi_c, int
 // Call ref_offset as frame distances between start frame and its reference
 // frames.
 static int motion_field_projection(EbDecHandle *dec_handle,
-    MvReferenceFrame start_frame, int dir)
+                                   MvReferenceFrame start_frame, int dir)
 {
-
     FrameHeader *frame_info = &dec_handle->frame_header;
 
     TemporalMvRef *tpl_mvs_base = dec_handle->master_frame_buf.tpl_mvs;
     int ref_offset[REF_FRAMES] = { 0 };
 
-    const EbDecPicBuf *const start_frame_buf = get_ref_frame_buf(dec_handle,
-        start_frame);
+    const EbDecPicBuf *const start_frame_buf
+        = get_ref_frame_buf(dec_handle, start_frame);
 
     if (start_frame_buf == NULL) return 0;
 
@@ -749,8 +774,7 @@ static int motion_field_projection(EbDecHandle *dec_handle,
 
     for (MvReferenceFrame rf = LAST_FRAME; rf <= INTER_REFS_PER_FRAME; ++rf) {
         ref_offset[rf] = get_relative_dist(&dec_handle->seq_header.order_hint_info,
-            start_frame_order_hint,
-            ref_order_hints[rf - LAST_FRAME]);
+            start_frame_order_hint, ref_order_hints[rf - LAST_FRAME]);
     }
 
     if (dir == 2) start_to_current_frame_offset = -start_to_current_frame_offset;
@@ -1098,7 +1122,7 @@ void update_chroma_trans_info(EbDecHandle *dec_handle,
 
     /* TODO: Make plane loop and avoid the unroll */
     for (int idy = 0; idy < max_blocks_high; idy += height) {
-        for (int idx = 0; idx < max_blocks_wide; idx += width) {
+        for (int idx = 0; idx < max_blocks_wide; idx += width, force_split_cnt++) {
 
             num_chroma_tus = 0;
 
@@ -1131,8 +1155,6 @@ void update_chroma_trans_info(EbDecHandle *dec_handle,
 
             parse_ctx->num_tus[AOM_PLANE_U][force_split_cnt] = num_chroma_tus;
             parse_ctx->num_tus[AOM_PLANE_V][force_split_cnt] = num_chroma_tus;
-
-            force_split_cnt++;
         }
     }
 
@@ -1250,7 +1272,7 @@ void update_flat_trans_info(EbDecHandle *dec_handle, PartitionInfo_t *part_info,
 
     /* TODO: Make plane loop and avoid the unroll */
     for (int idy = 0; idy < max_blocks_high; idy += height) {
-        for (int idx = 0; idx < max_blocks_wide; idx += width) {
+        for (int idx = 0; idx < max_blocks_wide; idx += width, force_split_cnt++) {
 
             num_luma_tus = 0;
             num_chroma_tus = 0;
@@ -1304,9 +1326,6 @@ void update_flat_trans_info(EbDecHandle *dec_handle, PartitionInfo_t *part_info,
 
             parse_ctx->num_tus[AOM_PLANE_U][force_split_cnt] = num_chroma_tus;
             parse_ctx->num_tus[AOM_PLANE_V][force_split_cnt] = num_chroma_tus;
-
-            // TODO: Move to beginning because increment might be missed for monochrome case
-            force_split_cnt++;
         }
     }
 
@@ -2141,8 +2160,8 @@ void parse_residual(EbDecHandle *dec_handle, PartitionInfo_t *pi, SvtReader *r,
     ModeInfo_t *mode = pi->mi;
 
     int skip     = mode->skip;
-    int force_split_cnt = 0;
-    int num_tu, total_num_tu;
+    uint32_t force_split_cnt = 0;
+    uint32_t num_tu, total_num_tu;
 
     const int max_blocks_wide = max_block_wide(pi, mi_size, 0);
     const int max_blocks_high = max_block_high(pi, mi_size, 0);
@@ -2194,9 +2213,10 @@ void parse_residual(EbDecHandle *dec_handle, PartitionInfo_t *pi, SvtReader *r,
                             parse_ctx->num_tus[plane][2] + parse_ctx->num_tus[plane][3]));
                 }
                 assert(num_tu != 0);
+
                 (void)total_num_tu;
 
-                for(int tu = 0; tu < num_tu; tu++)
+                for(uint32_t tu = 0; tu < num_tu; tu++)
                 {
                     assert(trans_info[plane]->tu_x_offset <= max_blocks_wide);
                     assert(trans_info[plane]->tu_y_offset <= max_blocks_high);
@@ -2506,14 +2526,182 @@ parse_block(dec_handle, db_r, db_c, reader, db_subsize,     \
         subSize, bsize, partition);
 }
 
+
+int count_units_in_frame(int unitSize, int frameSize) {
+    return MAX((frameSize + (unitSize >> 1)) / unitSize, 1);
+}
+
+int decode_subexp_bool(int num_syms, int k, SvtReader *reader) {
+    int i = 0, mk = 0;
+    while (1) {
+        int b2 = i ? k + i - 1 : k;
+        int a = 1 << b2;
+        if (num_syms <= mk + 3 * a) {
+            return svt_read_NS(reader, num_syms - mk, ACCT_STR) + mk;
+        }
+        else {
+            if (svt_read_literal(reader, 1, ACCT_STR)) {
+                i++;
+                mk += a;
+            }
+            else {
+                return svt_read_literal(reader, b2, ACCT_STR) + mk;
+            }
+        }
+    }
+}
+
+
+int decode_unsigned_subexp_with_ref_bool(int mx, int k, int r, SvtReader *reader) {
+    int v = decode_subexp_bool(mx, k, reader);
+    if ((r << 1) <= mx)
+        return inverse_recenter(r, v);
+    return mx - 1 - inverse_recenter(mx - 1 - r, v);
+}
+
+int decode_signed_subexp_with_ref_bool(int low, int high, int k, int r, SvtReader *reader) {
+    int x = decode_unsigned_subexp_with_ref_bool(high - low, k, r - low, reader);
+    return x + low;
+}
+
+void read_lr_unit(EbDecHandle *dec_handle, int32_t row, int32_t col,
+    int32_t plane, SvtReader *reader, int32_t ref_sgr_xqd[MAX_MB_PLANE][2],
+    int32_t ref_lr_wiener[MAX_MB_PLANE][2][3])
+{
+    FrameHeader *frame_info = &dec_handle->frame_header;
+    const LRParams *lrp = &frame_info->LR_params[plane];
+    ParseCtxt *parse_ctxt = (ParseCtxt *)dec_handle->pv_parse_ctxt;
+    if (lrp->frame_restoration_type == RESTORE_NONE) return;
+
+    int restoration_type = RESTORE_NONE;
+    if (lrp->frame_restoration_type == RESTORE_SWITCHABLE) {
+        restoration_type =
+            svt_read_symbol(reader, parse_ctxt->cur_tile_ctx.switchable_restore_cdf,
+                            RESTORE_SWITCHABLE_TYPES, ACCT_STR);
+    }
+    else if (lrp->frame_restoration_type == RESTORE_WIENER) {
+        if (svt_read_symbol(reader, parse_ctxt->cur_tile_ctx.wiener_restore_cdf,
+            2, ACCT_STR)) {
+            restoration_type = RESTORE_WIENER;
+        }
+    }
+    else if (lrp->frame_restoration_type == RESTORE_SGRPROJ) {
+        if (svt_read_symbol(reader, parse_ctxt->cur_tile_ctx.sgrproj_restore_cdf,
+            2, ACCT_STR)) {
+            restoration_type = RESTORE_SGRPROJ;
+        }
+    }
+
+    int firstCoeff = 0;
+    int lr_sgr_set;
+    switch (restoration_type) {
+    case RESTORE_WIENER:
+    for (int pass = 0; pass < 2; pass++) {
+        if (plane) {
+            firstCoeff = 1;
+            //LrWiener[plane][row][col][pass][0] = 0;
+        }
+        for (int j = firstCoeff; j < 3; j++) {
+            int min = wiener_taps_min[j];
+            int max = wiener_taps_max[j];
+            int k = wiener_taps_k[j];
+            int v = decode_signed_subexp_with_ref_bool(min, max + 1,
+                k, ref_lr_wiener[plane][pass][j], reader);
+            //LrWiener[plane][row][col][pass][j] = v;
+            ref_lr_wiener[plane][pass][j] = v;
+        }
+    }
+    break;
+    case RESTORE_SGRPROJ:
+    lr_sgr_set = svt_read_literal(reader, SGRPROJ_PARAMS_BITS, ACCT_STR);
+    //LrSgrSet[plane][row][col] = lr_sgr_set;
+    for (int i = 0; i < 2; i++) {
+        int radius = Sgr_Params[lr_sgr_set][i * 2];
+        int minimum = sgrproj_xqd_min[i];
+        int maximum = sgrproj_xqd_max[i];
+        int v = 0;
+        if (radius) {
+            v = decode_signed_subexp_with_ref_bool(minimum, maximum + 1,
+                SGRPROJ_PRJ_SUBEXP_K, ref_sgr_xqd[plane][i], reader);
+        }
+        else {
+            if (i == 1) {
+                int val = (1 << SGRPROJ_PRJ_BITS) - ref_sgr_xqd[plane][0];
+                v = CLIP(val, minimum, maximum);
+            }
+        }
+        //LrSgrXqd[plane][row][col][i] = v;
+        ref_sgr_xqd[plane][i] = v;
+    }
+    break;
+    default: assert(restoration_type == RESTORE_NONE); break;
+    }
+}
+
+void read_lr(EbDecHandle *dec_handle, int32_t row, int32_t col, SvtReader *reader,
+    int32_t ref_sgr_xqd[MAX_MB_PLANE][2],
+    int32_t ref_lr_wiener[MAX_MB_PLANE][2][3])
+{
+    FrameHeader *frame_info = &dec_handle->frame_header;
+    SeqHeader *seq_header = &dec_handle->seq_header;
+    EbColorConfig *color_config = &dec_handle->seq_header.color_config;
+    FrameSize *frame_size = &frame_info->frame_size;
+    if (frame_info->allow_intrabc) return;
+
+    int width = mi_size_wide[seq_header->sb_size];
+    int height = mi_size_high[seq_header->sb_size];
+    int num_planes = color_config->mono_chrome ? 1 : MAX_MB_PLANE;
+    for (int plane = 0; plane < num_planes; plane++) {
+        if (frame_info->LR_params[plane].frame_restoration_type != RESTORE_NONE) {
+            int subX = (plane == 0) ? 0 : dec_handle->seq_header.
+                color_config.subsampling_x;
+            int subY = (plane == 0) ? 0 : dec_handle->seq_header.
+                color_config.subsampling_y;
+            int unit_size = frame_info->LR_params[plane].loop_restoration_size;
+            int unit_rows = count_units_in_frame(unit_size,
+                ROUND_POWER_OF_TWO(frame_size->frame_height, subY));
+            int unit_cols = count_units_in_frame(unit_size,
+                ROUND_POWER_OF_TWO(frame_size->superres_upscaled_width, subX));
+            int unit_row_start = (row * (MI_SIZE >> subY) +
+                unit_size - 1) / unit_size;
+            int unit_row_end = MIN(unit_rows, ((row + height) * (MI_SIZE >> subY) +
+                unit_size - 1) / unit_size);
+            int numerator = 0, denominator = 0;
+            if (!(frame_size->frame_width == frame_size->superres_upscaled_width)) {
+                numerator = (MI_SIZE >> subX) * frame_size->superres_denominator;
+                denominator = unit_size * SCALE_NUMERATOR;
+            }
+            else {
+                numerator = MI_SIZE >> subX;
+                denominator = unit_size;
+            }
+            int unit_col_start = (col * numerator + denominator - 1) / denominator;
+            int unit_col_end = MIN(unit_cols, ((col + width) * numerator +
+                                   denominator - 1) / denominator);
+            for (int unit_row = unit_row_start; unit_row < unit_row_end; unit_row++) {
+                for (int unit_col = unit_col_start; unit_col < unit_col_end; unit_col++) {
+                    read_lr_unit(dec_handle, unit_row, unit_col, plane, reader,
+                                 ref_sgr_xqd, ref_lr_wiener);
+                }
+            }
+        }
+    }
+}
+
 void parse_super_block(EbDecHandle *dec_handle,
-    uint32_t blk_row, uint32_t blk_col, SBInfo *sbInfo)
+    uint32_t blk_row, uint32_t blk_col, SBInfo *sbInfo,
+    int32_t ref_sgr_xqd[MAX_MB_PLANE][2],
+    int32_t ref_lr_wiener[MAX_MB_PLANE][2][3])
 {
     ParseCtxt *parse_ctx = (ParseCtxt*)dec_handle->pv_parse_ctxt;
     SvtReader *reader = &parse_ctx->r;
 #if ENABLE_ENTROPY_TRACE
-    enable_dump = 1;
+    //enable_dump = 1;
+    enable_dump = dec_handle->dec_cnt == 42;//|| dec_handle->dec_cnt == 36;
 #endif
+
+    read_lr(dec_handle, blk_row, blk_col, reader, ref_sgr_xqd, ref_lr_wiener);
+
     parse_partition(dec_handle, blk_row, blk_col, reader,
         dec_handle->seq_header.sb_size, sbInfo);
 }

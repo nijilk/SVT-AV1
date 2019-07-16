@@ -28,6 +28,7 @@
 #include "EbDecPicMgr.h"
 #include "EbDecNbr.h"
 #include "EbDecUtils.h"
+#include "EbDecObmc.h"
 
 static INLINE void dec_clamp_mv(MV *mv, int32_t min_col, int32_t max_col, int32_t min_row,
     int32_t max_row) {
@@ -238,8 +239,7 @@ void svtav1_predict_inter_block(
     sub_y = part_info->subsampling_y;
     bool sub8_w = (block_size_wide[bsize] == 4) && sub_x;
     bool sub8_h = (block_size_high[bsize] == 4) && sub_y;
-    if (sub8_h || sub8_w)
-    {
+    if (sub8_h || sub8_w) {
         int32_t i, j;
         /* Floor and Ceil to nearest 8x8 blks */
         const int row_start = sub8_h ? (mi_row & (~1)) : mi_row;
@@ -268,6 +268,10 @@ void svtav1_predict_inter_block(
         svtav1_predict_inter_block_plane(dec_hdl, part_info, plane,
             0, mi_col*MI_SIZE, mi_row*MI_SIZE, blk_recon_buf, recon_strd,
             some_use_intra, recon_picture_buf->bit_depth);
+
+    }
+    if (part_info->mi->motion_mode == OBMC_CAUSAL) {
+        dec_build_obmc_inter_predictors_sb(dec_hdl, part_info, mi_row, mi_col);
     }
 
     return;

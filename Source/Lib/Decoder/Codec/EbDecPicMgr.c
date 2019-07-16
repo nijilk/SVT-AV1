@@ -169,6 +169,8 @@ EbDecPicBuf * dec_pic_mgr_get_cur_pic(EbDecPicMgr *ps_pic_mgr,
         assert(ps_pic_mgr->as_dec_pic[i].ps_pic_buf != NULL);
 
     ps_pic_mgr->as_dec_pic[i].is_free = 0;
+    ps_pic_mgr->as_dec_pic[i].ref_count = 1;
+
     pic_buf = &ps_pic_mgr->as_dec_pic[i];
 
     return pic_buf;
@@ -227,8 +229,7 @@ void dec_pic_mgr_update_ref_pic(EbDecHandle *dec_handle_ptr, int32_t frame_decod
             dec_handle_ptr->next_ref_frame_map[ref_index] = NULL;
         }
 
-        if (dec_handle_ptr->frame_header.show_existing_frame ||
-            dec_handle_ptr->frame_header.show_frame)
+        if (dec_handle_ptr->frame_header.show_existing_frame)
         {
             //TODO: Add output Q logic
             //assert(0);
@@ -489,6 +490,7 @@ void svt_setup_frame_buf_refs(EbDecHandle *dec_handle_ptr)
     for (ref_frame = LAST_FRAME; ref_frame <= ALTREF_FRAME; ++ref_frame) {
         const EbDecPicBuf *const buf = get_ref_frame_buf(dec_handle_ptr, ref_frame);
         if (buf != NULL)
-            dec_handle_ptr->cur_pic_buf[0]->ref_order_hints[ref_frame - LAST_FRAME] = buf->order_hint;
+            dec_handle_ptr->cur_pic_buf[0]->ref_order_hints[ref_frame - LAST_FRAME]
+                = buf->order_hint;
     }
 }
