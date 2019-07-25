@@ -117,7 +117,8 @@ int wiener_taps_k[3] = { 1, 2, 3 };
 int sgrproj_xqd_min[2] = { -96, -32 };
 int sgrproj_xqd_max[2] = { 31, 95 };
 
-int Sgr_Params[(1 << SGRPROJ_PARAMS_BITS)][4] = {
+/* Harmonize with encoder*/
+int sgr_params_dec[(1 << SGRPROJ_PARAMS_BITS)][4] = {
     { 2, 12, 1, 4 }, { 2, 15, 1, 6 }, { 2, 18, 1, 8 }, { 2, 21, 1, 9 },
     { 2, 24, 1, 10 }, { 2, 29, 1, 11 }, { 2, 36, 1, 12 }, { 2, 45, 1, 13 },
     { 2, 56, 1, 14 }, { 2, 68, 1, 15 }, { 0, 0, 1, 5 }, { 0, 0, 1, 8 },
@@ -554,7 +555,7 @@ void intra_frame_mode_info(EbDecHandle *dec_handle, PartitionInfo_t *xd, int mi_
     SegmentationParams *const seg = &dec_handle->frame_header.segmentation_params;
     EbColorConfig color_config = dec_handle->seq_header.color_config;
     uint8_t     *lossless_array = &dec_handle->frame_header.lossless_array[0];
-    IntMv_dec ref_mvs[MODE_CTX_REF_FRAMES][MAX_MV_REF_CANDIDATES] = { { { 0 } } };
+    IntMvDec ref_mvs[MODE_CTX_REF_FRAMES][MAX_MV_REF_CANDIDATES] = { { { 0 } } };
     int16_t inter_mode_ctx[MODE_CTX_REF_FRAMES];
     MvReferenceFrame ref_frame = av1_ref_frame_type(mbmi->ref_frame);
     MvCount *mv_cnt = (MvCount*)malloc(sizeof(MvCount));
@@ -589,7 +590,7 @@ void intra_frame_mode_info(EbDecHandle *dec_handle, PartitionInfo_t *xd, int mi_
         mbmi->motion_mode = SIMPLE_TRANSLATION;
         mbmi->compound_mode = COMPOUND_AVERAGE;
         dec_handle->frame_header.interpolation_filter = BILINEAR;
-        IntMv_dec global_mvs[2];
+        IntMvDec global_mvs[2];
         av1_find_mv_refs(dec_handle, xd, ref_frame, xd->ref_mv_stack,
             ref_mvs, global_mvs, mi_row, mi_col,
             inter_mode_ctx, mv_cnt);
@@ -795,7 +796,7 @@ static int motion_field_projection(EbDecHandle *dec_handle,
             MV fwd_mv = mv_ref->mf_mv0.as_mv;
 
             if (mv_ref->ref_frame_offset > INTRA_FRAME) {
-                IntMv_dec this_mv;
+                IntMvDec this_mv;
                 int mi_r, mi_c;
                 const int ref_frame_offset = ref_offset[mv_ref->ref_frame_offset];
 
@@ -994,12 +995,12 @@ void inter_frame_mode_info(EbDecHandle *dec_handle, PartitionInfo_t * pi,
         intra_block_mode_info(dec_handle, mi_row, mi_col, pi, mbmi, r);
 }
 
-static void intra_copy_frame_mvs(EbDecHandle *decHandle, int mi_row, int mi_col,
+static void intra_copy_frame_mvs(EbDecHandle *dec_handle, int mi_row, int mi_col,
     int x_mis, int y_mis) {
-    FrameHeader *frame_info = &decHandle->frame_header;
+    FrameHeader *frame_info = &dec_handle->frame_header;
     const int frame_mvs_stride = ROUND_POWER_OF_TWO(frame_info->mi_cols, 1);
     TemporalMvRef *frame_mvs =
-        decHandle->cur_pic_buf[0]->mvs + (mi_row >> 1) * frame_mvs_stride + (mi_col >> 1);
+        dec_handle->cur_pic_buf[0]->mvs + (mi_row >> 1) * frame_mvs_stride + (mi_col >> 1);
     x_mis = ROUND_POWER_OF_TWO(x_mis, 1);
     y_mis = ROUND_POWER_OF_TWO(y_mis, 1);
 
@@ -1013,13 +1014,13 @@ static void intra_copy_frame_mvs(EbDecHandle *decHandle, int mi_row, int mi_col,
     }
 }
 
-void inter_copy_frame_mvs(EbDecHandle *decHandle, ModeInfo_t *mi,
+void inter_copy_frame_mvs(EbDecHandle *dec_handle, ModeInfo_t *mi,
     int mi_row, int mi_col, int x_mis, int y_mis) {
 
-    FrameHeader *frame_info = &decHandle->frame_header;
+    FrameHeader *frame_info = &dec_handle->frame_header;
     const int frame_mvs_stride = ROUND_POWER_OF_TWO(frame_info->mi_cols, 1);
     TemporalMvRef *frame_mvs =
-        decHandle->cur_pic_buf[0]->mvs + (mi_row >> 1) * frame_mvs_stride + (mi_col >> 1);
+        dec_handle->cur_pic_buf[0]->mvs + (mi_row >> 1) * frame_mvs_stride + (mi_col >> 1);
     x_mis = ROUND_POWER_OF_TWO(x_mis, 1);
     y_mis = ROUND_POWER_OF_TWO(y_mis, 1);
 
@@ -1031,7 +1032,7 @@ void inter_copy_frame_mvs(EbDecHandle *decHandle, ModeInfo_t *mi,
     for (int idx = 0; idx < 2; ++idx) {
         MvReferenceFrame ref_frame = mi->ref_frame[idx];
         if (ref_frame > INTRA_FRAME) {
-            int8_t ref_idx = decHandle->master_frame_buf.ref_frame_side[ref_frame];
+            int8_t ref_idx = dec_handle->master_frame_buf.ref_frame_side[ref_frame];
             if (ref_idx) continue;
             if ((abs(mi->mv[idx].as_mv.row) > REFMVS_LIMIT) ||
                 (abs(mi->mv[idx].as_mv.col) > REFMVS_LIMIT))
@@ -1051,11 +1052,11 @@ void inter_copy_frame_mvs(EbDecHandle *decHandle, ModeInfo_t *mi,
 }
 
 
-void mode_info(EbDecHandle *decHandle, PartitionInfo_t *part_info, uint32_t mi_row,
+void mode_info(EbDecHandle *dec_handle, PartitionInfo_t *part_info, uint32_t mi_row,
     uint32_t mi_col, SvtReader *r, int8_t *cdef_strength)
 {
     ModeInfo_t *mi = part_info->mi;
-    FrameHeader *frame_info = &decHandle->frame_header;
+    FrameHeader *frame_info = &dec_handle->frame_header;
     //BlockSize bsize = mi->sb_type
     mi->use_intrabc = 0;
     const uint32_t bw = mi_size_wide[mi->sb_type];
@@ -1064,12 +1065,12 @@ void mode_info(EbDecHandle *decHandle, PartitionInfo_t *part_info, uint32_t mi_r
     const int y_mis = AOMMIN(bh, frame_info->mi_rows - mi_row);
 
     if (frame_info->frame_type == KEY_FRAME || frame_info->frame_type == INTRA_ONLY_FRAME) {
-        intra_frame_mode_info(decHandle, part_info, mi_row, mi_col, r, cdef_strength);
-        intra_copy_frame_mvs(decHandle, mi_row, mi_col, x_mis, y_mis);
+        intra_frame_mode_info(dec_handle, part_info, mi_row, mi_col, r, cdef_strength);
+        intra_copy_frame_mvs(dec_handle, mi_row, mi_col, x_mis, y_mis);
     }
     else {
-        inter_frame_mode_info(decHandle, part_info, mi_row, mi_col, r, cdef_strength);
-        inter_copy_frame_mvs(decHandle, mi, mi_row, mi_col, x_mis, y_mis);
+        inter_frame_mode_info(dec_handle, part_info, mi_row, mi_col, r, cdef_strength);
+        inter_copy_frame_mvs(dec_handle, mi, mi_row, mi_col, x_mis, y_mis);
     }
 }
 
@@ -2543,7 +2544,7 @@ int decode_subexp_bool(int num_syms, int k, SvtReader *reader) {
         int b2 = i ? k + i - 1 : k;
         int a = 1 << b2;
         if (num_syms <= mk + 3 * a) {
-            return svt_read_NS(reader, num_syms - mk, ACCT_STR) + mk;
+            return svt_read_ns_ae(reader, num_syms - mk, ACCT_STR) + mk;
         }
         else {
             if (svt_read_literal(reader, 1, ACCT_STR)) {
@@ -2578,7 +2579,7 @@ void read_lr_unit(EbDecHandle *dec_handle, int32_t row, int32_t col,
     UNUSED(col);
 
     FrameHeader *frame_info = &dec_handle->frame_header;
-    const LRParams *lrp = &frame_info->LR_params[plane];
+    const LRParams *lrp = &frame_info->lr_params[plane];
     ParseCtxt *parse_ctxt = (ParseCtxt *)dec_handle->pv_parse_ctxt;
     if (lrp->frame_restoration_type == RESTORE_NONE) return;
 
@@ -2605,44 +2606,44 @@ void read_lr_unit(EbDecHandle *dec_handle, int32_t row, int32_t col,
     int lr_sgr_set;
     switch (restoration_type) {
     case RESTORE_WIENER:
-    for (int pass = 0; pass < 2; pass++) {
-        if (plane) {
-            firstCoeff = 1;
-            //LrWiener[plane][row][col][pass][0] = 0;
-        }
-        for (int j = firstCoeff; j < 3; j++) {
-            int min = wiener_taps_min[j];
-            int max = wiener_taps_max[j];
-            int k = wiener_taps_k[j];
-            int v = decode_signed_subexp_with_ref_bool(min, max + 1,
-                k, ref_lr_wiener[plane][pass][j], reader);
-            //LrWiener[plane][row][col][pass][j] = v;
-            ref_lr_wiener[plane][pass][j] = v;
-        }
-    }
-    break;
-    case RESTORE_SGRPROJ:
-    lr_sgr_set = svt_read_literal(reader, SGRPROJ_PARAMS_BITS, ACCT_STR);
-    //LrSgrSet[plane][row][col] = lr_sgr_set;
-    for (int i = 0; i < 2; i++) {
-        int radius = Sgr_Params[lr_sgr_set][i * 2];
-        int minimum = sgrproj_xqd_min[i];
-        int maximum = sgrproj_xqd_max[i];
-        int v = 0;
-        if (radius) {
-            v = decode_signed_subexp_with_ref_bool(minimum, maximum + 1,
-                SGRPROJ_PRJ_SUBEXP_K, ref_sgr_xqd[plane][i], reader);
-        }
-        else {
-            if (i == 1) {
-                int val = (1 << SGRPROJ_PRJ_BITS) - ref_sgr_xqd[plane][0];
-                v = CLIP(val, minimum, maximum);
+        for (int pass = 0; pass < 2; pass++) {
+            if (plane) {
+                firstCoeff = 1;
+                //LrWiener[plane][row][col][pass][0] = 0;
+            }
+            for (int j = firstCoeff; j < 3; j++) {
+                int min = wiener_taps_min[j];
+                int max = wiener_taps_max[j];
+                int k = wiener_taps_k[j];
+                int v = decode_signed_subexp_with_ref_bool(min, max + 1,
+                    k, ref_lr_wiener[plane][pass][j], reader);
+                //LrWiener[plane][row][col][pass][j] = v;
+                ref_lr_wiener[plane][pass][j] = v;
             }
         }
-        //LrSgrXqd[plane][row][col][i] = v;
-        ref_sgr_xqd[plane][i] = v;
-    }
-    break;
+        break;
+    case RESTORE_SGRPROJ:
+        lr_sgr_set = svt_read_literal(reader, SGRPROJ_PARAMS_BITS, ACCT_STR);
+        //LrSgrSet[plane][row][col] = lr_sgr_set;
+        for (int i = 0; i < 2; i++) {
+            int radius = sgr_params_dec[lr_sgr_set][i * 2];
+            int minimum = sgrproj_xqd_min[i];
+            int maximum = sgrproj_xqd_max[i];
+            int v = 0;
+            if (radius) {
+                v = decode_signed_subexp_with_ref_bool(minimum, maximum + 1,
+                    SGRPROJ_PRJ_SUBEXP_K, ref_sgr_xqd[plane][i], reader);
+            }
+            else {
+                if (i == 1) {
+                    int val = (1 << SGRPROJ_PRJ_BITS) - ref_sgr_xqd[plane][0];
+                    v = CLIP(val, minimum, maximum);
+                }
+            }
+            //LrSgrXqd[plane][row][col][i] = v;
+            ref_sgr_xqd[plane][i] = v;
+        }
+        break;
     default: assert(restoration_type == RESTORE_NONE); break;
     }
 }
@@ -2661,12 +2662,12 @@ void read_lr(EbDecHandle *dec_handle, int32_t row, int32_t col, SvtReader *reade
     int height = mi_size_high[seq_header->sb_size];
     int num_planes = color_config->mono_chrome ? 1 : MAX_MB_PLANE;
     for (int plane = 0; plane < num_planes; plane++) {
-        if (frame_info->LR_params[plane].frame_restoration_type != RESTORE_NONE) {
+        if (frame_info->lr_params[plane].frame_restoration_type != RESTORE_NONE) {
             int subX = (plane == 0) ? 0 : dec_handle->seq_header.
                 color_config.subsampling_x;
             int subY = (plane == 0) ? 0 : dec_handle->seq_header.
                 color_config.subsampling_y;
-            int unit_size = frame_info->LR_params[plane].loop_restoration_size;
+            int unit_size = frame_info->lr_params[plane].loop_restoration_size;
             int unit_rows = count_units_in_frame(unit_size,
                 ROUND_POWER_OF_TWO(frame_size->frame_height, subY));
             int unit_cols = count_units_in_frame(unit_size,

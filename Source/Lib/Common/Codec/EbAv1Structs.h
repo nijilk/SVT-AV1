@@ -570,7 +570,7 @@ typedef struct FrameHeader {
     CDEFParams              CDEF_params;
 
     /*!< Loop Restoration Parameters */
-    LRParams                LR_params[MAX_MB_PLANE];
+    LRParams                lr_params[MAX_MB_PLANE];
 
     /*!< Specifies how the transform size is determined */
     TxMode                 tx_mode;
