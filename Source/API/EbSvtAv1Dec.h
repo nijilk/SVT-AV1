@@ -113,12 +113,17 @@ typedef struct EbSvtAv1DecConfiguration
     // Application Specific parameters
 
     /* Number of threads used by decoder.
-    *
-    * 0 = System default.
-    * 1 = Single thread decoding.
-    *
-    * Default is 0. */
+     * Default is 1. */
     uint32_t                 threads;
+
+    /* Number of frames that can be processed
+       in parallel. Default is 1 */
+    uint32_t                 num_p_frames;
+
+    /* Flag to enable row level parallelism
+       Default : disabled */
+    uint8_t                 enable_row_mt;
+
     // Application Specific parameters
 
     /* ID assigned to each channel when multiple instances are running within the

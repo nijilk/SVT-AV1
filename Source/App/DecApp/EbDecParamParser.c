@@ -27,6 +27,8 @@ static void set_bit_depth(const char *value, EbSvtAv1DecConfiguration *cfg) { cf
 static void set_pic_width(const char *value, EbSvtAv1DecConfiguration *cfg) { cfg->max_picture_width = strtoul(value, NULL, 0); };
 static void set_pic_height(const char *value, EbSvtAv1DecConfiguration *cfg) { cfg->max_picture_height = strtoul(value, NULL, 0); };
 static void set_colour_space(const char *value, EbSvtAv1DecConfiguration *cfg) { cfg->max_color_format = parse_name(value, csp_names); };
+static void set_num_thread(const char *value, EbSvtAv1DecConfiguration *cfg) { cfg->threads = strtoul(value, NULL, 0); };
+static void set_num_pframes(const char *value, EbSvtAv1DecConfiguration *cfg) { cfg->num_p_frames = strtoul(value, NULL, 0); };
 
  /**********************************
   * Config Entry Array
@@ -40,6 +42,8 @@ ConfigEntry config_entry[] = {
     { PIC_WIDTH_TOKEN, "PictureWidth", 1, set_pic_width},
     { PIC_HEIGHT_TOKEN, "PictureHeight", 1, set_pic_height},
     { COLOUR_SPACE_TOKEN,"InputColourSpace", 1, set_colour_space},
+    { THREADS_TOKEN,"ThreadCount", 1, set_num_thread},
+    { FRAME_PLL_TOKEN,"PllFrameCount", 1, set_num_pframes},
     // Termination
     { NULL, NULL, 0, NULL}
 };
@@ -57,6 +61,9 @@ static void showHelp()
     H0( " -w <arg>                  Input picture width \n");
     H0( " -h <arg>                  Input picture height \n");
     H0( " -colour-space <arg>       Input picture colour space. [400, 420, 422, 444]\n");
+    H0( " -threads <arg>            Number of threads to be launched \n");
+    H0( " -parallel-frames <arg>    Number of frames to be processed in parallel \n");
+    H0( " -enable-row-mt            Enable row level parallelism \n");
     H0( " -md5                      MD5 support flag \n");
     H0( " -fps-frm                  Show fps after each frame decoded\n");
     H0( " -fps-summary              Show fps summary");
@@ -133,6 +140,8 @@ EbErrorType read_command_line(int32_t argc, char *const argv[],
                 cli->fps_summary = 1;
             else if (EB_STRCMP(cmd_copy[token_index], FILM_GRAIN_TOKEN) == 0)
                 cli->skip_film_grain = 1;
+            else if (EB_STRCMP(cmd_copy[token_index], ROW_MT_TOKEN) == 0)
+                configs->enable_row_mt = 1;
             else if (EB_STRCMP(cmd_copy[token_index], HELP_TOKEN) == 0)
                 showHelp();
             else {

@@ -371,6 +371,11 @@ EbErrorType eb_svt_dec_set_default_parameter(
     config_ptr->active_channel_count = 1;
     config_ptr->stat_report = 0;
 
+    /* Multi-thread parameters */
+    config_ptr->threads = 1;
+    config_ptr->num_p_frames = 1;
+    config_ptr->enable_row_mt = 0;
+
     return return_error;
 }
 
