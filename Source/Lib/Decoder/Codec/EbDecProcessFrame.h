@@ -88,6 +88,11 @@ void decode_super_block(DecModCtxt *dec_mod_ctxt,
                         uint32_t mi_row, uint32_t mi_col,
                         SBInfo *sbInfo);
 
+#if MT_SUPPORT
+EbErrorType decode_tile(EbDecHandle *dec_handle_ptr,
+    TilesInfo *tile_info, int32_t tile_row, int32_t tile_col);
+#endif
+
 /* TODO: Should be moved out once decode tile is moved out from parse_tile */
 void cfl_init(CflCtx *cfl, EbColorConfig *cc);
 

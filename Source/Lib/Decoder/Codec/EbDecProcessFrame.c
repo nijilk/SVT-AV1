@@ -153,3 +153,49 @@ void decode_super_block(DecModCtxt *dec_mod_ctxt,
     decode_partition(dec_mod_ctxt, mi_row, mi_col,
                      dec_handle->seq_header.sb_size, sb_info);
 }
+
+#if MT_SUPPORT
+
+EbErrorType decode_tile_row(EbDecHandle *dec_handle_ptr, TilesInfo *tile_info,
+    int32_t tile_col, int32_t mi_row)
+{
+    EbErrorType status = EB_ErrorNone;
+    DecModCtxt *dec_mod_ctxt = (DecModCtxt*)dec_handle_ptr->pv_dec_mod_ctxt;
+    MasterFrameBuf *master_frame_buf = &dec_handle_ptr->master_frame_buf;
+    CurFrameBuf    *frame_buf = &master_frame_buf->cur_frame_bufs[0];
+    int32_t sb_row = (mi_row << 2) >> dec_handle_ptr->seq_header.sb_size_log2;
+    for (uint32_t mi_col = tile_info->tile_col_start_mi[tile_col];
+        mi_col < tile_info->tile_col_start_mi[tile_col + 1];
+        mi_col += dec_handle_ptr->seq_header.sb_mi_size)
+
+    {
+        int32_t sb_col = (mi_col << MI_SIZE_LOG2) >>
+            dec_handle_ptr->seq_header.sb_size_log2;
+
+        SBInfo  *sb_info = frame_buf->sb_info +
+            (sb_row * master_frame_buf->sb_cols) + sb_col;
+
+        dec_mod_ctxt->cur_coeff[AOM_PLANE_Y] = sb_info->sb_coeff[AOM_PLANE_Y];
+        dec_mod_ctxt->cur_coeff[AOM_PLANE_U] = sb_info->sb_coeff[AOM_PLANE_U];
+        dec_mod_ctxt->cur_coeff[AOM_PLANE_V] = sb_info->sb_coeff[AOM_PLANE_V];
+
+        decode_super_block(dec_mod_ctxt, mi_row, mi_col, sb_info);
+    }
+    return status;
+}
+
+EbErrorType decode_tile(EbDecHandle *dec_handle_ptr,
+    TilesInfo *tile_info, int32_t tile_row, int32_t tile_col)
+{
+    EbErrorType status = EB_ErrorNone;
+    for (uint32_t mi_row = tile_info->tile_row_start_mi[tile_row];
+        mi_row < tile_info->tile_row_start_mi[tile_row + 1];
+        mi_row += dec_handle_ptr->seq_header.sb_mi_size)
+    {
+        EbColorConfig *color_config = &dec_handle_ptr->seq_header.color_config;
+        cfl_init(&((DecModCtxt*)dec_handle_ptr->pv_dec_mod_ctxt)->cfl_ctx, color_config);
+        status = decode_tile_row(dec_handle_ptr, tile_info, tile_col, mi_row);
+    }
+    return status;
+}
+#endif

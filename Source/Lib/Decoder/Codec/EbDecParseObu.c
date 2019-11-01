@@ -2207,8 +2207,13 @@ void clear_loop_restoration(int num_planes, PartitionInfo_t *part_info)
     }
 }
 
+#if MT_SUPPORT
+EbErrorType parse_tile(bitstrm_t *bs, EbDecHandle *dec_handle_ptr, TilesInfo *tile_info,
+    int32_t tile_row, int32_t tile_col, int32_t is_mt)
+#else
 EbErrorType parse_tile(bitstrm_t *bs, EbDecHandle *dec_handle_ptr,
-                       TilesInfo *tile_info, int32_t tile_row, int32_t tile_col)
+    TilesInfo *tile_info, int32_t tile_row, int32_t tile_col)
+#endif
 {
     (void)bs;
     EbErrorType status = EB_ErrorNone;
@@ -2359,7 +2364,12 @@ EbErrorType parse_tile(bitstrm_t *bs, EbDecHandle *dec_handle_ptr,
 
             /* TO DO : Will move later */
             // decoding of the superblock
+#if MT_SUPPORT
+            if (!is_mt)
+                decode_super_block(dec_mod_ctxt, mi_row, mi_col, sb_info);
+#else
             decode_super_block(dec_mod_ctxt, mi_row, mi_col, sb_info);
+#endif
 #if !FRAME_MI_MAP
             /* nbr updates at SB level */
             update_nbrs_after_sb(&master_frame_buf->frame_mi_map, sb_col);
@@ -2474,6 +2484,10 @@ EbErrorType read_tile_group_obu(bitstrm_t *bs, EbDecHandle *dec_handle_ptr,
     dec_handle_ptr->cm.frm_size = dec_handle_ptr->frame_header.frame_size;
     dec_handle_ptr->cm.tiles_info = dec_handle_ptr->frame_header.tiles_info;
 
+#if MT_SUPPORT
+    int is_mt = 1; //TO-DO assign appropriately for multi-threaded process
+#endif
+
     for (int tile_num = tg_start; tile_num <= tg_end; tile_num++) {
         tile_row = tile_num / tiles_info->tile_cols;
         tile_col = tile_num % tiles_info->tile_cols;
@@ -2505,7 +2519,14 @@ EbErrorType read_tile_group_obu(bitstrm_t *bs, EbDecHandle *dec_handle_ptr,
         parse_ctxt->cur_tile_ctx = parse_ctxt->init_frm_ctx;
 #endif
         /* TO DO decode_tile() */
+#if MT_SUPPORT
+        status = parse_tile(bs, dec_handle_ptr, tiles_info, tile_row, tile_col, is_mt);
+
+        if (is_mt)
+            status = decode_tile(dec_handle_ptr, tiles_info, tile_row, tile_col);
+#else
         status = parse_tile(bs, dec_handle_ptr, tiles_info, tile_row, tile_col);
+#endif
 
         /* Save CDF */
         if (!frame_header->disable_frame_end_update_cdf &&
@@ -2530,10 +2551,17 @@ EbErrorType read_tile_group_obu(bitstrm_t *bs, EbDecHandle *dec_handle_ptr,
             dec_handle_ptr->frame_header.loop_filter_params.filter_level[1])
         {
             /*LF Trigger function for each frame*/
+#if MT_SUPPORT
+            dec_av1_loop_filter_frame(dec_handle_ptr,
+                dec_handle_ptr->cur_pic_buf[0]->ps_pic_buf,
+                dec_handle_ptr->pv_lf_ctxt,
+                AOM_PLANE_Y, MAX_MB_PLANE, is_mt);
+#else
             dec_av1_loop_filter_frame(dec_handle_ptr,
                 dec_handle_ptr->cur_pic_buf[0]->ps_pic_buf,
                 dec_handle_ptr->pv_lf_ctxt,
                 AOM_PLANE_Y, MAX_MB_PLANE);
+#endif
         }
 
         const int32_t do_cdef =

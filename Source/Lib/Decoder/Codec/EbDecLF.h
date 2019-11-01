@@ -51,9 +51,16 @@ void fill_4x4_param_luma(LFBlockParamL* lf_block_l,
 void fill_4x4_param_uv(LFBlockParamUV* lf_block_uv, int32_t tu_x, int32_t tu_y,
     int32_t stride, TxSize tx_size, int32_t sub_x, int32_t sub_y);
 
+#if MT_SUPPORT
+void dec_av1_loop_filter_frame(
+    EbDecHandle *dec_handle_ptr,
+    EbPictureBufferDesc *recon_picture_buf, LFCtxt *lf_ctxt,
+    int32_t plane_start, int32_t plane_end, int32_t is_mt);
+#else
 void dec_av1_loop_filter_frame(
     EbDecHandle *dec_handle_ptr,
     EbPictureBufferDesc *recon_picture_buf, LFCtxt *lf_ctxt,
     int32_t plane_start, int32_t plane_end);
+#endif
 
 #endif  // EbDecLF_h

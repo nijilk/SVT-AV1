@@ -27,6 +27,68 @@ void save_tile_row_boundary_lines(uint8_t *src, int32_t src_stride,
     int32_t src_width, int32_t src_height, int32_t use_highbd, int32_t plane,
     Av1Common *cm, int32_t after_cdef, RestorationStripeBoundaries *boundaries);
 
+
+#if MT_SUPPORT
+void dec_av1_loop_restoration_filter_row(EbDecHandle *dec_handle, int32_t plane,
+    int32_t row, int *h, int32_t sx, int32_t sy, int src_stride, int dst_stride,
+    uint8_t *src, uint8_t *dst, int optimized_lr, int unit_row)
+{
+    AV1PixelRect tile_rect;
+    RestorationTileLimits tile_limit;
+    RestorationUnitInfo *lr_unit;
+    int use_highbd = (dec_handle->seq_header.color_config.bit_depth > 8);
+    int bit_depth = dec_handle->seq_header.color_config.bit_depth;
+    LRCtxt *lr_ctxt = (LRCtxt *)dec_handle->pv_lr_ctxt;
+    LRParams *lr_params = &dec_handle->frame_header.lr_params[plane];
+    int ext_size = lr_params->loop_restoration_size * 3 / 2;
+    int w = 0, tile_stripe0 = 0;
+    int sb_log2 = dec_handle->seq_header.sb_size_log2;
+
+    tile_rect = whole_frame_rect(&dec_handle->frame_header.frame_size,
+        dec_handle->seq_header.color_config.subsampling_x,
+        dec_handle->seq_header.color_config.subsampling_y, plane > 0);
+    int tile_h = tile_rect.bottom - tile_rect.top;
+    int tile_w = tile_rect.right - tile_rect.left;
+
+    int remaining_h = tile_h - row;
+    *h = (remaining_h < ext_size) ? remaining_h :
+        lr_params->loop_restoration_size;
+    tile_limit.v_start = tile_rect.top + row;
+    tile_limit.v_end = tile_rect.top + row + (*h);
+    assert(tile_limit.v_end <= tile_rect.bottom);
+
+    // Offset the tile upwards to align with the restoration processing stripe
+    const int voffset = RESTORATION_UNIT_OFFSET >> sy;
+    tile_limit.v_start = AOMMAX(tile_rect.top, tile_limit.v_start - voffset);
+    if (tile_limit.v_end < tile_rect.bottom) tile_limit.v_end -= voffset;
+
+    for (int x = 0, unit_col = 0; x < tile_w; x += w, unit_col++)
+    {
+        int remaining_w = tile_w - x;
+        w = (remaining_w < ext_size) ? remaining_w :
+            lr_params->loop_restoration_size;
+
+        tile_limit.h_start = tile_rect.left + x;
+        tile_limit.h_end = tile_rect.left + x + w;
+
+        lr_unit = lr_ctxt->lr_unit[plane] +
+            unit_row * lr_ctxt->lr_stride[plane] + unit_col;
+
+        if (!use_highbd)
+            eb_av1_loop_restoration_filter_unit(1, &tile_limit, lr_unit,
+                &lr_ctxt->boundaries[plane], lr_ctxt->rlbs, &tile_rect,
+                tile_stripe0, sx, sy, use_highbd, bit_depth, src,
+                src_stride, dst, dst_stride, lr_ctxt->rst_tmpbuf, optimized_lr);
+        else
+            eb_av1_loop_restoration_filter_unit(1, &tile_limit, lr_unit,
+                &lr_ctxt->boundaries[plane], lr_ctxt->rlbs, &tile_rect,
+                tile_stripe0, sx, sy, use_highbd, bit_depth,
+                CONVERT_TO_BYTEPTR(src), src_stride, CONVERT_TO_BYTEPTR(dst),
+                dst_stride, lr_ctxt->rst_tmpbuf, optimized_lr);
+    }
+}
+#endif
+
 void dec_av1_loop_restoration_filter_frame(EbDecHandle *dec_handle, int optimized_lr)
 {
     assert(!dec_handle->frame_header.all_lossless);
@@ -35,10 +97,14 @@ void dec_av1_loop_restoration_filter_frame(EbDecHandle *dec_handle, int optimize
     LRCtxt *lr_ctxt = (LRCtxt *)dec_handle->pv_lr_ctxt;
     MasterFrameBuf *master_frame_buf = &dec_handle->master_frame_buf;
     CurFrameBuf    *frame_buf = &master_frame_buf->cur_frame_bufs[0];
+#if !MT_SUPPORT
     RestorationTileLimits tile_limit;
+#endif
     AV1PixelRect tile_rect;
     EbPictureBufferDesc *cur_pic_buf = dec_handle->cur_pic_buf[0]->ps_pic_buf;
+#if !MT_SUPPORT
     RestorationUnitInfo *lr_unit;
+#endif
 
     lr_ctxt->lr_unit[AOM_PLANE_Y] = frame_buf->lr_unit[AOM_PLANE_Y];
     lr_ctxt->lr_unit[AOM_PLANE_U] = frame_buf->lr_unit[AOM_PLANE_U];
@@ -82,6 +148,10 @@ void dec_av1_loop_restoration_filter_frame(EbDecHandle *dec_handle, int optimize
 
         for (y = 0, unit_row = 0; y < tile_h; y += h, unit_row++)
         {
+#if MT_SUPPORT
+            dec_av1_loop_restoration_filter_row(dec_handle, plane, y, &h,
+                sx, sy, src_stride, dst_stride, src, dst, optimized_lr, unit_row);
+#else
             int remaining_h = tile_h - y;
             h = (remaining_h < ext_size) ? remaining_h :
                                            lr_params->loop_restoration_size;
@@ -118,6 +188,7 @@ void dec_av1_loop_restoration_filter_frame(EbDecHandle *dec_handle, int optimize
                         CONVERT_TO_BYTEPTR(src), src_stride, CONVERT_TO_BYTEPTR(dst),
                         dst_stride, lr_ctxt->rst_tmpbuf, optimized_lr);
             }
+#endif
         }
         for (y = 0; y < tile_h; y++) {
             memcpy(src, dst, dst_stride * sizeof(*dst) << use_highbd);

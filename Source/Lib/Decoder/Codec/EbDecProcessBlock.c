@@ -32,6 +32,9 @@
 #include "EbDecLF.h"
 #include "EbDecPicMgr.h"
 
+#include <stdio.h>
+#include <stdlib.h>
+
 extern int select_samples(
     MV *mv,
     int *pts,
@@ -157,6 +160,7 @@ void decode_block(DecModCtxt *dec_mod_ctxt, int32_t mi_row, int32_t mi_col,
 
     BlockModeInfo *mode_info = get_cur_mode_info(dec_mod_ctxt->dec_handle_ptr, mi_row, mi_col, sb_info);
     bool inter_block = is_inter_block(mode_info);
+
 #if MODE_INFO_DBG
     assert(mode_info->mi_row == mi_row);
     assert(mode_info->mi_col == mi_col);

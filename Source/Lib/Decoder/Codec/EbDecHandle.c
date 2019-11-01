@@ -541,7 +541,7 @@ EB_API EbErrorType eb_svt_decode_frame(
     {
         /*TODO : Remove or move. For Test purpose only */
         dec_handle_ptr->dec_cnt++;
-        //printf("\n SVT-AV1 Dec : Decoding Pic #%d", dec_handle_ptr->dec_cnt);
+        printf("\n SVT-AV1 Dec : Decoding Pic #%d", dec_handle_ptr->dec_cnt);
 
         uint64_t frame_size = 0;
         /*if (ctx->is_annexb) {
