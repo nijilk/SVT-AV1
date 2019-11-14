@@ -2114,32 +2114,28 @@ void clear_above_context(EbDecHandle *dec_handle_ptr, int mi_col_start,
 
     int num_planes  = av1_num_planes(&seq_params->color_config);
     const int width = mi_col_end - mi_col_start;
-
     const int offset_y  = mi_col_start;
-    const int width_y   = width;
+    int width_y   = width;
+
+    if ((mi_col_end + 1) >> 1 == dec_handle_ptr->frame_header.mi_cols >> 1)
+        width_y = parse_ctxt->parse_nbr4x4_ctxt.num_mi_col - mi_col_start;
 
     const int offset_uv = offset_y >> seq_params->color_config.subsampling_x;
     const int width_uv  = width_y >> seq_params->color_config.subsampling_x;
 
     int8_t num4_64x64 = mi_size_wide[BLOCK_64X64];
 
-    ZERO_ARRAY((&parse_ctxt->parse_nbr4x4_ctxt.above_level_ctx[0][tile_row]) +
-        offset_y, width_y);
-    ZERO_ARRAY((&parse_ctxt->parse_nbr4x4_ctxt.above_dc_ctx[0][tile_row]) +
+    ZERO_ARRAY((&parse_ctxt->parse_nbr4x4_ctxt.above_ctx[0][tile_row]) +
         offset_y, width_y);
     ZERO_ARRAY((&parse_ctxt->parse_nbr4x4_ctxt.above_palette_colors[0][tile_row]),
         num4_64x64 * PALETTE_MAX_SIZE);
 
     if (num_planes > 1) {
-        ZERO_ARRAY((&parse_ctxt->parse_nbr4x4_ctxt.above_level_ctx[1][tile_row]) +
-            offset_uv, width_uv);
-        ZERO_ARRAY((&parse_ctxt->parse_nbr4x4_ctxt.above_dc_ctx[1][tile_row]) +
+        ZERO_ARRAY((&parse_ctxt->parse_nbr4x4_ctxt.above_ctx[1][tile_row]) +
             offset_uv, width_uv);
         ZERO_ARRAY((&parse_ctxt->parse_nbr4x4_ctxt.above_palette_colors[1][tile_row]),
             num4_64x64 * PALETTE_MAX_SIZE);
-        ZERO_ARRAY((&parse_ctxt->parse_nbr4x4_ctxt.above_level_ctx[2][tile_row]) +
-            offset_uv, width_uv);
-        ZERO_ARRAY((&parse_ctxt->parse_nbr4x4_ctxt.above_dc_ctx[2][tile_row]) +
+        ZERO_ARRAY((&parse_ctxt->parse_nbr4x4_ctxt.above_ctx[2][tile_row]) +
             offset_uv, width_uv);
         ZERO_ARRAY((&parse_ctxt->parse_nbr4x4_ctxt.above_palette_colors[2][tile_row]),
             num4_64x64 * PALETTE_MAX_SIZE);
@@ -2169,10 +2165,8 @@ void clear_left_context(EbDecHandle *dec_handle_ptr)
     int32_t num_4x4_neigh_sb = seq_params->sb_mi_size;
 
     /* TODO :  after Optimizing the allocation for Chroma fix here also */
-    for (int i = 0; i < num_planes; i++) {
-        ZERO_ARRAY(parse_ctxt->parse_nbr4x4_ctxt.left_level_ctx[i], blk_cnt);
-        ZERO_ARRAY(parse_ctxt->parse_nbr4x4_ctxt.left_dc_ctx[i], blk_cnt);
-    }
+    for (int i = 0; i < num_planes; i++)
+        ZERO_ARRAY(parse_ctxt->parse_nbr4x4_ctxt.left_ctx[i], blk_cnt);
 
     ZERO_ARRAY(parse_ctxt->parse_nbr4x4_ctxt.left_seg_pred_ctx, blk_cnt);
 
@@ -2475,6 +2469,10 @@ EbErrorType read_tile_group_obu(bitstrm_t *bs, EbDecHandle *dec_handle_ptr,
         dec_handle_ptr->seq_header.color_config.subsampling_y;
     dec_handle_ptr->cm.frm_size = dec_handle_ptr->frame_header.frame_size;
     dec_handle_ptr->cm.tiles_info = dec_handle_ptr->frame_header.tiles_info;
+    dec_handle_ptr->is_lf_enabled =
+        (!dec_handle_ptr->frame_header.allow_intrabc &&
+        (dec_handle_ptr->frame_header.loop_filter_params.filter_level[0] ||
+        dec_handle_ptr->frame_header.loop_filter_params.filter_level[1]));
 
     for (int tile_num = tg_start; tile_num <= tg_end; tile_num++) {
         tile_row = tile_num / tiles_info->tile_cols;
@@ -2683,7 +2681,7 @@ EbErrorType decode_multiple_obu(EbDecHandle *dec_handle_ptr, uint8_t **data,
             uint16_t prev_max_frame_width = dec_handle_ptr->seq_header.max_frame_width;
             uint16_t prev_max_frame_height = dec_handle_ptr->seq_header.max_frame_height;
 
-                status = read_sequence_header_obu(&bs, &dec_handle_ptr->seq_header);
+            status = read_sequence_header_obu(&bs, &dec_handle_ptr->seq_header);
             if (status != EB_ErrorNone)
                 return status;
             if (dec_handle_ptr->seq_header.color_config.bit_depth == EB_TWELVE_BIT)

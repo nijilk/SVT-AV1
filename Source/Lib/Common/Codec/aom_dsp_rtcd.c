@@ -438,6 +438,8 @@ void setup_rtcd_internal(EbAsm asm_type)
 
     eb_av1_warp_affine = eb_av1_warp_affine_c;
     if (flags & HAS_AVX2) eb_av1_warp_affine = eb_av1_warp_affine_avx2;
+    eb_av1_highbd_warp_affine = eb_av1_highbd_warp_affine_c;
+    if (flags & HAS_SSE4_1) eb_av1_highbd_warp_affine = eb_av1_highbd_warp_affine_sse4_1;
 
     eb_av1_filter_intra_predictor = eb_av1_filter_intra_predictor_c;
 #if FILTER_INTRA_FLAG

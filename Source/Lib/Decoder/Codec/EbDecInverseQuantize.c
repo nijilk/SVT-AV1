@@ -217,16 +217,21 @@ int32_t inverse_quantize(EbDecHandle * dec_handle, PartitionInfo_t *part, BlockM
 #endif
     level++;
 
+    TranLow q_coeff;
+    int32_t lev;
     for (i = 0; i < n_coeffs; i++) {
+        lev = level[i];
         pos = scan[i];
-        qcoeffs[pos] = (TranLow)((int64_t)abs(level[i]) *
-            get_dqv(dequant, pos, iqmatrix) & 0xffffff);
-        qcoeffs[pos] = qcoeffs[pos] >> shift;
+        if (lev != 0) {
+            q_coeff = (TranLow)((int64_t)abs(lev) *
+                get_dqv(dequant, pos, iqmatrix) & 0xffffff);
+            q_coeff = q_coeff >> shift;
 
-        if (level[i] < 0)
-            qcoeffs[pos] = -qcoeffs[pos];
+            if (lev < 0)
+                q_coeff = -q_coeff;
 
-        qcoeffs[pos] = clamp(qcoeffs[pos], min_value, max_value);
+            qcoeffs[pos] = clamp(q_coeff, min_value, max_value);
+        }
     }
     return n_coeffs;
 }

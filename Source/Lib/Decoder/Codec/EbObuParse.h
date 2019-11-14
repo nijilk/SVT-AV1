@@ -86,20 +86,17 @@ typedef struct ParseNbr4x4Ctxt {
      to the current super block row. */
     uint8_t *left_part_ht;
 
-    /* Buffer holding the sign of the DC coefficients of the previous 4x4 block row. */
-    uint8_t *above_dc_ctx[MAX_MB_PLANE];
+    /* Buffer holding the sign of the DC coefficients and the cumulative
+       sum of the coefficient levels of the previous 4x4 block row. */
+    int8_t *above_ctx[MAX_MB_PLANE];
 
-    /* Buffer holding the sign of the DC coefficients of the left 4x4 blocks
-     corresponding to the current super block row. */
-    uint8_t *left_dc_ctx[MAX_MB_PLANE];
+    /* Buffer holding the sign of the DC coefficients and the cumulative
+       sum of the coefficient levels of the left 4x4 blocks
+       corresponding to the current super block row. */
+    int8_t *left_ctx[MAX_MB_PLANE];
 
-    /* Buffer holding the cumulative sum of the coefficient levels of the
-     previous 4x4 block row. */
-    uint8_t *above_level_ctx[MAX_MB_PLANE];
-
-    /* Buffer holding the cumulative sum of the coefficient levels of the
-     left 4x4 blocks corresponding to the current super block row. */
-    uint8_t *left_level_ctx[MAX_MB_PLANE];
+    /* Number of mi columns with respect to the aligned width. */
+    uint32_t num_mi_col;
 
     /* Buffer holding the seg_id_predicted of the previous 4x4 block row. */
     uint8_t *left_seg_pred_ctx;

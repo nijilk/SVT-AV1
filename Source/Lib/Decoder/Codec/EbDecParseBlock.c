@@ -758,6 +758,8 @@ void intra_frame_mode_info(EbDecHandle *dec_handle, PartitionInfo_t *xd,
             mbmi->uv_mode = UV_DC_PRED;
 
         if (allow_palette(dec_handle->frame_header.allow_screen_content_tools, bsize)) {
+            memset(parse_ctxt->parse_nbr4x4_ctxt.palette_colors, 0,
+                   MAX_MB_PLANE * PALETTE_MAX_SIZE);
             palette_mode_info(dec_handle, xd, mi_row, mi_col, r);
             update_palette_context(dec_handle, mi_row, mi_col, mbmi);
         }
@@ -1095,6 +1097,8 @@ void intra_block_mode_info(EbDecHandle *dec_handle, int mi_row,
     mbmi->palette_size[1] = 0;
 
     if (allow_palette(dec_handle->frame_header.allow_screen_content_tools, bsize)) {
+        memset(parse_ctxt->parse_nbr4x4_ctxt.palette_colors, 0,
+               MAX_MB_PLANE * PALETTE_MAX_SIZE);
         palette_mode_info(dec_handle, xd, mi_row, mi_col, r);
         update_palette_context(dec_handle, mi_row, mi_col, mbmi);
     }
@@ -1665,9 +1669,36 @@ TxType compute_tx_type(PlaneType plane_type,
     return tx_type;
 }
 
+void reset_skip_context(EbDecHandle *dec_handle, int mi_row, int mi_col,
+                        BlockSize bsize, const int num_planes)
+{
+    int i, nplanes, chroma_ref;
+    ParseCtxt *parse_ctxt = (ParseCtxt *)dec_handle->pv_parse_ctxt;
+    ParseNbr4x4Ctxt *ngr_ctx = &parse_ctxt->parse_nbr4x4_ctxt;
+    chroma_ref = is_chroma_reference(mi_row, mi_col, bsize,
+                 dec_handle->seq_header.color_config.subsampling_x,
+                 dec_handle->seq_header.color_config.subsampling_y);
+    nplanes = 1 + (num_planes - 1) * chroma_ref;
+
+    for (i = 0; i < nplanes; i++) {
+        uint8_t suby = i ? dec_handle->seq_header.color_config.subsampling_y : 0;
+        uint8_t subx = i ? dec_handle->seq_header.color_config.subsampling_x : 0;
+        const BlockSize plane_bsize = get_plane_block_size(bsize, subx, suby);
+        const int txs_wide = block_size_wide[plane_bsize] >> tx_size_wide_log2[0];
+        const int txs_high = block_size_high[plane_bsize] >> tx_size_high_log2[0];
+
+        int8_t *const above_ctx = ngr_ctx->above_ctx[i] + (mi_col >> subx);
+        int8_t *const left_ctx = ngr_ctx->left_ctx[i] +
+            ((mi_row - parse_ctxt->sb_row_mi) >> suby);
+
+        memset(above_ctx, 0, txs_wide);
+        memset(left_ctx, 0, txs_high);
+    }
+}
+
 void update_coeff_ctx(EbDecHandle *dec_handle, int plane, PartitionInfo_t *pi,
     TxSize tx_size, uint32_t blk_row, uint32_t blk_col, int above_off,
-    int left_off, int cul_level, int dc_val)
+    int left_off, int cul_level)
 {
     ParseCtxt *parse_ctxt = (ParseCtxt *)dec_handle->pv_parse_ctxt;
     ParseNbr4x4Ctxt *ngr_ctx = &parse_ctxt->parse_nbr4x4_ctxt;
@@ -1675,12 +1706,8 @@ void update_coeff_ctx(EbDecHandle *dec_handle, int plane, PartitionInfo_t *pi,
     uint8_t suby = plane ? dec_handle->seq_header.color_config.subsampling_y : 0;
     uint8_t subx = plane ? dec_handle->seq_header.color_config.subsampling_x : 0;
 
-    uint8_t *const above_dc_ctx = ngr_ctx->above_dc_ctx[plane] + blk_col;
-    uint8_t *const left_dc_ctx = ngr_ctx->left_dc_ctx[plane] +
-        (blk_row - (parse_ctxt->sb_row_mi >> suby));
-
-    uint8_t *const above_level_ctx = ngr_ctx->above_level_ctx[plane] + blk_col;
-    uint8_t *const left_level_ctx = ngr_ctx->left_level_ctx[plane] +
+    int8_t *const above_ctx = ngr_ctx->above_ctx[plane] + blk_col;
+    int8_t *const left_ctx = ngr_ctx->left_ctx[plane] +
         (blk_row - (parse_ctxt->sb_row_mi >> suby));
 
     const int txs_wide = tx_size_wide_unit[tx_size];
@@ -1692,14 +1719,11 @@ void update_coeff_ctx(EbDecHandle *dec_handle, int plane, PartitionInfo_t *pi,
         const int blocks_wide = max_block_wide(pi, plane_bsize, subx);
         const int above_contexts = AOMMIN(txs_wide, (blocks_wide - above_off));
 
-        memset(above_dc_ctx, dc_val, above_contexts);
-        memset(above_dc_ctx + above_contexts, 0, (txs_wide - above_contexts));
-        memset(above_level_ctx, cul_level, above_contexts);
-        memset(above_level_ctx + above_contexts, 0, (txs_wide - above_contexts));
+        memset(above_ctx, cul_level, above_contexts);
+        memset(above_ctx + above_contexts, 0, (txs_wide - above_contexts));
     }
     else {
-        memset(above_dc_ctx, dc_val, txs_wide);
-        memset(above_level_ctx, cul_level, txs_wide);
+        memset(above_ctx, cul_level, txs_wide);
     }
 
     if (pi->mb_to_bottom_edge < 0) {
@@ -1708,14 +1732,11 @@ void update_coeff_ctx(EbDecHandle *dec_handle, int plane, PartitionInfo_t *pi,
         const int blocks_high = max_block_high(pi, plane_bsize, suby);
         const int left_contexts = AOMMIN(txs_high, (blocks_high - left_off));
 
-        memset(left_dc_ctx, dc_val, left_contexts);
-        memset(left_dc_ctx + left_contexts, 0, txs_high - left_contexts);
-        memset(left_level_ctx, cul_level, left_contexts);
-        memset(left_level_ctx + left_contexts, 0, txs_high - left_contexts);
+        memset(left_ctx, cul_level, left_contexts);
+        memset(left_ctx + left_contexts, 0, txs_high - left_contexts);
     }
     else {
-        memset(left_dc_ctx, dc_val, txs_high);
-        memset(left_level_ctx, cul_level, txs_high);
+        memset(left_ctx, cul_level, txs_high);
     }
 }
 
@@ -1827,6 +1848,13 @@ static INLINE void read_coeffs_reverse(SvtReader *r, TxSize tx_size,
     }
 }
 
+static INLINE void set_dc_sign(int *cul_level, int dc_val) {
+    if (dc_val < 0)
+        *cul_level |= 1 << COEFF_CONTEXT_BITS;
+    else if (dc_val > 0)
+        *cul_level += 2 << COEFF_CONTEXT_BITS;
+}
+
 uint16_t parse_coeffs(EbDecHandle *dec_handle, PartitionInfo_t *xd, SvtReader *r,
     uint32_t blk_row, uint32_t blk_col, int above_off, int left_off, int plane,
     int txb_skip_ctx, int dc_sign_ctx, TxSize tx_size, int32_t *coeff_buf,
@@ -1860,7 +1888,7 @@ uint16_t parse_coeffs(EbDecHandle *dec_handle, PartitionInfo_t *xd, SvtReader *r
         }
 
         update_coeff_ctx(dec_handle, plane, xd, tx_size, blk_row, blk_col,
-            above_off, left_off, cul_level, dc_val);
+            above_off, left_off, cul_level);
 
         return 0;
     }
@@ -2000,7 +2028,7 @@ uint16_t parse_coeffs(EbDecHandle *dec_handle, PartitionInfo_t *xd, SvtReader *r
                 sign = svt_read_bit(r, ACCT_STR);
             if (level >= MAX_BASE_BR_RANGE)
                 level += read_golomb(r);
-            if (c == 0) dc_val = sign ? 1 : 2;
+            if (c == 0) dc_val = sign ? -level : level;
 
         level &= 0xfffff;
         cul_level += level;
@@ -2009,9 +2037,10 @@ uint16_t parse_coeffs(EbDecHandle *dec_handle, PartitionInfo_t *xd, SvtReader *r
     }
 
     cul_level = AOMMIN(COEFF_CONTEXT_MASK, cul_level);
+    set_dc_sign(&cul_level, dc_val);
 
     update_coeff_ctx(dec_handle, plane, xd, tx_size, blk_row, blk_col,
-        above_off, left_off, cul_level, dc_val);
+        above_off, left_off, cul_level);
 
     trans_info->cbf = 1; assert(eob);
 
@@ -2074,6 +2103,96 @@ PartitionType parse_partition_type(uint32_t blk_row, uint32_t blk_col, SvtReader
     return  PARTITION_SPLIT;
 }
 
+static INLINE int combine_entropy_contexts(int8_t a, int8_t b) {
+    return (a != 0) + (b != 0);
+}
+
+static INLINE int get_entropy_context(TxSize tx_size, const int8_t *a,
+    const int8_t *l) {
+    uint8_t above_ec = 0, left_ec = 0;
+
+    switch (tx_size) {
+    case TX_4X4:
+        above_ec = a[0] != 0;
+        left_ec = l[0] != 0;
+        break;
+    case TX_4X8:
+        above_ec = a[0] != 0;
+        left_ec = !!*(const uint16_t *)l;
+        break;
+    case TX_8X4:
+        above_ec = !!*(const uint16_t *)a;
+        left_ec = l[0] != 0;
+        break;
+    case TX_8X16:
+        above_ec = !!*(const uint16_t *)a;
+        left_ec = !!*(const uint32_t *)l;
+        break;
+    case TX_16X8:
+        above_ec = !!*(const uint32_t *)a;
+        left_ec = !!*(const uint16_t *)l;
+        break;
+    case TX_16X32:
+        above_ec = !!*(const uint32_t *)a;
+        left_ec = !!*(const uint64_t *)l;
+        break;
+    case TX_32X16:
+        above_ec = !!*(const uint64_t *)a;
+        left_ec = !!*(const uint32_t *)l;
+        break;
+    case TX_8X8:
+        above_ec = !!*(const uint16_t *)a;
+        left_ec = !!*(const uint16_t *)l;
+        break;
+    case TX_16X16:
+        above_ec = !!*(const uint32_t *)a;
+        left_ec = !!*(const uint32_t *)l;
+        break;
+    case TX_32X32:
+        above_ec = !!*(const uint64_t *)a;
+        left_ec = !!*(const uint64_t *)l;
+        break;
+    case TX_64X64:
+        above_ec = !!(*(const uint64_t *)a | *(const uint64_t *)(a + 8));
+        left_ec = !!(*(const uint64_t *)l | *(const uint64_t *)(l + 8));
+        break;
+    case TX_32X64:
+        above_ec = !!*(const uint64_t *)a;
+        left_ec = !!(*(const uint64_t *)l | *(const uint64_t *)(l + 8));
+        break;
+    case TX_64X32:
+        above_ec = !!(*(const uint64_t *)a | *(const uint64_t *)(a + 8));
+        left_ec = !!*(const uint64_t *)l;
+        break;
+    case TX_4X16:
+        above_ec = a[0] != 0;
+        left_ec = !!*(const uint32_t *)l;
+        break;
+    case TX_16X4:
+        above_ec = !!*(const uint32_t *)a;
+        left_ec = l[0] != 0;
+        break;
+    case TX_8X32:
+        above_ec = !!*(const uint16_t *)a;
+        left_ec = !!*(const uint64_t *)l;
+        break;
+    case TX_32X8:
+        above_ec = !!*(const uint64_t *)a;
+        left_ec = !!*(const uint16_t *)l;
+        break;
+    case TX_16X64:
+        above_ec = !!*(const uint32_t *)a;
+        left_ec = !!(*(const uint64_t *)l | *(const uint64_t *)(l + 8));
+        break;
+    case TX_64X16:
+        above_ec = !!(*(const uint64_t *)a | *(const uint64_t *)(a + 8));
+        left_ec = !!*(const uint32_t *)l;
+        break;
+    default: assert(0 && "Invalid transform size."); break;
+    }
+    return combine_entropy_contexts(above_ec, left_ec);
+}
+
 static INLINE void dec_get_txb_ctx(EbDecHandle *dec_handle,
     const TxSize tx_size, const int plane, int plane_bsize, int txb_h_unit,
     int txb_w_unit, int blk_row, int blk_col, TXB_CTX *const txb_ctx)
@@ -2087,37 +2206,30 @@ static INLINE void dec_get_txb_ctx(EbDecHandle *dec_handle,
     int suby = plane ? clr_cfg->subsampling_y : 0;
     int dc_sign = 0;
     int k = 0;
-    uint8_t *above_dc_ctx = nbr_ctx->above_dc_ctx[plane] + blk_col;
-    uint8_t *left_dc_ctx = nbr_ctx->left_dc_ctx[plane] +
-        (blk_row - (parse_ctx->sb_row_mi>> suby));
+    static const int8_t signs[3] = { 0, -1, 1 };
+    static const int8_t dc_sign_contexts[4 * MAX_TX_SIZE_UNIT + 1] = {
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+        2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2
+    };
+    int8_t *above_ctx = nbr_ctx->above_ctx[plane] + blk_col;
+    int8_t *left_ctx = nbr_ctx->left_ctx[plane] +
+        (blk_row - (parse_ctx->sb_row_mi >> suby));
 
     do {
-        const unsigned int sign = above_dc_ctx[k];
-        if (sign == 1)
-            dc_sign--;
-        else if (sign == 2)
-            dc_sign++;
+        const unsigned int sign = ((uint8_t)above_ctx[k] >> COEFF_CONTEXT_BITS);
+        assert(sign <= 2);
+        dc_sign += signs[sign];
     } while (++k < txb_w_unit);
 
     k = 0;
     do {
-        const unsigned int sign = left_dc_ctx[k];
-        if (sign == 1)
-            dc_sign--;
-        else if (sign == 2)
-            dc_sign++;
+        const unsigned int sign = ((uint8_t)left_ctx[k] >> COEFF_CONTEXT_BITS);
+        assert(sign <= 2);
+        dc_sign += signs[sign];
     } while (++k < txb_h_unit);
 
-    if (dc_sign < 0)
-        txb_ctx->dc_sign_ctx = 1;
-    else if (dc_sign > 0)
-        txb_ctx->dc_sign_ctx = 2;
-    else
-        txb_ctx->dc_sign_ctx = 0;
-
-    uint8_t *above_level_ctx = nbr_ctx->above_level_ctx[plane] + blk_col;
-    uint8_t *left_level_ctx = nbr_ctx->left_level_ctx[plane] +
-        (blk_row - (parse_ctx->sb_row_mi >> suby));
+    txb_ctx->dc_sign_ctx = dc_sign_contexts[dc_sign + 2 * MAX_TX_SIZE_UNIT];
 
     if (plane == 0) {
         if (plane_bsize == txsize_to_bsize[tx_size])
@@ -2133,13 +2245,16 @@ static INLINE void dec_get_txb_ctx(EbDecHandle *dec_handle,
 
             k = 0;
             do {
-                top |= above_level_ctx[k];
+                top |= above_ctx[k];
             } while (++k < txb_w_unit);
+            top &= COEFF_CONTEXT_MASK;
 
             k = 0;
             do {
-                left |= left_level_ctx[k];
+                left |= left_ctx[k];
             } while (++k < txb_h_unit);
+            left &= COEFF_CONTEXT_MASK;
+
             const int max = AOMMIN(top | left, 4);
             const int min = AOMMIN(AOMMIN(top, left), 4);
 
@@ -2147,25 +2262,10 @@ static INLINE void dec_get_txb_ctx(EbDecHandle *dec_handle,
         }
     }
     else {
-        int above = 0, left = 0;
-        k = 0;
-        do {
-                above |= above_level_ctx[k];
-                above |= above_dc_ctx[k];
-        } while (++k < txb_w_unit);
-
-        k = 0;
-        do {
-            left |= left_level_ctx[k];
-            left |= left_dc_ctx[k];
-        } while (++k < txb_h_unit);
-
+        const int ctx_base = get_entropy_context(tx_size, above_ctx, left_ctx);
         const int ctx_offset = (num_pels_log2_lookup[plane_bsize] >
-            num_pels_log2_lookup[txsize_to_bsize[tx_size]])
-            ? 10
-            : 7;
-        int ctx = (above != 0) + (left != 0);
-        txb_ctx->txb_skip_ctx = ctx + ctx_offset;
+            num_pels_log2_lookup[txsize_to_bsize[tx_size]]) ? 10 : 7;
+        txb_ctx->txb_skip_ctx = ctx_base + ctx_offset;
     }
 #undef MAX_TX_SIZE_UNIT
 }
@@ -2173,20 +2273,10 @@ static INLINE void dec_get_txb_ctx(EbDecHandle *dec_handle,
 uint16_t parse_transform_block(EbDecHandle *dec_handle,
     PartitionInfo_t *pi, SvtReader *r, int32_t *coeff,
     TransformInfo_t *trans_info, int plane, int blk_col,
-    int blk_row, int mi_row, int mi_col,
-    TxSize tx_size, int skip)
+    int blk_row, int start_x, int start_y, TxSize tx_size,
+    int skip, int sub_x, int sub_y)
 {
-    uint16_t eob = 0 , sub_x, sub_y;
-
-    sub_x = (plane > 0) ? dec_handle->seq_header.color_config.subsampling_x : 0;
-    sub_y = (plane > 0) ? dec_handle->seq_header.color_config.subsampling_y : 0;
-
-    uint32_t start_x = (mi_col >> sub_x) + blk_col;
-    uint32_t start_y = (mi_row >> sub_y) + blk_row;
-
-    if ( start_x >= (dec_handle->frame_header.mi_cols >> sub_x) ||
-         start_y >= (dec_handle->frame_header.mi_rows >> sub_y) )
-        return eob;
+    uint16_t eob = 0;
 
     if (!skip) {
         TXB_CTX txb_ctx;
@@ -2219,10 +2309,6 @@ uint16_t parse_transform_block(EbDecHandle *dec_handle,
         eob = parse_coeffs(dec_handle, pi, r, start_y, start_x, blk_col,
             blk_row, plane, txb_ctx.txb_skip_ctx, txb_ctx.dc_sign_ctx,
             tx_size, coeff, trans_info);
-    }
-    else{
-        update_coeff_ctx(dec_handle, plane, pi, tx_size,
-            start_y, start_x, blk_col, blk_row, 0, 0);
     }
     return eob;
 }
@@ -2312,15 +2398,26 @@ void parse_residual(EbDecHandle *dec_handle, PartitionInfo_t *pi, SvtReader *r,
                     cur_coeff[1] = cur_loc;
                     }
 #endif
-                    int32_t eob = parse_transform_block(dec_handle, pi, r, coeff,
-                        trans_info[plane], plane,
-                        trans_info[plane]->tu_x_offset, trans_info[plane]->tu_y_offset,
-                        mi_row, mi_col, trans_info[plane]->tx_size, skip);
+                    int32_t eob = 0;
+
+                    int blk_col = trans_info[plane]->tu_x_offset;
+                    int blk_row = trans_info[plane]->tu_y_offset;
+
+                    uint32_t start_x = (mi_col >> sub_x) + blk_col;
+                    uint32_t start_y = (mi_row >> sub_y) + blk_row;
+
+                    if (start_x >= (dec_handle->frame_header.mi_cols >> sub_x) ||
+                        start_y >= (dec_handle->frame_header.mi_rows >> sub_y))
+                        return;
+
+                    eob = parse_transform_block(dec_handle, pi, r, coeff,
+                        trans_info[plane], plane, blk_col, blk_row, start_x,
+                        start_y, trans_info[plane]->tx_size, skip, sub_x, sub_y);
 
                     if (eob != 0) {
                         parse_ctx->cur_coeff_buf[plane] += (eob + 1);
                         trans_info[plane]->cbf = 1;
-                        }
+                    }
                     else
                         trans_info[plane]->cbf = 0;
 
@@ -2355,9 +2452,6 @@ void parse_block(EbDecHandle *dec_handle, uint32_t mi_row, uint32_t mi_col,
     part_info.sb_info   = sb_info;
     part_info.mi_row = mi_row;
     part_info.mi_col = mi_col;
-
-    for (int i = 0; i < MAX_MB_PLANE * PALETTE_MAX_SIZE; i++)
-        parse_ctx->parse_nbr4x4_ctxt.palette_colors[i] = 0;
 
     mode->partition = partition;
     /* TU offset update from parse ctxt info of previous block */
@@ -2464,6 +2558,11 @@ void parse_block(EbDecHandle *dec_handle, uint32_t mi_row, uint32_t mi_col,
 
     read_block_tx_size(dec_handle, r, &part_info, subsize);
 
+    if (mode->skip) {
+        int num_planes =
+            dec_handle->seq_header.color_config.mono_chrome ? 1 : MAX_MB_PLANE;
+        reset_skip_context(dec_handle, mi_row, mi_col, mode->sb_type, num_planes);
+    }
     parse_residual(dec_handle, &part_info, r, mi_row, mi_col, subsize);
 
     /* Update block level MI map */

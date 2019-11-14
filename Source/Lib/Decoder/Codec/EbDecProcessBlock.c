@@ -339,37 +339,48 @@ void decode_block(DecModCtxt *dec_mod_ctxt, int32_t mi_row, int32_t mi_col,
             num_tu = plane ? mode_info->num_chroma_tus : mode_info->num_luma_tus;
 
         assert(num_tu != 0);
+        void *blk_recon_buf;
+        int32_t recon_stride;
+
+        derive_blk_pointers(recon_picture_buf, plane,
+            (mi_col >> sub_x) << MI_SIZE_LOG2,
+            (mi_row >> sub_y) << MI_SIZE_LOG2,
+            &blk_recon_buf, &recon_stride, sub_x, sub_y);
 
         for (uint32_t tu = 0; tu < num_tu; tu++)
         {
             int32_t *qcoeffs = dec_mod_ctxt->iquant_cur_ptr;
-            void *blk_recon_buf;
-            int32_t recon_stride;
+            void *tu_recon_buf;
+            int32_t tu_offset;
 
             tx_size = trans_info->tx_size;
             coeffs = dec_mod_ctxt->cur_coeff[plane];
 
-            derive_blk_pointers(recon_picture_buf, plane,
-                ((mi_col >> sub_x) + trans_info->tu_x_offset)*MI_SIZE,
-                ((mi_row >> sub_y) + trans_info->tu_y_offset)*MI_SIZE,
-                &blk_recon_buf, &recon_stride, sub_x, sub_y);
+            tu_offset = (trans_info->tu_y_offset * recon_stride +
+                         trans_info->tu_x_offset) << MI_SIZE_LOG2;
+            if (recon_picture_buf->bit_depth != EB_8BIT)
+                tu_recon_buf = (void*)((uint16_t*)blk_recon_buf + tu_offset);
+            else
+                tu_recon_buf = (void*)((uint8_t*)blk_recon_buf + tu_offset);
 
-            if (plane == 0)
-                /*Populate the LF luma params for current block*/
-                fill_4x4_param_luma(lf_block_l,
-                    mi_col + trans_info->tu_x_offset,
-                    mi_row + trans_info->tu_y_offset,
-                    lf_stride, tx_size, mode_info);
-            else if(plane == 1)
-                /*Chroma population is done at luma unit, not the chroma unit*/
-                fill_4x4_param_uv(lf_block_uv,
-                    (mi_col & (~sub_x)) + (trans_info->tu_x_offset << sub_x),
-                    (mi_row & (~sub_y)) + (trans_info->tu_y_offset << sub_y),
-                    lf_stride, tx_size, sub_x, sub_y);
+            if (dec_handle->is_lf_enabled) {
+                if (plane == 0)
+                    /*Populate the LF luma params for current block*/
+                    fill_4x4_param_luma(lf_block_l,
+                        mi_col + trans_info->tu_x_offset,
+                        mi_row + trans_info->tu_y_offset,
+                        lf_stride, tx_size, mode_info);
+                else if (plane == 1)
+                    /*Chroma population is done at luma unit, not the chroma unit*/
+                    fill_4x4_param_uv(lf_block_uv,
+                        (mi_col & (~sub_x)) + (trans_info->tu_x_offset << sub_x),
+                        (mi_row & (~sub_y)) + (trans_info->tu_y_offset << sub_y),
+                        lf_stride, tx_size, sub_x, sub_y);
+            }
 
             if (!inter_block)
                 svt_av1_predict_intra(dec_mod_ctxt, &part_info, plane,
-                    tx_size, dec_mod_ctxt->cur_tile_info, blk_recon_buf,
+                    tx_size, dec_mod_ctxt->cur_tile_info, tu_recon_buf,
                     recon_stride, recon_picture_buf->bit_depth,
                     trans_info->tu_x_offset, trans_info->tu_y_offset);
 
@@ -400,15 +411,15 @@ void decode_block(DecModCtxt *dec_mod_ctxt, int32_t mi_row, int32_t mi_col,
 
                     if (recon_picture_buf->bit_depth == EB_8BIT)
                         av1_inv_transform_recon8bit(qcoeffs,
-                            (uint8_t *)blk_recon_buf, recon_stride,
-                            (uint8_t *)blk_recon_buf, recon_stride,
+                            (uint8_t *)tu_recon_buf, recon_stride,
+                            (uint8_t *)tu_recon_buf, recon_stride,
                             tx_size, tx_type, plane, n_coeffs,
                             dec_handle->frame_header.
                             lossless_array[mode_info->segment_id]);
                     else
                         av1_inv_transform_recon(qcoeffs,
-                            CONVERT_TO_BYTEPTR(blk_recon_buf), recon_stride,
-                            CONVERT_TO_BYTEPTR(blk_recon_buf), recon_stride,
+                            CONVERT_TO_BYTEPTR(tu_recon_buf), recon_stride,
+                            CONVERT_TO_BYTEPTR(tu_recon_buf), recon_stride,
                             tx_size, recon_picture_buf->bit_depth - EB_8BIT,
                             tx_type, plane, n_coeffs, dec_handle->frame_header.
                             lossless_array[mode_info->segment_id]);
@@ -421,7 +432,7 @@ void decode_block(DecModCtxt *dec_mod_ctxt, int32_t mi_row, int32_t mi_col,
             {
                 cfl_store_tx(&part_info, &dec_mod_ctxt->cfl_ctx,
                     trans_info->tu_y_offset, trans_info->tu_x_offset, tx_size,
-                    bsize, color_config, blk_recon_buf, recon_stride);
+                    bsize, color_config, tu_recon_buf, recon_stride);
             }
 
             // increment transform pointer
