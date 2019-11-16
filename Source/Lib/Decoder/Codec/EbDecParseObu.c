@@ -51,6 +51,8 @@ void svt_av1_queue_parse_jobs(EbDecHandle *dec_handle_ptr,
     bitstrm_t   *bs,
     uint32_t tg_start, uint32_t tg_end);
 void parse_frame_tiles(EbDecHandle *dec_handle_ptr, int th_cnt);
+
+void svt_av1_queue_lf_jobs(EbDecHandle *dec_handle_ptr);
 #endif
 
 #define CONFIG_MAX_DECODE_PROFILE 2
@@ -2295,6 +2297,20 @@ EbErrorType read_tile_group_obu(bitstrm_t *bs, EbDecHandle *dec_handle_ptr,
 
         svt_av1_queue_parse_jobs(dec_handle_ptr, tiles_info, obu_header, bs,
                                     tg_start, tg_end);
+#if TEMP_TEST_MT
+        DecMTFrameData *dec_mt_frame_data = &dec_handle_ptr->
+            master_frame_buf.cur_frame_bufs[0].dec_mt_frame_data;
+
+        eb_block_on_mutex(dec_mt_frame_data->temp_mutex);
+
+        dec_mt_frame_data->start_lf_frame = EB_FALSE;
+
+        dec_mt_frame_data->num_tiles_parsed = 0;
+        dec_mt_frame_data->num_tiles_total = num_tiles;
+        dec_mt_frame_data->start_parse_frame = EB_TRUE;
+
+        eb_release_mutex(dec_mt_frame_data->temp_mutex);
+#endif
         parse_frame_tiles(dec_handle_ptr, 0);
     }
     else {
@@ -2338,9 +2354,20 @@ EbErrorType read_tile_group_obu(bitstrm_t *bs, EbDecHandle *dec_handle_ptr,
         }
 #if MT_SUPPORT
     }
-
+#if TEMP_TEST_MT
+    DecMTFrameData *dec_mt_frame_data = &dec_handle_ptr->
+        master_frame_buf.cur_frame_bufs[0].dec_mt_frame_data;
+    volatile uint32_t *num_tiles_parsed = &dec_mt_frame_data->num_tiles_parsed;
+    while(*num_tiles_parsed != dec_mt_frame_data->num_tiles_total)
+        Sleep(5);
+    eb_block_on_mutex(dec_mt_frame_data->temp_mutex);
+    dec_mt_frame_data->start_parse_frame = EB_FALSE;
+    dec_mt_frame_data->num_tiles_parsed = 0;
+    eb_release_mutex(dec_mt_frame_data->temp_mutex);
+#else
+    /*ToDo : Remove*/
     Sleep(200);
-
+#endif
     DecModCtxt *dec_mod_ctxt = (DecModCtxt*)dec_handle_ptr->pv_dec_mod_ctxt;
     /* Reconstruct Tiles */
     for (int tile_num = tg_start; tile_num <= tg_end; tile_num++) {
@@ -2363,6 +2390,41 @@ EbErrorType read_tile_group_obu(bitstrm_t *bs, EbDecHandle *dec_handle_ptr,
         {
             /*LF Trigger function for each frame*/
 #if MT_SUPPORT
+            if(is_mt) {
+                svt_av1_queue_lf_jobs(dec_handle_ptr);
+#if TEMP_TEST_MT
+                DecMTFrameData *dec_mt_frame_data = &dec_handle_ptr->
+                    master_frame_buf.cur_frame_bufs[0].dec_mt_frame_data;
+                int32_t sb_size_h = block_size_high[dec_handle_ptr->seq_header.sb_size];
+                uint32_t picture_height_in_sb = (dec_handle_ptr->frame_header.frame_size.
+                    frame_height + sb_size_h - 1) / sb_size_h;
+
+                eb_block_on_mutex(dec_mt_frame_data->temp_mutex);
+
+                dec_mt_frame_data->start_parse_frame = EB_FALSE;
+
+                dec_mt_frame_data->num_rows_lfed = 0;
+                dec_mt_frame_data->num_rows_total = picture_height_in_sb;
+                dec_mt_frame_data->start_lf_frame = EB_TRUE;
+
+                eb_release_mutex(dec_mt_frame_data->temp_mutex);
+#endif
+                dec_av1_loop_filter_frame_mt(dec_handle_ptr,
+                    dec_handle_ptr->cur_pic_buf[0]->ps_pic_buf,
+                    dec_handle_ptr->pv_lf_ctxt,
+                    &((LFCtxt *)dec_handle_ptr->pv_lf_ctxt)->lf_info,
+                    AOM_PLANE_Y, MAX_MB_PLANE, 0);
+#if TEMP_TEST_MT
+                volatile uint32_t *num_rows_lfed = &dec_mt_frame_data->num_rows_lfed;
+                while (*num_rows_lfed != dec_mt_frame_data->num_rows_total)
+                    Sleep(5);
+                eb_block_on_mutex(dec_mt_frame_data->temp_mutex);
+                dec_mt_frame_data->start_lf_frame = EB_FALSE;
+                dec_mt_frame_data->num_rows_lfed = 0;
+                eb_release_mutex(dec_mt_frame_data->temp_mutex);
+#endif
+            }
+            else
             dec_av1_loop_filter_frame(dec_handle_ptr,
                 dec_handle_ptr->cur_pic_buf[0]->ps_pic_buf,
                 dec_handle_ptr->pv_lf_ctxt,

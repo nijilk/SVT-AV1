@@ -578,6 +578,17 @@ void dec_loop_filter_row(
     uint32_t picture_width_in_sb =
         (seq_header->max_frame_width + sb_size_w - 1) / sb_size_w;
     uint32_t sb_origin_y = y_lcu_index << sb_size_Log2;
+
+    volatile uint32_t *sb_lf_completed_in_prev_row, nsync =1;
+    DecMTLFFrameInfo *lf_frame_info = &dec_handle_ptr->
+        master_frame_buf.cur_frame_bufs[0].dec_mt_frame_data.lf_frame_info;
+    if (y_lcu_index) {
+        sb_lf_completed_in_prev_row = &lf_frame_info->
+            sb_lf_completed_in_row[y_lcu_index-1];
+    }
+    uint32_t *sb_lf_completed_in_row = &lf_frame_info->
+            sb_lf_completed_in_row[y_lcu_index];
+
     for (uint32_t x_lcu_index = 0; x_lcu_index < picture_width_in_sb; ++x_lcu_index) {
         int32_t sb_origin_x = x_lcu_index << sb_size_Log2;
         int32_t endOfRowFlag = (x_lcu_index == picture_width_in_sb - 1) ?
@@ -586,10 +597,19 @@ void dec_loop_filter_row(
         SBInfo  *sb_info = frame_buf->sb_info + (
             ((y_lcu_index * master_frame_buf->sb_cols) + x_lcu_index));
 
+        /* Top-Right Sync*/
+        if (y_lcu_index) {
+            if (x_lcu_index == picture_width_in_sb - 1)
+                nsync = 0;
+            while (*sb_lf_completed_in_prev_row < (x_lcu_index + nsync))
+                Sleep(5); /* ToDo : Change */
+        }
         /*LF function for a SB*/
         dec_loop_filter_sb(frm_hdr, seq_header, recon_picture_buf,
             lf_ctxt, lf_info, sb_origin_y >> 2, sb_origin_x >> 2,
             plane_start, plane_end, endOfRowFlag, sb_info->sb_delta_lf);
+        /* Update Top-Right Sync*/
+        *sb_lf_completed_in_row = x_lcu_index;
     }
 }
 #endif

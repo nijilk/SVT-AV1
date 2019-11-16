@@ -9,7 +9,7 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-
+#define TEMP_TEST_MT 1
 #include "EbDefinitions.h"
 #include "EbSystemResourceManager.h"
 
@@ -42,8 +42,11 @@ typedef struct DecMTParseReconTileInfo {
 
 typedef struct DecMTLFFrameInfo {
 
+    // System Resource Managers
+    EbSystemResource    *lf_resource_ptr;
     /* EbFifo at Frame Row level */
-    EbFifo          *lf_fifo_ptr;
+    EbFifo              **lf_row_producer_fifo_ptr;
+    EbFifo              **lf_row_consumer_fifo_ptr;
     
     /* Array to store SBs completed in every SB row of LF stage.
        Used for top sync */
@@ -54,6 +57,16 @@ typedef struct DecMTLFFrameInfo {
 /* MT State information for each frame in parallel */
 typedef struct DecMTFrameData {
     //EbDctor             dctor;
+#if TEMP_TEST_MT
+    EbBool              start_parse_frame;
+    uint32_t            num_tiles_parsed;
+    uint32_t            num_tiles_total;
+    EbBool              start_lf_frame;
+    uint32_t            num_rows_lfed;
+    uint32_t            num_rows_total;
+    EbHandle            temp_mutex;
+#endif
+    //eb_create_mutex, eb_block_on_mutex, eb_release_mutex
 
     TilesInfo           *tiles_info;
 

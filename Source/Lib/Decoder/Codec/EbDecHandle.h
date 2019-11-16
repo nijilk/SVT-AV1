@@ -246,7 +246,7 @@ typedef struct EbDecHandle {
 
     // Thread Handles
 #if MT_SUPPORT
-    EbHandle                    *parse_thread_handle_array;
+    EbHandle                    *decode_thread_handle_array;
     EbBool                      start_thread_process;
 #endif //MT_SUPPORT
 }EbDecHandle;
@@ -255,6 +255,8 @@ typedef struct EbDecHandle {
 typedef struct DecThreadCtxt {
     uint32_t    thread_cnt;
     EbDecHandle *dec_handle_ptr;
+
+    LoopFilterInfoN lf_info;
 } DecThreadCtxt;
 
 #ifdef __cplusplus
