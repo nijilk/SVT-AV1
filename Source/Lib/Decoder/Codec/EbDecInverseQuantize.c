@@ -23,6 +23,7 @@
 #include "EbDecInverseQuantize.h"
 #include "EbObuParse.h"
 #include "EbDecProcessFrame.h"
+#include "EbDecUtils.h"
 
 #include "EbTransforms.h"
 

@@ -11,6 +11,7 @@ extern "C" {
 #endif
 
 #include "EbDefinitions.h"
+#include "EbSystemResourceManager.h"
 
 /* Node structure used in Decoder Queues. Can be used for tile/row idx */
 typedef struct DecMTNode {
@@ -52,12 +53,15 @@ typedef struct DecMTLFFrameInfo {
 
 /* MT State information for each frame in parallel */
 typedef struct DecMTFrameData {
-    EbDctor             dctor;
+    //EbDctor             dctor;
 
     TilesInfo           *tiles_info;
 
+    // System Resource Managers
+    EbSystemResource    *parse_tile_resource_ptr;
     /* EbFifo at Tile level : Parse Stage */
-    EbFifo              *parse_tile_fifo_ptr;
+    EbFifo              **parse_tile_producer_fifo_ptr;
+    EbFifo              **parse_tile_consumer_fifo_ptr;
 
     /* To prevent more than 1 thread from mod. recon_row_started simult. */
     EbHandle                recon_mutex;

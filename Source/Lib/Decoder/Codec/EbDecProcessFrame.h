@@ -35,7 +35,7 @@ typedef struct DecModCtxt {
     int32_t *cur_coeff[MAX_MB_PLANE];
 
     /* Current tile info */
-    TileInfo    *cur_tile_info;
+    TileInfo    cur_tile_info;
 
     /* CFL context */
     CflCtx  cfl_ctx;

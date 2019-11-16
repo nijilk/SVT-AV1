@@ -116,8 +116,8 @@ typedef struct EbSvtAv1DecConfiguration
      * Default is 1. */
     uint32_t                 threads;
 
-    /* Number of frames that can be processed
-       in parallel. Default is 1 */
+    /* Number of frames that can be processed in parallel.
+     * Default is 1 */
     uint32_t                 num_p_frames;
 
     /* Flag to enable row level parallelism

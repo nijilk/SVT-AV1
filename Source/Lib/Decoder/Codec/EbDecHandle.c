@@ -37,6 +37,19 @@
 /**************************************
 * Globals
 **************************************/
+uint8_t                          num_groups = 0;
+#ifdef _WIN32
+GROUP_AFFINITY                   group_affinity;
+EbBool                           alternate_groups = 0;
+#elif defined(__linux__)
+cpu_set_t                        group_affinity;
+typedef struct logicalProcessorGroup {
+    uint32_t num;
+    uint32_t group[1024];
+    }processorGroup;
+#define INITIAL_PROCESSOR_GROUP 16
+processorGroup                  *lp_group = NULL;
+#endif
 
 EbMemoryMapEntry                 *svt_dec_memory_map;
 uint32_t                         *svt_dec_memory_map_index;
@@ -121,6 +134,8 @@ static EbErrorType eb_dec_handle_ctor(
     svt_dec_memory_map = dec_handle_ptr->memory_map;
     svt_dec_memory_map_index = &dec_handle_ptr->memory_map_index;
     svt_dec_lib_malloc_count = 0;
+
+    dec_handle_ptr->start_thread_process = FALSE;
 
     return return_error;
 }
@@ -364,7 +379,6 @@ EbErrorType eb_svt_dec_set_default_parameter(
     config_ptr->max_bit_depth = EB_EIGHT_BIT;
     config_ptr->max_color_format = EB_YUV420;
     config_ptr->asm_type = 0;
-    config_ptr->threads = 1;
 
     // Application Specific parameters
     config_ptr->channel_id = 0;
@@ -483,7 +497,7 @@ EB_API EbErrorType eb_init_decoder(
     if (svt_dec_component == NULL)
         return EB_ErrorBadParameter;
 
-    EbDecHandle     *dec_handle_ptr = (EbDecHandle   *)svt_dec_component->p_component_private;
+    EbDecHandle     *dec_handle_ptr = (EbDecHandle *)svt_dec_component->p_component_private;
 
     dec_handle_ptr->dec_cnt = -1;
     dec_handle_ptr->num_frms_prll   = 1;
@@ -497,6 +511,9 @@ EB_API EbErrorType eb_init_decoder(
     dec_handle_ptr->show_frame          = 0;
     dec_handle_ptr->showable_frame      = 0;
 
+    /************************************
+    * Plateform detection
+    ************************************/
     dec_handle_ptr->dec_config.asm_type = get_cpu_asm_type();
     setup_rtcd_internal(dec_handle_ptr->dec_config.asm_type);
     asmSetConvolveAsmTable();

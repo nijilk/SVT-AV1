@@ -261,7 +261,7 @@ void decode_block(DecModCtxt *dec_mod_ctxt, int32_t mi_row, int32_t mi_col,
             int32_t nsamples = 0;
             int32_t apply_wm = 0;
 
-            nsamples = find_warp_samples(dec_handle, &part_info, mi_row, mi_col, pts, pts_inref);
+            nsamples = find_warp_samples(dec_handle, tile, &part_info, mi_row, mi_col, pts, pts_inref);
             assert(nsamples > 0);
 
             MV mv = mode_info->mv[REF_LIST_0].as_mv;
@@ -373,7 +373,7 @@ void decode_block(DecModCtxt *dec_mod_ctxt, int32_t mi_row, int32_t mi_col,
 
             if (!inter_block)
                 svt_av1_predict_intra(dec_mod_ctxt, &part_info, plane,
-                    tx_size, dec_mod_ctxt->cur_tile_info, blk_recon_buf,
+                    tx_size, &dec_mod_ctxt->cur_tile_info, blk_recon_buf,
                     recon_stride, recon_picture_buf->bit_depth,
                     trans_info->tu_x_offset, trans_info->tu_y_offset);
 

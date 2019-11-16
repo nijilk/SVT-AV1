@@ -48,7 +48,7 @@ static void decode_partition(DecModCtxt *dec_mod_ctxt,
 
 #define DECODE_BLOCK(db_r, db_c, db_subsize)                \
 decode_block(dec_mod_ctxt, db_r, db_c, db_subsize,          \
-    dec_mod_ctxt->cur_tile_info, sb_info)
+    &dec_mod_ctxt->cur_tile_info, sb_info)
 
 #define DECODE_PARTITION(db_r, db_c, db_subsize)            \
 decode_partition(dec_mod_ctxt, (db_r), (db_c),              \
@@ -123,7 +123,7 @@ void decode_super_block(DecModCtxt *dec_mod_ctxt,
 
     /* Pointer updates */
     bool do_memset = true;
-    int left_available = (mi_col > (uint32_t)dec_mod_ctxt->cur_tile_info->mi_col_start);
+    int left_available = (mi_col > (uint32_t)dec_mod_ctxt->cur_tile_info.mi_col_start);
     if (left_available) {
         BlockModeInfo *left_mode = get_left_mode_info(dec_handle, mi_row, mi_col, sb_info);
         if (left_mode->skip && left_mode->sb_type == seq->sb_size) {

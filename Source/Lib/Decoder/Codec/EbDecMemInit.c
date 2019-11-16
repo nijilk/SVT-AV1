@@ -19,12 +19,14 @@
 #include "EbDecProcessFrame.h"
 
 #include "EbObuParse.h"
+#include "EbDecParseFrame.h"
 
 #include "EbDecMemInit.h"
 #include "EbDecInverseQuantize.h"
 
 #include "EbDecPicMgr.h"
 #include "EbDecLF.h"
+#include "EbDecUtils.h"
 
 /*TODO: Remove and harmonize with encoder. Globals prevent harmonization now! */
 /*****************************************
@@ -157,7 +159,12 @@ static EbErrorType init_master_frame_ctxt(EbDecHandle  *dec_handle_ptr) {
         EB_MALLOC_DEC(BlockModeInfo*, cur_frame_buf->mode_info,
                     (num_sb * num_mis_in_sb * sizeof(BlockModeInfo)), EB_N_PTR);
 
+#if MT_SUPPORT
+        /* TransformInfo str allocation at 4x4 level 
+           TO-DO optimize memory based on the chroma subsampling.*/
+#else
         /* TransformInfo str allocation at 4x4 level */
+#endif
         EB_MALLOC_DEC(TransformInfo_t*, cur_frame_buf->trans_info[AOM_PLANE_Y],
             (num_sb * num_mis_in_sb * sizeof(TransformInfo_t)), EB_N_PTR);
 
@@ -319,58 +326,32 @@ static EbErrorType init_master_frame_ctxt(EbDecHandle  *dec_handle_ptr) {
 static EbErrorType init_parse_context (EbDecHandle  *dec_handle_ptr) {
     EbErrorType return_error = EB_ErrorNone;
 
+#if MT_SUPPORT
+    EB_MALLOC_DEC(void *, dec_handle_ptr->pv_master_parse_ctxt,
+        sizeof(MasterParseCtxt), EB_N_PTR);
+
+    MasterParseCtxt *master_parse_ctx =
+        (MasterParseCtxt*)dec_handle_ptr->pv_master_parse_ctxt;
+#else
     EB_MALLOC_DEC(void *, dec_handle_ptr->pv_parse_ctxt, sizeof(ParseCtxt), EB_N_PTR);
 
     ParseCtxt *parse_ctx = (ParseCtxt*)dec_handle_ptr->pv_parse_ctxt;
 
-    SeqHeader   *seq_header = &dec_handle_ptr->seq_header;
+#endif
 
-    int32_t num_mi_row, num_mi_col;
-    //int32_t num_mi_frame;
+#if MT_SUPPORT
+    master_parse_ctx->context_count = 0;
+    master_parse_ctx->tile_parse_ctxt = NULL;
 
-    int32_t num_4x4_neigh_sb    = seq_header->sb_mi_size;
-    int32_t sb_size_log2        = seq_header->sb_size_log2;
-    int32_t sb_aligned_width    = ALIGN_POWER_OF_TWO(seq_header->max_frame_width,
-                                    sb_size_log2);
-    /*int32_t sb_aligned_height   = ALIGN_POWER_OF_TWO(seq_header->max_frame_height,
-                                    sb_size_log2);*/
-    int32_t sb_cols             = sb_aligned_width >> sb_size_log2;
-    //int32_t sb_rows             = sb_aligned_height >> sb_size_log2;
-    int8_t num_planes           = seq_header->color_config.mono_chrome ? 1 : MAX_MB_PLANE;
+    master_parse_ctx->parse_above_nbr4x4_ctxt = NULL;
+    master_parse_ctx->parse_left_nbr4x4_ctxt = NULL;
 
+    master_parse_ctx->num_tiles = 0;
+    master_parse_ctx->parse_tile_data = NULL;
+
+#else
     ParseNbr4x4Ctxt *neigh_ctx = &parse_ctx->parse_nbr4x4_ctxt;
-
-    num_mi_col = sb_cols * num_4x4_neigh_sb;
-    num_mi_row = num_4x4_neigh_sb;
-    //num_mi_frame = sb_cols * sb_rows * num_4x4_neigh_sb;
-
-    int num4_64x64 = mi_size_wide[BLOCK_64X64];
-
-    EB_MALLOC_DEC(uint8_t*, neigh_ctx->above_tx_wd, num_mi_col * sizeof(uint8_t), EB_N_PTR);
-    EB_MALLOC_DEC(uint8_t*, neigh_ctx->left_tx_ht, num_mi_row * sizeof(uint8_t), EB_N_PTR);
-
-    EB_MALLOC_DEC(uint8_t*, neigh_ctx->above_part_wd, num_mi_col * sizeof(uint8_t), EB_N_PTR);
-    EB_MALLOC_DEC(uint8_t*, neigh_ctx->left_part_ht, num_mi_row * sizeof(uint8_t), EB_N_PTR);
-    /* TODO : Optimize the size for Chroma */
-    for (int i = 0; i < num_planes; i++) {
-        EB_MALLOC_DEC(uint8_t*, neigh_ctx->above_dc_ctx[i], num_mi_col * sizeof(uint8_t), EB_N_PTR);
-        EB_MALLOC_DEC(uint8_t*, neigh_ctx->left_dc_ctx[i], num_mi_row * sizeof(uint8_t), EB_N_PTR);
-
-        EB_MALLOC_DEC(uint8_t*, neigh_ctx->above_level_ctx[i], num_mi_col * sizeof(uint8_t), EB_N_PTR);
-        EB_MALLOC_DEC(uint8_t*, neigh_ctx->left_level_ctx[i], num_mi_row * sizeof(uint8_t), EB_N_PTR);
-
-        EB_MALLOC_DEC(uint16_t*, neigh_ctx->above_palette_colors[i],
-            num4_64x64 * PALETTE_MAX_SIZE *sizeof(uint16_t), EB_N_PTR);
-        EB_MALLOC_DEC(uint16_t*, neigh_ctx->left_palette_colors[i],
-            num_4x4_neigh_sb * PALETTE_MAX_SIZE *sizeof(uint16_t), EB_N_PTR);
-    }
-
-    EB_MALLOC_DEC(int8_t*, neigh_ctx->above_comp_grp_idx, num_mi_col * sizeof(int8_t), EB_N_PTR);
-    EB_MALLOC_DEC(int8_t*, neigh_ctx->left_comp_grp_idx, num_mi_row * sizeof(int8_t), EB_N_PTR);
-
-    EB_MALLOC_DEC(uint8_t*, neigh_ctx->above_seg_pred_ctx, num_mi_col * sizeof(uint8_t), EB_N_PTR);
-    EB_MALLOC_DEC(uint8_t*, neigh_ctx->left_seg_pred_ctx, num_mi_row * sizeof(uint8_t), EB_N_PTR);
-
+#endif
     return return_error;
 }
 

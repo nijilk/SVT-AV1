@@ -327,7 +327,7 @@ void av1_build_intra_predictors_for_interintra(EbDecHandle *dec_hdl,
     }
     /*Calling Intra prediction */
     svtav1_predict_intra_block(part_info, plane,
-        max_txsize_rect_lookup[plane_bsize], dec_mod_ctxt->cur_tile_info,
+        max_txsize_rect_lookup[plane_bsize], &dec_mod_ctxt->cur_tile_info,
         (void *)dst, dst_stride, pv_topNeighArray, pv_leftNeighArray,
         &dec_hdl->seq_header, mode, 0, 0, bit_depth);
 }

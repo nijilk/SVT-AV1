@@ -64,6 +64,11 @@ static INLINE int has_second_ref(const BlockModeInfo *mbmi) {
     return mbmi->ref_frame[1] > INTRA_FRAME;
 }
 
+// TODO: Need to sync with encoder
+static INLINE int av1_num_planes(EbColorConfig   *color_info) {
+    return color_info->mono_chrome ? 1 : MAX_MB_PLANE;
+}
+
 #ifdef __cplusplus
 }
 #endif
