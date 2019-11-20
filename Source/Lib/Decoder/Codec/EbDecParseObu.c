@@ -2104,8 +2104,8 @@ EbErrorType read_frame_header_obu(bitstrm_t *bs, EbDecHandle *dec_handle_ptr,
     return status;
 }
 
-void clear_above_context(EbDecHandle *dec_handle_ptr, int mi_col_start,
-                         int mi_col_end, const int tile_row)
+void clear_above_context(EbDecHandle *dec_handle_ptr, uint32_t mi_col_start,
+                         uint32_t mi_col_end, const int tile_row)
 {
     assert(0 == tile_row);
 

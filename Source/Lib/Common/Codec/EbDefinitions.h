@@ -50,7 +50,6 @@ extern "C" {
 #if PAL_SUP
 #define PAL_CLASS   1
 #endif
-
 #define LESS_RECTANGULAR_CHECK_LEVEL 1 // Shortcut to skip a/b shapes depending on SQ/H/V shape costs
 
 #define INTER_INTRA_CLASS_PRUNING    1
@@ -1159,7 +1158,7 @@ typedef enum ATTRIBUTE_PACKED
     INTERINTRA_MODES
 } InterIntraMode;
 
-typedef enum
+typedef enum ATTRIBUTE_PACKED
 {
     COMPOUND_AVERAGE,
     COMPOUND_DISTWTD,

@@ -2274,42 +2274,39 @@ uint16_t parse_transform_block(EbDecHandle *dec_handle,
     PartitionInfo_t *pi, SvtReader *r, int32_t *coeff,
     TransformInfo_t *trans_info, int plane, int blk_col,
     int blk_row, int start_x, int start_y, TxSize tx_size,
-    int skip, int sub_x, int sub_y)
+    int sub_x, int sub_y)
 {
     uint16_t eob = 0;
+    TXB_CTX txb_ctx;
 
-    if (!skip) {
-        TXB_CTX txb_ctx;
+    BlockSize bsize = pi->mi->sb_type;
+    int plane_bsize = (bsize == BLOCK_INVALID) ? BLOCK_INVALID :
+        ss_size_lookup[bsize][sub_x][sub_y];
 
-        BlockSize bsize = pi->mi->sb_type;
-        int plane_bsize = (bsize == BLOCK_INVALID) ? BLOCK_INVALID :
-            ss_size_lookup[bsize][sub_x][sub_y];
+    int txb_w_unit = tx_size_wide_unit[tx_size];
+    int txb_h_unit = tx_size_high_unit[tx_size];
 
-        int txb_w_unit = tx_size_wide_unit[tx_size];
-        int txb_h_unit = tx_size_high_unit[tx_size];
-
-        if (pi->mb_to_right_edge < 0) {
-            int plane_bsize = (pi->mi->sb_type == BLOCK_INVALID) ? BLOCK_INVALID :
-                ss_size_lookup[pi->mi->sb_type][sub_x][sub_y];
-            const int blocks_wide = max_block_wide(pi, plane_bsize, sub_x);
-            txb_w_unit = AOMMIN(txb_w_unit, (blocks_wide - blk_col));
-        }
-
-        if (pi->mb_to_bottom_edge < 0) {
-            int plane_bsize = (pi->mi->sb_type == BLOCK_INVALID) ? BLOCK_INVALID :
-                ss_size_lookup[pi->mi->sb_type][sub_x][sub_y];
-            const int blocks_high = max_block_high(pi, plane_bsize, sub_y);
-            txb_h_unit = AOMMIN(txb_h_unit, (blocks_high - blk_row));
-        }
-
-
-        dec_get_txb_ctx(dec_handle, tx_size, plane, plane_bsize, txb_h_unit,
-            txb_w_unit, start_y, start_x, &txb_ctx);
-
-        eob = parse_coeffs(dec_handle, pi, r, start_y, start_x, blk_col,
-            blk_row, plane, txb_ctx.txb_skip_ctx, txb_ctx.dc_sign_ctx,
-            tx_size, coeff, trans_info);
+    if (pi->mb_to_right_edge < 0) {
+        int plane_bsize = (pi->mi->sb_type == BLOCK_INVALID) ? BLOCK_INVALID :
+            ss_size_lookup[pi->mi->sb_type][sub_x][sub_y];
+        const int blocks_wide = max_block_wide(pi, plane_bsize, sub_x);
+        txb_w_unit = AOMMIN(txb_w_unit, (blocks_wide - blk_col));
     }
+
+    if (pi->mb_to_bottom_edge < 0) {
+        int plane_bsize = (pi->mi->sb_type == BLOCK_INVALID) ? BLOCK_INVALID :
+            ss_size_lookup[pi->mi->sb_type][sub_x][sub_y];
+        const int blocks_high = max_block_high(pi, plane_bsize, sub_y);
+        txb_h_unit = AOMMIN(txb_h_unit, (blocks_high - blk_row));
+    }
+
+
+    dec_get_txb_ctx(dec_handle, tx_size, plane, plane_bsize, txb_h_unit,
+        txb_w_unit, start_y, start_x, &txb_ctx);
+
+    eob = parse_coeffs(dec_handle, pi, r, start_y, start_x, blk_col,
+        blk_row, plane, txb_ctx.txb_skip_ctx, txb_ctx.dc_sign_ctx,
+        tx_size, coeff, trans_info);
     return eob;
 }
 
@@ -2410,9 +2407,11 @@ void parse_residual(EbDecHandle *dec_handle, PartitionInfo_t *pi, SvtReader *r,
                         start_y >= (dec_handle->frame_header.mi_rows >> sub_y))
                         return;
 
-                    eob = parse_transform_block(dec_handle, pi, r, coeff,
-                        trans_info[plane], plane, blk_col, blk_row, start_x,
-                        start_y, trans_info[plane]->tx_size, skip, sub_x, sub_y);
+					if (!skip) {
+						eob = parse_transform_block(dec_handle, pi, r, coeff,
+							trans_info[plane], plane, blk_col, blk_row, start_x,
+							start_y, trans_info[plane]->tx_size, sub_x, sub_y);
+					}
 
                     if (eob != 0) {
                         parse_ctx->cur_coeff_buf[plane] += (eob + 1);

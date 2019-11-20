@@ -25,9 +25,9 @@ void svt_av1_predict_intra(DecModCtxt *dec_mod_ctxt, PartitionInfo_t *part_info,
 
 void svtav1_predict_intra_block(PartitionInfo_t *xd, int32_t plane,
     TxSize tx_size, TileInfo *td, void *pv_pred_buf, int32_t pred_stride,
-    void *topNeighArray, void *leftNeighArray, SeqHeader *seq_header,
-    const PredictionMode mode, int32_t blk_mi_col_off, int32_t blk_mi_row_off,
-    EbBitDepthEnum bit_depth);
+    void *topNeighArray, void *leftNeighArray, int32_t ref_stride,
+    SeqHeader *seq_header, const PredictionMode mode, int32_t blk_mi_col_off,
+    int32_t blk_mi_row_off, EbBitDepthEnum bit_depth);
 
 #endif //comp_interintra
 
