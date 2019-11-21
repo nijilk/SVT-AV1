@@ -83,7 +83,7 @@ void fill_4x4_param_uv(LFBlockParamUV* lf_block_uv, int32_t tu_x, int32_t tu_y,
 }
 
 /*Function to get transform size*/
-static TxSize dec_get_transform_size(const EDGE_DIR edge_dir, TxSize tx_size) {
+static INLINE TxSize dec_get_transform_size(const EDGE_DIR edge_dir, TxSize tx_size) {
     /*since in case of chrominance or non-square transorm need to convert
     transform size into transform size in particular direction.
     for vertical edge, filter direction is horizontal, for horizontal

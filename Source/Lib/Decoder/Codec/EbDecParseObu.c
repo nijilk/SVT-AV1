@@ -824,8 +824,9 @@ void read_quantization_params(bitstrm_t *bs, QuantizationParams *quant_params,
     uint8_t diff_uv_delta;
     quant_params->base_q_idx = dec_get_bits(bs, 8);
     PRINT_FRAME("base_q_idx", quant_params->base_q_idx);
-    quant_params->delta_q_y_dc = read_delta_q(bs);
-    PRINT_FRAME("delta_q_y_dc", quant_params->delta_q_y_dc);
+    quant_params->delta_q_dc[AOM_PLANE_Y] = read_delta_q(bs);
+    PRINT_FRAME("delta_q_y_dc", quant_params->delta_q_dc[0]);
+    quant_params->delta_q_ac[AOM_PLANE_Y] = 0;
     if (num_planes > 1)
     {
         if (color_info->separate_uv_delta_q) {
@@ -834,45 +835,45 @@ void read_quantization_params(bitstrm_t *bs, QuantizationParams *quant_params,
         }
         else
             diff_uv_delta = 0;
-        quant_params->delta_q_u_dc = read_delta_q(bs);
-        quant_params->delta_q_u_ac = read_delta_q(bs);
+        quant_params->delta_q_dc[AOM_PLANE_U] = read_delta_q(bs); //U Plane
+        quant_params->delta_q_ac[AOM_PLANE_U] = read_delta_q(bs); //U Plane
         if (diff_uv_delta) {
-            quant_params->delta_q_v_dc = read_delta_q(bs);
-            quant_params->delta_q_v_ac = read_delta_q(bs);
+            quant_params->delta_q_dc[AOM_PLANE_V] = read_delta_q(bs); //V Plane
+            quant_params->delta_q_ac[AOM_PLANE_V] = read_delta_q(bs); //V Plane
         }
         else {
-            quant_params->delta_q_v_dc = quant_params->delta_q_u_dc;
-            quant_params->delta_q_v_ac = quant_params->delta_q_u_ac;
+            quant_params->delta_q_dc[AOM_PLANE_V] = quant_params->delta_q_dc[AOM_PLANE_U];
+            quant_params->delta_q_ac[AOM_PLANE_V] = quant_params->delta_q_ac[AOM_PLANE_U];
         }
     }
     else {
-        quant_params->delta_q_u_dc = 0;
-        quant_params->delta_q_u_ac = 0;
-        quant_params->delta_q_v_dc = 0;
-        quant_params->delta_q_v_ac = 0;
+        quant_params->delta_q_dc[AOM_PLANE_U] = 0;
+        quant_params->delta_q_ac[AOM_PLANE_U] = 0;
+        quant_params->delta_q_dc[AOM_PLANE_V] = 0;
+        quant_params->delta_q_ac[AOM_PLANE_V] = 0;
     }
-    PRINT_FRAME("u_dc_delta_q", quant_params->delta_q_u_dc);
-    PRINT_FRAME("u_ac_delta_q", quant_params->delta_q_u_ac);
-    PRINT_FRAME("v_dc_delta_q", quant_params->delta_q_v_dc);
-    PRINT_FRAME("v_ac_delta_q", quant_params->delta_q_v_ac);
+    PRINT_FRAME("u_dc_delta_q", quant_params->delta_q_dc[AOM_PLANE_U]);
+    PRINT_FRAME("u_ac_delta_q", quant_params->delta_q_ac[AOM_PLANE_U]);
+    PRINT_FRAME("v_dc_delta_q", quant_params->delta_q_dc[AOM_PLANE_V]);
+    PRINT_FRAME("v_ac_delta_q", quant_params->delta_q_ac[AOM_PLANE_V]);
     quant_params->using_qmatrix = dec_get_bits(bs, 1);
     PRINT_FRAME("using_qmatrix", quant_params->using_qmatrix);
     if (quant_params->using_qmatrix) {
-        quant_params->qm_y = dec_get_bits(bs, 4);
-        quant_params->qm_u = dec_get_bits(bs, 4);
+        quant_params->qm[AOM_PLANE_Y] = dec_get_bits(bs, 4);
+        quant_params->qm[AOM_PLANE_U] = dec_get_bits(bs, 4);
         if (!color_info->separate_uv_delta_q)
-            quant_params->qm_v = quant_params->qm_u;
+            quant_params->qm[AOM_PLANE_V] = quant_params->qm[AOM_PLANE_U];
         else
-            quant_params->qm_v = dec_get_bits(bs, 4);
+            quant_params->qm[AOM_PLANE_V] = dec_get_bits(bs, 4);
     }
     else {
-        quant_params->qm_y = 0;
-        quant_params->qm_u = 0;
-        quant_params->qm_v = 0;
+        quant_params->qm[AOM_PLANE_Y] = 0;
+        quant_params->qm[AOM_PLANE_U] = 0;
+        quant_params->qm[AOM_PLANE_V] = 0;
     }
-    PRINT_FRAME("qm_y", quant_params->qm_y);
-    PRINT_FRAME("qm_u", quant_params->qm_u);
-    PRINT_FRAME("qm_v", quant_params->qm_v);
+    PRINT_FRAME("qm_y", quant_params->qm[AOM_PLANE_Y]);
+    PRINT_FRAME("qm_u", quant_params->qm[AOM_PLANE_U]);
+    PRINT_FRAME("qm_v", quant_params->qm[AOM_PLANE_V]);
 }
 
 static INLINE void segfeatures_copy(SegmentationParams *dst,
@@ -2006,11 +2007,11 @@ void read_uncompressed_header(bitstrm_t *bs, EbDecHandle *dec_handle_ptr,
         int qindex = get_qindex(&frame_info->segmentation_params, i,
             frame_info->quantization_params.base_q_idx);
         frame_info->lossless_array[i] = qindex == 0 &&
-            frame_info->quantization_params.delta_q_y_dc == 0 &&
-            frame_info->quantization_params.delta_q_u_ac == 0 &&
-            frame_info->quantization_params.delta_q_u_dc == 0 &&
-            frame_info->quantization_params.delta_q_v_ac == 0 &&
-            frame_info->quantization_params.delta_q_v_dc == 0;
+            frame_info->quantization_params.delta_q_dc[AOM_PLANE_Y] == 0 &&
+            frame_info->quantization_params.delta_q_ac[AOM_PLANE_U] == 0 &&
+            frame_info->quantization_params.delta_q_dc[AOM_PLANE_U] == 0 &&
+            frame_info->quantization_params.delta_q_ac[AOM_PLANE_V] == 0 &&
+            frame_info->quantization_params.delta_q_dc[AOM_PLANE_V] == 0;
         if (!frame_info->lossless_array[i])
             frame_info->coded_lossless = 0;
         if (frame_info->quantization_params.using_qmatrix) {
@@ -2021,11 +2022,11 @@ void read_uncompressed_header(bitstrm_t *bs, EbDecHandle *dec_handle_ptr,
             }
             else {
                 frame_info->segmentation_params.seg_qm_level[0][i]
-                    = frame_info->quantization_params.qm_y;
+                    = frame_info->quantization_params.qm[AOM_PLANE_Y];
                 frame_info->segmentation_params.seg_qm_level[1][i]
-                    = frame_info->quantization_params.qm_u;
+                    = frame_info->quantization_params.qm[AOM_PLANE_U];
                 frame_info->segmentation_params.seg_qm_level[2][i]
-                    = frame_info->quantization_params.qm_v;
+                    = frame_info->quantization_params.qm[AOM_PLANE_V];
             }
         }
     }
@@ -2317,8 +2318,8 @@ EbErrorType parse_tile(bitstrm_t *bs, EbDecHandle *dec_handle_ptr,
 
             clear_cdef(sb_info->sb_cdef_strength, cdef_factor);
 
-            parse_ctx->first_luma_tu_offset = 0;
-            parse_ctx->first_chroma_tu_offset = 0;
+            parse_ctx->first_tu_offset[AOM_PLANE_Y] = 0;
+            parse_ctx->first_tu_offset[AOM_PLANE_U] = 0;
             parse_ctx->cur_mode_info = sb_info->sb_mode_info;
             parse_ctx->cur_mode_info_cnt = 0;
             parse_ctx->sb_row_mi = mi_row;
@@ -2330,8 +2331,6 @@ EbErrorType parse_tile(bitstrm_t *bs, EbDecHandle *dec_handle_ptr,
             parse_ctx->left_sb_info = left_sb_info;
             parse_ctx->above_sb_info= above_sb_info;
 #endif
-            parse_ctx->prev_blk_has_chroma = 1; //default at start of frame / tile
-
             /* Init DecModCtxt */
             DecModCtxt *dec_mod_ctxt = (DecModCtxt*)dec_handle_ptr->pv_dec_mod_ctxt;
 #if !FRAME_MI_MAP
@@ -2571,18 +2570,12 @@ EbErrorType read_tile_group_obu(bitstrm_t *bs, EbDecHandle *dec_handle_ptr,
 
             if (do_loop_restoration) {
                 dec_av1_loop_restoration_save_boundary_lines(dec_handle_ptr, 1);
-
-                /* Padded bits are required for filtering pixel around frame boundary */
-                pad_pic(dec_handle_ptr->cur_pic_buf[0]->ps_pic_buf,
-                        &dec_handle_ptr->frame_header);
                 dec_av1_loop_restoration_filter_frame(dec_handle_ptr, opt_lr);
             }
         }
         else {
             if (do_loop_restoration) {
                 /* Padded bits are required for filtering pixel around frame boundary */
-                pad_pic(dec_handle_ptr->cur_pic_buf[0]->ps_pic_buf,
-                        &dec_handle_ptr->frame_header);
                 dec_av1_loop_restoration_filter_frame(dec_handle_ptr, opt_lr);
             }
         }

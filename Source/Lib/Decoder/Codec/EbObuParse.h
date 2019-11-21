@@ -143,10 +143,8 @@ typedef struct ParseCtxt {
     TileInfo        cur_tile_info;
 
     /* Stored here for current block and should be updated to next block modeinfo */
-    /*!< Offset of first Luma transform info from strat of SB pointer */
-    uint16_t        first_luma_tu_offset;
-    /*!< Offset of first Chroma transform info from strat of SB pointer */
-    uint16_t        first_chroma_tu_offset;
+    /*!< Offset of first transform info from strat of SB pointer for each plane */
+    uint16_t        first_tu_offset[MAX_MB_PLANE - 1];
     /* TODO: Points to the cur ModeInfo_t in SB. Should be moved out */
     BlockModeInfo   *cur_mode_info;
     /* TODO: Points to the cur ModeInfo_t in SB. Should be moved out */
@@ -169,10 +167,6 @@ typedef struct ParseCtxt {
     SBInfo  *left_sb_info;
     SBInfo  *above_sb_info;
 #endif
-    /*!< Chroma mode indo state acroos sub 8x8 blocks
-     * if Prev block does not have chroma info then this state is remembered in this variable to be used in next block
-    */
-    int32_t  prev_blk_has_chroma;
 
     TransformInfo_t *inter_trans_chroma;
 
