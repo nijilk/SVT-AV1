@@ -45,13 +45,24 @@
 #include "EbDecCdef.h"
 
 #if MT_SUPPORT
+/*TO DO: Should Remove*/
+void dec_av1_loop_filter_frame_mt(
+    EbDecHandle *dec_handle_ptr,
+    EbPictureBufferDesc *recon_picture_buf,
+    LFCtxt *lf_ctxt, LoopFilterInfoN *lf_info,
+    int32_t plane_start, int32_t plane_end,
+    int32_t th_cnt);
+
+EbErrorType DecSystemResourceInit(EbDecHandle *dec_handle_ptr,
+    TilesInfo *tiles_info);
+
 void svt_av1_queue_parse_jobs(EbDecHandle *dec_handle_ptr,
     TilesInfo   *tiles_info,
     ObuHeader   *obu_header,
     bitstrm_t   *bs,
     uint32_t tg_start, uint32_t tg_end);
 void parse_frame_tiles(EbDecHandle *dec_handle_ptr, int th_cnt);
-
+void decode_frame_tiles(EbDecHandle *dec_handle_ptr, DecThreadCtxt *thread_ctxt);
 void svt_av1_queue_lf_jobs(EbDecHandle *dec_handle_ptr);
 #endif
 
@@ -2077,7 +2088,7 @@ void read_uncompressed_header(bitstrm_t *bs, EbDecHandle *dec_handle_ptr,
     read_segmentation_params(bs, dec_handle_ptr, frame_info);
     read_frame_delta_q_params(bs, frame_info);
     read_frame_delta_lf_params(bs, frame_info);
-    setup_segmentation_dequant(dec_handle_ptr, &seq_header->color_config);
+    setup_segmentation_dequant((DecModCtxt*)dec_handle_ptr->pv_dec_mod_ctxt);
 
 #if MT_SUPPORT
     MasterParseCtxt *master_parse_ctx = (MasterParseCtxt *)
@@ -2242,7 +2253,6 @@ EbErrorType read_tile_group_obu(bitstrm_t *bs, EbDecHandle *dec_handle_ptr,
     FrameHeader *frame_header = &dec_handle_ptr->frame_header;
 
     int num_tiles, tg_start, tg_end, tile_bits, tile_start_and_end_present_flag = 0;
-    int tile_row, tile_col;
     size_t tile_size;
     uint32_t start_position, end_position, header_bytes;
     num_tiles = tiles_info->tile_cols * tiles_info->tile_rows;
@@ -2303,15 +2313,49 @@ EbErrorType read_tile_group_obu(bitstrm_t *bs, EbDecHandle *dec_handle_ptr,
 
         eb_block_on_mutex(dec_mt_frame_data->temp_mutex);
 
+        dec_mt_frame_data->start_decode_frame = EB_FALSE;
         dec_mt_frame_data->start_lf_frame = EB_FALSE;
-
+        
         dec_mt_frame_data->num_tiles_parsed = 0;
-        dec_mt_frame_data->num_tiles_total = num_tiles;
+        dec_mt_frame_data->num_tiles_total = tg_end - tg_start + 1;
         dec_mt_frame_data->start_parse_frame = EB_TRUE;
 
         eb_release_mutex(dec_mt_frame_data->temp_mutex);
 #endif
         parse_frame_tiles(dec_handle_ptr, 0);
+
+#if TEMP_TEST_MT
+        volatile uint32_t *num_tiles_parsed = &dec_mt_frame_data->num_tiles_parsed;
+        while (*num_tiles_parsed != dec_mt_frame_data->num_tiles_total)
+            Sleep(5);
+
+        eb_block_on_mutex(dec_mt_frame_data->temp_mutex);
+        
+        dec_mt_frame_data->start_parse_frame = EB_FALSE;
+        dec_mt_frame_data->num_tiles_parsed = 0;
+
+        dec_mt_frame_data->num_tiles_decoded = 0;
+        dec_mt_frame_data->start_decode_frame = EB_TRUE;
+
+        eb_release_mutex(dec_mt_frame_data->temp_mutex);
+#else
+        /*ToDo : Remove*/
+        Sleep(200);
+#endif
+        decode_frame_tiles(dec_handle_ptr, NULL);
+#if TEMP_TEST_MT
+        volatile uint32_t *num_tiles_decoded = &dec_mt_frame_data->num_tiles_decoded;
+        while (*num_tiles_decoded != dec_mt_frame_data->num_tiles_total)
+            Sleep(5);
+
+        eb_block_on_mutex(dec_mt_frame_data->temp_mutex);
+        dec_mt_frame_data->start_decode_frame = EB_FALSE;
+        dec_mt_frame_data->num_tiles_decoded = 0;
+        eb_release_mutex(dec_mt_frame_data->temp_mutex);
+#else
+        /*ToDo : Remove*/
+        Sleep(200);
+#endif
     }
     else {
 #endif
@@ -2354,31 +2398,6 @@ EbErrorType read_tile_group_obu(bitstrm_t *bs, EbDecHandle *dec_handle_ptr,
         }
 #if MT_SUPPORT
     }
-#if TEMP_TEST_MT
-    DecMTFrameData *dec_mt_frame_data = &dec_handle_ptr->
-        master_frame_buf.cur_frame_bufs[0].dec_mt_frame_data;
-    volatile uint32_t *num_tiles_parsed = &dec_mt_frame_data->num_tiles_parsed;
-    while(*num_tiles_parsed != dec_mt_frame_data->num_tiles_total)
-        Sleep(5);
-    eb_block_on_mutex(dec_mt_frame_data->temp_mutex);
-    dec_mt_frame_data->start_parse_frame = EB_FALSE;
-    dec_mt_frame_data->num_tiles_parsed = 0;
-    eb_release_mutex(dec_mt_frame_data->temp_mutex);
-#else
-    /*ToDo : Remove*/
-    Sleep(200);
-#endif
-    DecModCtxt *dec_mod_ctxt = (DecModCtxt*)dec_handle_ptr->pv_dec_mod_ctxt;
-    /* Reconstruct Tiles */
-    for (int tile_num = tg_start; tile_num <= tg_end; tile_num++) {
-        if (is_mt) {
-            tile_row = tile_num / tiles_info->tile_cols;
-            tile_col = tile_num % tiles_info->tile_cols;
-            svt_tile_init(&dec_mod_ctxt->cur_tile_info, frame_header,
-                tile_row, tile_col);
-            status = decode_tile(dec_handle_ptr, tiles_info, tile_row, tile_col);
-            }
-        }
 #endif
 
     if ((tg_end + 1) != num_tiles)

@@ -65,6 +65,7 @@ extern "C" {
 #define NON_AVX512_SUPPORT
 #endif
 
+#define INTRINSIC_FIX                     1
 #define MR_MODE                           0
 #define MT_SUPPORT                        1
 #define WARP_UPDATE                       1 // Modified Warp settings: ON for MR mode. ON for ref frames in M0

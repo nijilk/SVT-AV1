@@ -61,6 +61,8 @@ typedef struct DecMTFrameData {
     EbBool              start_parse_frame;
     uint32_t            num_tiles_parsed;
     uint32_t            num_tiles_total;
+    EbBool              start_decode_frame;
+    uint32_t            num_tiles_decoded;
     EbBool              start_lf_frame;
     uint32_t            num_rows_lfed;
     uint32_t            num_rows_total;
@@ -75,6 +77,13 @@ typedef struct DecMTFrameData {
     /* EbFifo at Tile level : Parse Stage */
     EbFifo              **parse_tile_producer_fifo_ptr;
     EbFifo              **parse_tile_consumer_fifo_ptr;
+
+    // System Resource Managers
+    EbSystemResource    *recon_tile_resource_ptr;
+
+    /* EbFifo at Tile level : Recon Stage */
+    EbFifo              **recon_tile_producer_fifo_ptr;
+    EbFifo              **recon_tile_consumer_fifo_ptr;
 
     /* To prevent more than 1 thread from mod. recon_row_started simult. */
     EbHandle                recon_mutex;

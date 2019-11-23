@@ -255,7 +255,7 @@ typedef struct EbDecHandle {
 typedef struct DecThreadCtxt {
     uint32_t    thread_cnt;
     EbDecHandle *dec_handle_ptr;
-
+    void        *dec_mod_ctxt;
     LoopFilterInfoN lf_info;
 } DecThreadCtxt;
 

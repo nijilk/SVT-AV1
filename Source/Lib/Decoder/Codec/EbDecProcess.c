@@ -19,10 +19,13 @@
 
 #include "EbObuParse.h"
 #include "EbDecParseFrame.h"
+#include "EbDecProcessFrame.h"
 #include "EbDecLF.h"
 
 #include "EbDecBitstream.h"
 #include "EbTime.h"
+
+#include "EbDecInverseQuantize.h"
 
 #if MT_SUPPORT
 
@@ -92,6 +95,19 @@ EbErrorType DecSystemResourceInit(EbDecHandle *dec_handle_ptr,
         &node_idx,
         NULL);
 
+    /* Recon queue */
+    EB_NEW(dec_mt_frame_data->recon_tile_resource_ptr,
+        eb_system_resource_ctor,
+        num_tiles, /* object_total_count */
+        1, /* producer procs cnt : 1 Q per cnt is created inside, so kept 1*/
+        1, /* consumer prcos cnt : 1 Q per cnt is created inside, so kept 1*/
+        &dec_mt_frame_data->recon_tile_producer_fifo_ptr, /* producer_fifo */
+        &dec_mt_frame_data->recon_tile_consumer_fifo_ptr, /* consumer_fifo */
+        EB_TRUE, /* Full Queue*/
+        DecDummyCreator,
+        &node_idx,
+        NULL);
+
     int32_t sb_size_h = block_size_high[dec_handle_ptr->seq_header.sb_size];
     uint32_t picture_height_in_sb =
         (dec_handle_ptr->seq_header.max_frame_height + sb_size_h - 1) / sb_size_h;
@@ -112,12 +128,17 @@ EbErrorType DecSystemResourceInit(EbDecHandle *dec_handle_ptr,
     * Contexts
     ************************************/
     EB_MALLOC_DEC(uint32_t *, dec_mt_frame_data->lf_frame_info.
-      sb_lf_completed_in_row, picture_height_in_sb*sizeof(uint32_t), EB_N_PTR);
+      sb_lf_completed_in_row, picture_height_in_sb*sizeof(int32_t), EB_N_PTR);
 #if TEMP_TEST_MT
     dec_mt_frame_data->temp_mutex = eb_create_mutex();
+
     dec_mt_frame_data->start_parse_frame = EB_FALSE;
     dec_mt_frame_data->num_tiles_parsed = 0;
     dec_mt_frame_data->num_tiles_total = num_tiles;
+
+    dec_mt_frame_data->start_decode_frame = EB_FALSE;
+    dec_mt_frame_data->num_tiles_decoded = 0;
+    
     dec_mt_frame_data->start_lf_frame = EB_FALSE;
     dec_mt_frame_data->num_rows_lfed = 0;
     dec_mt_frame_data->num_rows_total = picture_height_in_sb;
@@ -138,6 +159,7 @@ EbErrorType DecSystemResourceInit(EbDecHandle *dec_handle_ptr,
         for (int32_t i = 0; i < num_lib_threads; i++) {
             thread_ctxt_pa[i].thread_cnt     = i + 1;
             thread_ctxt_pa[i].dec_handle_ptr = dec_handle_ptr;
+            init_dec_mod_ctxt(dec_handle_ptr, &thread_ctxt_pa[i].dec_mod_ctxt);
         }
         EB_CREATE_THREAD_ARRAY(dec_handle_ptr->decode_thread_handle_array,
             num_lib_threads, dec_all_stage_kernel, (void **)&thread_ctxt_pa);
@@ -248,6 +270,20 @@ void parse_frame_tiles(EbDecHandle     *dec_handle_ptr, int th_cnt) {
             }
             //printf("\nThread id : %d Tile id : %d done \n",
             //    th_cnt, context_ptr->node_index);
+
+            EbObjectWrapper *recon_results_wrapper_ptr;
+            // Get Empty Recon Tile Job
+            eb_get_empty_object(dec_mt_frame_data->recon_tile_producer_fifo_ptr[0],
+                &recon_results_wrapper_ptr);
+
+            DecMTNode *recon_context_ptr =
+                (DecMTNode*)recon_results_wrapper_ptr->object_ptr;
+            recon_context_ptr->node_index = context_ptr->node_index;
+            //printf("\nPost dec job in queue Thread id : %d Tile id : %d \n",
+            //    th_cnt, recon_context_ptr->node_index);
+            // Post Recon Tile Job
+            eb_post_full_object(recon_results_wrapper_ptr);
+
 #if TEMP_TEST_MT
             eb_block_on_mutex(dec_mt_frame_data->temp_mutex);
             dec_mt_frame_data->num_tiles_parsed++;
@@ -255,6 +291,68 @@ void parse_frame_tiles(EbDecHandle     *dec_handle_ptr, int th_cnt) {
 #endif
             // Release Parse Results
             eb_release_object(parse_results_wrapper_ptr);
+        }
+        else
+            break;
+    }
+}
+
+EbErrorType decode_tile_job(EbDecHandle *dec_handle_ptr,
+    int32_t tile_num, DecModCtxt *dec_mod_ctxt)
+{
+    EbErrorType status = EB_ErrorNone;
+    TilesInfo   *tiles_info = &dec_handle_ptr->frame_header.tiles_info;
+    status = start_decode_tile(dec_handle_ptr, dec_mod_ctxt, tiles_info, tile_num);
+    return status;
+}
+
+void decode_frame_tiles(EbDecHandle *dec_handle_ptr, DecThreadCtxt *thread_ctxt) {
+    DecMTFrameData  *dec_mt_frame_data =
+        &dec_handle_ptr->master_frame_buf.cur_frame_bufs[0].dec_mt_frame_data;
+    EbObjectWrapper *recon_results_wrapper_ptr;
+    DecMTNode *context_ptr;
+#if TEMP_TEST_MT
+    volatile EbBool *start_decode_frame = &dec_mt_frame_data->start_decode_frame;
+    while (*start_decode_frame != EB_TRUE)
+        Sleep(5);
+#endif
+    while (1) {
+        eb_get_full_object_non_blocking(dec_mt_frame_data->
+            recon_tile_consumer_fifo_ptr[0],
+            &recon_results_wrapper_ptr);
+
+        if (NULL != recon_results_wrapper_ptr) {
+            context_ptr = (DecMTNode*)recon_results_wrapper_ptr->object_ptr;
+
+            DecModCtxt *dec_mod_ctxt = (DecModCtxt*)dec_handle_ptr->pv_dec_mod_ctxt;
+            int32_t thread_id = 0;
+            if (thread_ctxt != NULL) {
+                thread_id = thread_ctxt->thread_cnt;
+                dec_mod_ctxt = thread_ctxt->dec_mod_ctxt;
+
+                /* TODO : Calling this function at a tile level is
+                   excessive. Move this call to operate at a frame level.*/
+                setup_segmentation_dequant(thread_ctxt->dec_mod_ctxt);
+            }
+
+            //printf("\nStart decode Thread id : %d Tile id : %d",
+            //  thread_id, context_ptr->node_index);
+            if (EB_ErrorNone !=
+                decode_tile_job(dec_handle_ptr, context_ptr->node_index, dec_mod_ctxt))
+            {
+                printf("\nDecode Issue for Tile %d", context_ptr->node_index);
+                break;
+            }
+            //dec_handle_ptr->recon_count++;
+#if TEMP_TEST_MT
+            eb_block_on_mutex(dec_mt_frame_data->temp_mutex);
+            dec_mt_frame_data->num_tiles_decoded++;
+            eb_release_mutex(dec_mt_frame_data->temp_mutex);
+#endif
+            //printf("\nEnd decode Thread id : %d Tile id : %d",
+            //    thread_id, context_ptr->node_index);
+
+            eb_release_object(recon_results_wrapper_ptr);
         }
         else
             break;
@@ -272,8 +370,8 @@ void svt_av1_queue_lf_jobs(EbDecHandle *dec_handle_ptr)
                                 frame_height + sb_size_h - 1) / sb_size_h;
     uint32_t y_lcu_index;
 
-    memset(lf_frame_info->sb_lf_completed_in_row, 0, 
-            picture_height_in_sb * sizeof(uint32_t));
+    memset(lf_frame_info->sb_lf_completed_in_row, -1, 
+            picture_height_in_sb * sizeof(int32_t));
 
     for (y_lcu_index = 0; y_lcu_index < picture_height_in_sb; ++y_lcu_index) {
         // Get Empty LF Frame Row Job
@@ -307,8 +405,8 @@ void dec_av1_loop_filter_frame_mt(
     DecMTFrameData  *dec_mt_frame_data1 =
         &dec_handle_ptr->master_frame_buf.cur_frame_bufs[0].dec_mt_frame_data;
     volatile EbBool *start_lf_frame = &dec_mt_frame_data1->start_lf_frame;
-    while (*start_lf_frame != EB_TRUE)
-        Sleep(5);
+    while (*start_lf_frame != EB_TRUE);
+        //Sleep(5);
 #endif
     frm_hdr->loop_filter_params.combine_vert_horz_lf = 1;
     /*init hev threshold const vectors*/
@@ -365,6 +463,9 @@ void* dec_all_stage_kernel(void *input_ptr) {
         /* Parse Tiles */
         parse_frame_tiles(dec_handle_ptr, thread_ctxt->thread_cnt);
 
+        /* Decode Tiles */
+        decode_frame_tiles(dec_handle_ptr, thread_ctxt);
+
         if (!dec_handle_ptr->frame_header.allow_intrabc) {
             /* Frame LF */
             if (dec_handle_ptr->frame_header.loop_filter_params.filter_level[0] ||
@@ -375,8 +476,6 @@ void* dec_all_stage_kernel(void *input_ptr) {
                     dec_handle_ptr->pv_lf_ctxt, &thread_ctxt->lf_info,
                     AOM_PLANE_Y, MAX_MB_PLANE, thread_ctxt->thread_cnt);
             }
-            /*ToDo : Remove*/
-            EbSleepMs(5);
         }
     }
 

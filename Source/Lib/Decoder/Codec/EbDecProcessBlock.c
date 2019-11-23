@@ -151,10 +151,10 @@ void decode_block(DecModCtxt *dec_mod_ctxt, int32_t mi_row, int32_t mi_col,
     BlockSize bsize, TileInfo *tile, SBInfo *sb_info)
 {
     EbDecHandle *dec_handle   = (EbDecHandle *)dec_mod_ctxt->dec_handle_ptr;
-    EbColorConfig *color_config = &dec_handle->seq_header.color_config;
+    EbColorConfig *color_config = &dec_mod_ctxt->seq_header->color_config;
     EbPictureBufferDesc *recon_picture_buf = dec_handle->cur_pic_buf[0]->ps_pic_buf;
-    uint32_t mi_cols = (&dec_handle->frame_header)->mi_cols;
-    uint32_t mi_rows = (&dec_handle->frame_header)->mi_rows;
+    uint32_t mi_cols = dec_mod_ctxt->frame_header->mi_cols;
+    uint32_t mi_rows = dec_mod_ctxt->frame_header->mi_rows;
 
     int num_planes = av1_num_planes(color_config);
 
@@ -297,7 +297,7 @@ void decode_block(DecModCtxt *dec_mod_ctxt, int32_t mi_row, int32_t mi_col,
     }
 
     if (inter_block)
-        svtav1_predict_inter_block(dec_handle, &part_info, mi_row, mi_col,
+        svtav1_predict_inter_block(dec_mod_ctxt, dec_handle, &part_info, mi_row, mi_col,
             num_planes);
 
     TxType tx_type;
@@ -309,13 +309,13 @@ void decode_block(DecModCtxt *dec_mod_ctxt, int32_t mi_row, int32_t mi_col,
     const int max_blocks_wide = max_block_wide(&part_info, bsize, 0);
     const int max_blocks_high = max_block_high(&part_info, bsize, 0);
 
-    int num_chroma_tus = (dec_handle->frame_header.lossless_array[part_info.mi->segment_id] &&
+    int num_chroma_tus = (dec_mod_ctxt->frame_header->lossless_array[part_info.mi->segment_id] &&
         ((bsize >= BLOCK_64X64) && (bsize <= BLOCK_128X128)) ) ?
         (max_blocks_wide * max_blocks_high) >>
         (color_config->subsampling_x + color_config->subsampling_y) : mode_info->num_chroma_tus;
 
     LFCtxt *lf_ctxt = (LFCtxt *)dec_handle->pv_lf_ctxt;
-    int32_t lf_stride = dec_handle->frame_header.mi_stride;
+    int32_t lf_stride = dec_mod_ctxt->frame_header->mi_stride;
     struct LFBlockParamL* lf_block_l = lf_ctxt->lf_block_luma;
     struct LFBlockParamUV* lf_block_uv = lf_ctxt->lf_block_uv;
 
@@ -332,7 +332,7 @@ void decode_block(DecModCtxt *dec_mod_ctxt, int32_t mi_row, int32_t mi_col,
             (sb_info->sb_trans_info[plane] + mode_info->first_chroma_tu_offset) :
             (sb_info->sb_trans_info[plane - 1] + mode_info->first_chroma_tu_offset + num_chroma_tus);
 
-        if (dec_handle->frame_header.lossless_array[part_info.mi->segment_id] &&
+        if (dec_mod_ctxt->frame_header->lossless_array[part_info.mi->segment_id] &&
             (bsize >= BLOCK_64X64) && (bsize <= BLOCK_128X128) )
         {
             assert(trans_info->tx_size == TX_4X4);
@@ -397,7 +397,7 @@ void decode_block(DecModCtxt *dec_mod_ctxt, int32_t mi_row, int32_t mi_col,
 #endif
                 tx_type = trans_info->txk_type;
 
-                n_coeffs = inverse_quantize(dec_handle, &part_info,
+                n_coeffs = inverse_quantize(dec_mod_ctxt, &part_info,
                     mode_info, coeffs, qcoeffs, tx_type, tx_size, plane);
                 if (n_coeffs != 0) {
                     dec_mod_ctxt->cur_coeff[plane] += (n_coeffs + 1);
@@ -407,14 +407,14 @@ void decode_block(DecModCtxt *dec_mod_ctxt, int32_t mi_row, int32_t mi_col,
                             (uint8_t *)blk_recon_buf, recon_stride,
                             (uint8_t *)blk_recon_buf, recon_stride,
                             tx_size, tx_type, plane, n_coeffs,
-                            dec_handle->frame_header.
+                            dec_mod_ctxt->frame_header->
                             lossless_array[mode_info->segment_id]);
                     else
                         av1_inv_transform_recon(qcoeffs,
                             CONVERT_TO_BYTEPTR(blk_recon_buf), recon_stride,
                             CONVERT_TO_BYTEPTR(blk_recon_buf), recon_stride,
                             tx_size, recon_picture_buf->bit_depth - EB_8BIT,
-                            tx_type, plane, n_coeffs, dec_handle->frame_header.
+                            tx_type, plane, n_coeffs, dec_mod_ctxt->frame_header->
                             lossless_array[mode_info->segment_id]);
                 }
             }

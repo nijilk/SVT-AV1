@@ -2,7 +2,7 @@
 * Copyright(c) 2019 Intel Corporation
 * SPDX - License - Identifier: BSD - 2 - Clause - Patent
 */
-
+#define DEC_MT_SUPPORT 1
 #include <stdlib.h>
 
 #include "EbSystemResourceManager.h"
@@ -277,7 +277,39 @@ static EbErrorType EbMuxingQueueAssignation(
 
     return return_error;
 }
+#if DEC_MT_SUPPORT
+static EbErrorType EbMuxingQueueAssignationNonBlocking(
+    EbMuxingQueue *queue_ptr)
+{
+    EbErrorType return_error = EB_ErrorNone;
+    EbFifo *processFifoPtr;
+    EbObjectWrapper *wrapper_ptr;
 
+    // while loop
+    while ((EbCircularBufferEmptyCheck(queue_ptr->object_queue) == EB_FALSE) &&
+        (EbCircularBufferEmptyCheck(queue_ptr->process_queue) == EB_FALSE)) {
+        // Get the next process
+        EbCircularBufferPopFront(
+            queue_ptr->process_queue,
+            (void **)&processFifoPtr);
+
+        // Get the next object
+        EbCircularBufferPopFront(
+            queue_ptr->object_queue,
+            (void **)&wrapper_ptr);
+
+        // Put the object on the fifo
+        EbFifoPushBack(
+            processFifoPtr,
+            wrapper_ptr);
+
+        // Post the semaphore
+        eb_post_semaphore(processFifoPtr->counting_semaphore);
+    }
+
+    return return_error;
+}
+#endif
 /**************************************
  * EbMuxingQueueObjectPushBack
  **************************************/
@@ -556,7 +588,25 @@ static EbErrorType EbReleaseProcess(
 
     return return_error;
 }
+#if DEC_MT_SUPPORT
+static EbErrorType EbReleaseProcessNonBlocking (
+    EbFifo   *processFifoPtr)
+{
+    EbErrorType return_error = EB_ErrorNone;
 
+    eb_block_on_mutex(processFifoPtr->queue_ptr->lockout_mutex);
+
+    EbCircularBufferPushFront(
+        processFifoPtr->queue_ptr->process_queue,
+        processFifoPtr);
+
+    EbMuxingQueueAssignationNonBlocking(processFifoPtr->queue_ptr);
+
+    eb_release_mutex(processFifoPtr->queue_ptr->lockout_mutex);
+
+    return return_error;
+}
+#endif
 /*********************************************************************
  * EbSystemResourcePostObject
  *   Queues a full EbObjectWrapper to the SystemResource. This
@@ -707,6 +757,26 @@ EbErrorType eb_get_full_object(
 
     return return_error;
 }
+#if DEC_MT_SUPPORT
+EbErrorType eb_get_non_blocking_full_object(
+    EbFifo   *full_fifo_ptr,
+    EbObjectWrapper **wrapper_dbl_ptr)
+{
+    EbErrorType return_error = EB_ErrorNone;
+
+    // Queue the Fifo requesting the full fifo
+    EbReleaseProcessNonBlocking(full_fifo_ptr);
+
+    // Block on the counting Semaphore until an empty buffer is available
+    eb_block_on_semaphore(full_fifo_ptr->counting_semaphore);
+
+    EbFifoPopFront(
+        full_fifo_ptr,
+        wrapper_dbl_ptr);
+
+    return return_error;
+}
+#endif
 
 /**************************************
 * EbFifoPopFront
@@ -720,7 +790,35 @@ static EbBool EbFifoPeakFront(
     else
         return EB_FALSE;
 }
+#if DEC_MT_SUPPORT
+EbErrorType eb_get_full_object_non_blocking(
+    EbFifo   *full_fifo_ptr,
+    EbObjectWrapper **wrapper_dbl_ptr)
+{
+    EbErrorType return_error = EB_ErrorNone;
+    EbBool      fifoEmpty;
+    // Queue the Fifo requesting the full fifo
+    EbReleaseProcessNonBlocking(full_fifo_ptr);
 
+    // Acquire lockout Mutex
+    eb_block_on_mutex(full_fifo_ptr->lockout_mutex);
+
+    fifoEmpty = EbFifoPeakFront(
+        full_fifo_ptr);
+
+    if (fifoEmpty == EB_FALSE)
+        eb_get_non_blocking_full_object(
+            full_fifo_ptr,
+            wrapper_dbl_ptr);
+    else
+        *wrapper_dbl_ptr = (EbObjectWrapper*)EB_NULL;
+
+    // Release Mutex
+    eb_release_mutex(full_fifo_ptr->lockout_mutex);
+
+    return return_error;
+}
+#else
 EbErrorType eb_get_full_object_non_blocking(
     EbFifo   *full_fifo_ptr,
     EbObjectWrapper **wrapper_dbl_ptr)
@@ -748,3 +846,4 @@ EbErrorType eb_get_full_object_non_blocking(
 
     return return_error;
 }
+#endif

@@ -356,28 +356,30 @@ static EbErrorType init_parse_context (EbDecHandle  *dec_handle_ptr) {
 }
 
 /*TODO: Move to module files */
-static EbErrorType init_dec_mod_ctxt(EbDecHandle  *dec_handle_ptr)
+EbErrorType init_dec_mod_ctxt(EbDecHandle  *dec_handle_ptr,
+    void **pp_dec_mod_ctxt)
 {
     EbErrorType return_error = EB_ErrorNone;
-    SeqHeader   *seq_header = &dec_handle_ptr->seq_header;
+    SeqHeader *seq_header = &dec_handle_ptr->seq_header;
     EbColorConfig *color_config = &seq_header->color_config;
 
-    EB_MALLOC_DEC(void *, dec_handle_ptr->pv_dec_mod_ctxt, sizeof(DecModCtxt), EB_N_PTR);
+    EB_MALLOC_DEC(void *, *pp_dec_mod_ctxt, sizeof(DecModCtxt), EB_N_PTR);
 
-    DecModCtxt *dec_mod_ctxt = (DecModCtxt*)dec_handle_ptr->pv_dec_mod_ctxt;
+    DecModCtxt *p_dec_mod_ctxt = (DecModCtxt*)*pp_dec_mod_ctxt;
+    p_dec_mod_ctxt->dec_handle_ptr  = (void *)dec_handle_ptr;
+    p_dec_mod_ctxt->seq_header      = &dec_handle_ptr->seq_header;
+    p_dec_mod_ctxt->frame_header    = &dec_handle_ptr->frame_header;
 
-    dec_mod_ctxt->dec_handle_ptr = (void *)dec_handle_ptr;
-
-    int32_t sb_size_log2 = dec_handle_ptr->seq_header.sb_size_log2;
+    int32_t sb_size_log2 = seq_header->sb_size_log2;
 
     int32_t y_size = (1 << sb_size_log2) * (1 << sb_size_log2);
     int32_t iq_size = y_size +
         (color_config->subsampling_x ? y_size >> 2 : y_size) +
         (color_config->subsampling_y ? y_size >> 2 : y_size);
 
-    EB_MALLOC_DEC(int32_t*, dec_mod_ctxt->sb_iquant_ptr,
+    EB_MALLOC_DEC(int32_t*, p_dec_mod_ctxt->sb_iquant_ptr,
         iq_size * sizeof(int32_t), EB_N_PTR);
-    av1_inverse_qm_init(dec_handle_ptr);
+    av1_inverse_qm_init(p_dec_mod_ctxt, seq_header);
 
     return return_error;
 }
@@ -473,7 +475,8 @@ EbErrorType dec_mem_init(EbDecHandle  *dec_handle_ptr) {
 
     return_error |= init_parse_context(dec_handle_ptr);
 
-    return_error |= init_dec_mod_ctxt(dec_handle_ptr);
+    return_error |= init_dec_mod_ctxt(dec_handle_ptr,
+                    &dec_handle_ptr->pv_dec_mod_ctxt);
 
     return_error |= init_lf_ctxt(dec_handle_ptr);
 

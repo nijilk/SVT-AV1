@@ -17,6 +17,10 @@ typedef struct DecModCtxt {
     /** Decoder Handle */
     void *dec_handle_ptr;
 
+    SeqHeader *seq_header;
+
+    FrameHeader *frame_header;
+
     int32_t *sb_iquant_ptr;
 
     int32_t *iquant_cur_ptr;
@@ -89,8 +93,12 @@ void decode_super_block(DecModCtxt *dec_mod_ctxt,
                         SBInfo *sbInfo);
 
 #if MT_SUPPORT
-EbErrorType decode_tile(EbDecHandle *dec_handle_ptr,
-    TilesInfo *tile_info, int32_t tile_row, int32_t tile_col);
+EbErrorType start_decode_tile(EbDecHandle *dec_handle_ptr,
+    DecModCtxt *dec_mod_ctxt, TilesInfo *tiles_info, int32_t tile_num);
+
+EbErrorType decode_tile(
+    DecModCtxt *dec_mod_ctxt, TilesInfo *tile_info,
+    int32_t tile_row, int32_t tile_col);
 #endif
 
 /* TODO: Should be moved out once decode tile is moved out from parse_tile */

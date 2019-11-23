@@ -810,14 +810,13 @@ void svt_av1_predict_intra(DecModCtxt *dec_mod_ctxt, PartitionInfo_t *part_info,
     EbBitDepthEnum bit_depth, int32_t blk_mi_col_off, int32_t blk_mi_row_off )
 {
     int32_t i, wpx, hpx;
-    EbDecHandle *dec_handle = (EbDecHandle *)dec_mod_ctxt->dec_handle_ptr;
 
     //assert(part_info->wpx[plane] <= 64);
     //assert(part_info->hpx[plane] <= 64);
     wpx = AOMMIN(part_info->wpx[plane], plane ?
-        (64 >> dec_handle->seq_header.color_config.subsampling_x) : 64);
+        (64 >> dec_mod_ctxt->seq_header->color_config.subsampling_x) : 64);
     hpx = AOMMIN(part_info->hpx[plane], plane ?
-        (64 >> dec_handle->seq_header.color_config.subsampling_y) : 64);
+        (64 >> dec_mod_ctxt->seq_header->color_config.subsampling_y) : 64);
 
     void *pv_topNeighArray  = (void *)dec_mod_ctxt->topNeighArray;;
     void *pv_leftNeighArray = (void *)dec_mod_ctxt->leftNeighArray;
@@ -857,13 +856,13 @@ void svt_av1_predict_intra(DecModCtxt *dec_mod_ctxt, PartitionInfo_t *part_info,
             tx_size, td,
             pv_blk_recon_buf, recon_stride,
             pv_topNeighArray, pv_leftNeighArray,
-            &dec_handle->seq_header, mode,
+            dec_mod_ctxt->seq_header, mode,
             blk_mi_col_off, blk_mi_row_off, bit_depth);
 
         cfl_predict_block(part_info, part_info->pv_cfl_ctxt,
             pv_blk_recon_buf, recon_stride, tx_size, plane,
-            &dec_handle->seq_header.color_config,
-            &dec_handle->frame_header);
+            &dec_mod_ctxt ->seq_header->color_config,
+            dec_mod_ctxt->frame_header);
 
         return;
     }
@@ -872,6 +871,6 @@ void svt_av1_predict_intra(DecModCtxt *dec_mod_ctxt, PartitionInfo_t *part_info,
         tx_size, td,
         pv_blk_recon_buf, recon_stride,
         pv_topNeighArray, pv_leftNeighArray,
-        &dec_handle->seq_header, mode,
+        dec_mod_ctxt->seq_header, mode,
         blk_mi_col_off, blk_mi_row_off, bit_depth);
 }

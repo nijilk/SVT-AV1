@@ -274,14 +274,13 @@ void av1_combine_interintra(PartitionInfo_t *part_info, BlockSize bsize,
         inter_stride, intra_pred, intra_stride);
 }
 
-void av1_build_intra_predictors_for_interintra(EbDecHandle *dec_hdl,
+void av1_build_intra_predictors_for_interintra(DecModCtxt *dec_mod_ctxt,
     PartitionInfo_t *part_info, void *pv_blk_recon_buf, int32_t recon_stride,
     BlockSize bsize, int32_t plane, uint8_t *dst, int dst_stride,
     EbBitDepthEnum bit_depth)
 {
     BlockModeInfo *mi = part_info->mi;
     int32_t i, wpx, hpx;
-    DecModCtxt *dec_mod_ctxt = (DecModCtxt *)dec_hdl->pv_dec_mod_ctxt;
     int32_t sub_x = (plane > 0) ? part_info->subsampling_x : 0;
     int32_t sub_y = (plane > 0) ? part_info->subsampling_y : 0;
     BlockSize plane_bsize = get_plane_block_size(bsize, sub_x, sub_y);
@@ -329,17 +328,17 @@ void av1_build_intra_predictors_for_interintra(EbDecHandle *dec_hdl,
     svtav1_predict_intra_block(part_info, plane,
         max_txsize_rect_lookup[plane_bsize], &dec_mod_ctxt->cur_tile_info,
         (void *)dst, dst_stride, pv_topNeighArray, pv_leftNeighArray,
-        &dec_hdl->seq_header, mode, 0, 0, bit_depth);
+        dec_mod_ctxt->seq_header, mode, 0, 0, bit_depth);
 }
 
 /* Build interintra_predictors */
-void av1_build_interintra_predictors(EbDecHandle *dec_hdl,
+void av1_build_interintra_predictors(DecModCtxt *dec_mod_ctxt,
     PartitionInfo_t *part_info, void *pred, int32_t stride, int plane,
     BlockSize bsize, EbBitDepthEnum bit_depth)
 {
     if (bit_depth > EB_8BIT) {
         DECLARE_ALIGNED(16, uint16_t, intrapredictor[MAX_SB_SQUARE]);
-        av1_build_intra_predictors_for_interintra(dec_hdl, part_info, pred,
+        av1_build_intra_predictors_for_interintra(dec_mod_ctxt, part_info, pred,
             stride, bsize, plane, (uint8_t *)intrapredictor,
             MAX_SB_SIZE, bit_depth);
         av1_combine_interintra(part_info, bsize, plane, pred, stride,
@@ -347,7 +346,7 @@ void av1_build_interintra_predictors(EbDecHandle *dec_hdl,
     }
     else {
         DECLARE_ALIGNED(16, uint8_t, intrapredictor[MAX_SB_SQUARE]);
-        av1_build_intra_predictors_for_interintra(dec_hdl, part_info, pred,
+        av1_build_intra_predictors_for_interintra(dec_mod_ctxt, part_info, pred,
             stride, bsize, plane, intrapredictor, MAX_SB_SIZE, bit_depth);
         av1_combine_interintra(part_info, bsize, plane, pred, stride,
             intrapredictor, MAX_SB_SIZE, bit_depth);
@@ -357,16 +356,15 @@ void av1_build_interintra_predictors(EbDecHandle *dec_hdl,
 #endif //comp_interintra
 
 
-void svtav1_predict_inter_block_plane(
+void svtav1_predict_inter_block_plane(DecModCtxt *dec_mod_ctx,
     EbDecHandle *dec_hdl, PartitionInfo_t *part_info, int32_t plane,
     int32_t build_for_obmc, int32_t mi_x, int32_t mi_y,
     void *dst, int32_t dst_stride,
     int32_t some_use_intra, int32_t bit_depth)
 {
     const BlockModeInfo *mi = part_info->mi;
-    const FrameHeader *cur_frm_hdr = &dec_hdl->frame_header;
-    DecModCtxt *dec_mod_ctx = (DecModCtxt*) dec_hdl->pv_dec_mod_ctxt;
-    SeqHeader *seq_header = &dec_hdl->seq_header;
+    const FrameHeader *cur_frm_hdr = dec_mod_ctx->frame_header;
+    SeqHeader *seq_header = dec_mod_ctx->seq_header;
     int32_t is_compound = has_second_ref(mi);
     int32_t ref;
     const int32_t is_intrabc = is_intrabc_block(mi);
@@ -482,7 +480,7 @@ void svtav1_predict_inter_block_plane(
     }
 }
 
-void svtav1_predict_inter_block(
+void svtav1_predict_inter_block(DecModCtxt *dec_mod_ctxt,
     EbDecHandle *dec_hdl, PartitionInfo_t *part_info,
     int32_t mi_row, int32_t mi_col, int32_t num_planes)
 {
@@ -526,21 +524,21 @@ void svtav1_predict_inter_block(
             mi_col*MI_SIZE >> sub_x, mi_row*MI_SIZE >> sub_y,
             &blk_recon_buf, &recon_stride, sub_x, sub_y);
 
-        svtav1_predict_inter_block_plane(dec_hdl, part_info, plane,
+        svtav1_predict_inter_block_plane(dec_mod_ctxt, dec_hdl, part_info, plane,
             0/*OBMC_FLAG*/, mi_col*MI_SIZE, mi_row*MI_SIZE, blk_recon_buf,
             recon_stride, some_use_intra, recon_picture_buf->bit_depth);
 
 #if COMP_INTERINTRA
         if (is_interintra_pred(part_info->mi)) {
 /*Inter prd is done in above function, In the below function Intra prd happens follwed by interintra blending */
-            av1_build_interintra_predictors(dec_hdl, part_info, blk_recon_buf,
+            av1_build_interintra_predictors(dec_mod_ctxt, part_info, blk_recon_buf,
                 recon_stride, plane, bsize, recon_picture_buf->bit_depth);
         }
 
 #endif //comp_interitra
     }
     if (part_info->mi->motion_mode == OBMC_CAUSAL) {
-        dec_build_obmc_inter_predictors_sb(dec_hdl, part_info, mi_row, mi_col);
+        dec_build_obmc_inter_predictors_sb(dec_mod_ctxt, dec_hdl, part_info, mi_row, mi_col);
     }
 
     return;
