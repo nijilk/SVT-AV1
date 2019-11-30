@@ -178,6 +178,8 @@ void decode_block(DecModCtxt *dec_mod_ctxt, int32_t mi_row, int32_t mi_col,
     part_info.mi_col = mi_col;
     part_info.pv_cfl_ctxt = &dec_mod_ctxt->cfl_ctx;
 
+    part_info.is_chroma_ref = is_chroma_ref;
+
     /*!< Distance of MB away from frame edges in subpixels (1/8th pixel). */
     part_info.mb_to_top_edge = -((mi_row * MI_SIZE) * 8);
     part_info.mb_to_bottom_edge = ((mi_rows - bh4 - mi_row) * MI_SIZE) * 8;

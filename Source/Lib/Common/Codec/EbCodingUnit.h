@@ -269,7 +269,7 @@ extern "C" {
         int8_t angle_delta[PLANE_TYPES];
 
         // Number of base colors for Y (0) and UV (1)
-        uint8_t palette_size[2];
+        uint8_t palette_size[MAX_MB_PLANE-1];
 
 #if MODE_INFO_DBG
         int32_t mi_row;

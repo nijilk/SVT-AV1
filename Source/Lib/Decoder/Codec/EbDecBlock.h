@@ -225,6 +225,8 @@ typedef struct PartitionInfo {
     const struct ScaleFactors *sf_identity;
 
     int8_t *cdef_strength;
+
+    int32_t is_chroma_ref;
 } PartitionInfo_t;
 
 #endif //EbDecBlock_h

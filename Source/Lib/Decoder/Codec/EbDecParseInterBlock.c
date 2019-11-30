@@ -1485,9 +1485,9 @@ static INLINE int is_dv_valid(MV dv, EbDecHandle *dec_handle,
     // Special case for sub 8x8 chroma cases, to prevent referring to chroma
     // pixels outside current tile.
     int num_planes = dec_handle->seq_header.color_config.mono_chrome ? 1 : MAX_MB_PLANE;
+    int32_t is_chroma_ref = pi->is_chroma_ref;
     for (int plane = 1; plane < num_planes; ++plane) {
-        if (is_chroma_reference(mi_row, mi_col, bsize, subsampling_x,
-            subsampling_y)) {
+        if (is_chroma_ref) {
             if (bw < 8 && subsampling_x)
                 if (src_left_edge < tile_left_edge + 4 * SCALE_PX_TO_MV) return 0;
             if (bh < 8 && subsampling_y)
@@ -2334,6 +2334,7 @@ void palette_tokens(EbDecHandle *dec_handle, PartitionInfo_t *pi,
     int on_screen_height = MIN(block_height, (mi_rows - mi_row) * MI_SIZE);
     int on_screen_width = MIN(block_width, (mi_cols - mi_col) * MI_SIZE);
 
+    int32_t is_chroma_ref = pi->is_chroma_ref;
     uint8_t color_order[PALETTE_MAX_SIZE];
     uint8_t color_map[COLOR_MAP_STRIDE][COLOR_MAP_STRIDE];
     int sub_x, sub_y;
@@ -2360,7 +2361,7 @@ void palette_tokens(EbDecHandle *dec_handle, PartitionInfo_t *pi,
                 }
             }
 
-            if (is_chroma_reference(mi_row, mi_col, bsize, sub_x, sub_y)) {
+            if ((plane_itr ? is_chroma_ref : 1)) {
                 int color_index_map = svt_read_ns_ae(r, palette_size, ACCT_STR);
                 color_map[0][0] = color_index_map;
                 for (int i = 1; i < on_screen_height + on_screen_width - 1; i++) {
@@ -2394,7 +2395,7 @@ void palette_tokens(EbDecHandle *dec_handle, PartitionInfo_t *pi,
             }
         }
 
-        if (is_chroma_reference(mi_row, mi_col, bsize, sub_x, sub_y)) {
+        if ((plane_itr ? is_chroma_ref : 1)) {
             if (palette_size){
                 /* Palette prediction process */
                 void *blk_recon_buf;
@@ -2406,9 +2407,8 @@ void palette_tokens(EbDecHandle *dec_handle, PartitionInfo_t *pi,
                     (mi_col >> sub_x) * MI_SIZE,
                     (mi_row >> sub_y) * MI_SIZE,
                     &blk_recon_buf, &recon_stride, sub_x, sub_y);
-
                 uint16_t *palette = &nbr_ctx->
-                    palette_colors[plane_itr * PALETTE_MAX_SIZE];
+                    palette_colors[plane_itr][0];
                 if (recon_picture_buf->bit_depth == EB_8BIT) {
                     uint8_t *temp_buf = (uint8_t*)blk_recon_buf;
                     for (int i = 0; i < block_height; i++) {

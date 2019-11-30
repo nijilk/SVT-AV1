@@ -116,7 +116,7 @@ typedef struct ParseNbr4x4Ctxt {
     int32_t cur_q_ind;
 
     /* Place holder for palette color information */
-    uint16_t palette_colors[MAX_MB_PLANE * PALETTE_MAX_SIZE];
+    uint16_t palette_colors[MAX_MB_PLANE][PALETTE_MAX_SIZE];
 
     int8_t *above_comp_grp_idx;
 
