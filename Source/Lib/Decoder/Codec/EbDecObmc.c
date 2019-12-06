@@ -462,9 +462,10 @@ static void dec_build_prediction_by_left_preds(DecModCtxt *dec_mod_ctx,
 }
 
 
-void dec_build_obmc_inter_predictors_sb(DecModCtxt *dec_mod_ctxt, EbDecHandle *dec_handle,
-    PartitionInfo_t *pi, int mi_row, int mi_col)
+void dec_build_obmc_inter_predictors_sb(void *pv_dec_mod_ctxt,
+    EbDecHandle *dec_handle, PartitionInfo_t *pi, int mi_row, int mi_col)
 {
+    DecModCtxt *dec_mod_ctxt = (DecModCtxt *)pv_dec_mod_ctxt;
     uint8_t *dst_buf[MAX_MB_PLANE];
     dec_mod_ctxt->obmc_ctx.dst_stride[AOM_PLANE_Y] = MAX_SB_SIZE;
     dec_mod_ctxt->obmc_ctx.dst_stride[AOM_PLANE_U] = MAX_SB_SIZE;

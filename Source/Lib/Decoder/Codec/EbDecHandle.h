@@ -23,9 +23,7 @@ extern "C" {
 
 #include "EbDecStruct.h"
 #include "EbDecBlock.h"
-#if MT_SUPPORT
 #include "EbDecProcess.h"
-#endif
 
 /* Maximum number of frames in parallel */
 #define DEC_MAX_NUM_FRM_PRLL    1
@@ -101,9 +99,9 @@ typedef struct CurFrameBuf {
 
     /*!< Global warp params of current frame */
     EbWarpedMotionParams global_motion_warp[REF_FRAMES];
-#if MT_SUPPORT
+
     DecMTFrameData  dec_mt_frame_data;
-#endif
+
 } CurFrameBuf;
 
 #define FRAME_MI_MAP 1
@@ -184,11 +182,7 @@ typedef struct EbDecHandle {
     // Thread Handles
 
     // Module Contexts
-#if MT_SUPPORT
     void   *pv_master_parse_ctxt;
-#else
-    void   *pv_parse_ctxt;
-#endif
 
     void   *pv_dec_mod_ctxt;
 
@@ -245,17 +239,24 @@ typedef struct EbDecHandle {
     struct Av1Common             cm;
 
     // Thread Handles
-#if MT_SUPPORT
     EbHandle                    *decode_thread_handle_array;
     EbBool                      start_thread_process;
-#endif //MT_SUPPORT
+
 }EbDecHandle;
 
-/* Bhavna : Add comment */
+/* Thread level context data */
 typedef struct DecThreadCtxt {
-    uint32_t    thread_cnt;
-    EbDecHandle *dec_handle_ptr;
-    void        *dec_mod_ctxt;
+
+    /* Unique ID for the thread */
+    uint32_t        thread_cnt;
+
+    /* Pointer to the decode handle */
+    EbDecHandle     *dec_handle_ptr;
+
+    /* Pointer to the decode context */
+    void            *dec_mod_ctxt;
+
+    /* Loop filter information */
     LoopFilterInfoN lf_info;
 } DecThreadCtxt;
 

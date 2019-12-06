@@ -196,13 +196,8 @@ static INLINE void jnt_2d_comp_avg_round_store_4x2_avx2(
     d = _mm256_packus_epi16(d, d);
     const __m128i d0 = _mm256_castsi256_si128(d);
     const __m128i d1 = _mm256_extracti128_si256(d, 1);
-#if INTRINSIC_FIX
     *(uint32_t *)(dst8) = _mm_cvtsi128_si32(d0);
     *(uint32_t *)(dst8 + dst8_stride) = _mm_cvtsi128_si32(d1);
-#else
-    _mm_storel_epi64((__m128i *)dst8, d0);
-    _mm_storel_epi64((__m128i *)(dst8 + dst8_stride), d1);
-#endif
 }
 
 static INLINE void jnt_2d_comp_avg_round_store_8x2_avx2(
@@ -381,13 +376,8 @@ static INLINE void jnt_2d_avg_round_store_4x2_avx2(
     d = _mm256_packus_epi16(d, d);
     const __m128i d0 = _mm256_castsi256_si128(d);
     const __m128i d1 = _mm256_extracti128_si256(d, 1);
-#if INTRINSIC_FIX
     *(uint32_t *)(dst8) = _mm_cvtsi128_si32(d0);
     *(uint32_t *)(dst8 + dst8_stride) = _mm_cvtsi128_si32(d1);
-#else
-    _mm_storel_epi64((__m128i *)dst8, d0);
-    _mm_storel_epi64((__m128i *)(dst8 + dst8_stride), d1);
-#endif
 }
 
 static INLINE void jnt_2d_avg_round_store_8x2_avx2(

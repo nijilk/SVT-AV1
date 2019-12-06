@@ -75,7 +75,8 @@ static INLINE int get_tx_size_context(const PartitionInfo_t *xd,
     const int has_above = xd->up_available;
     const int has_left = xd->left_available;
 
-    int above = parse_ctxt->parse_above_nbr4x4_ctxt->above_tx_wd[xd->mi_col] >= max_tx_wide;
+    int above = parse_ctxt->parse_above_nbr4x4_ctxt->above_tx_wd[xd->mi_col -
+        parse_ctxt->cur_tile_info.mi_col_start] >= max_tx_wide;
     int left = parse_ctxt->parse_left_nbr4x4_ctxt->
         left_tx_ht[xd->mi_row - parse_ctxt->sb_row_mi] >= max_tx_high;
 
@@ -114,7 +115,8 @@ void update_tx_context(ParseCtxt *parse_ctxt, PartitionInfo_t *pi,
     BlockSize b_size = bsize;
     if(is_inter_block(pi->mi))
         b_size = txsize_to_bsize[txSize];
-    uint8_t *const above_ctx = above_parse_ctx->above_tx_wd + mi_col + blk_col;
+    uint8_t *const above_ctx = above_parse_ctx->above_tx_wd +
+        (mi_col - parse_ctxt->cur_tile_info.mi_col_start + blk_col);
     uint8_t *const left_ctx = left_parse_ctx->left_tx_ht +
         (mi_row - parse_ctxt->sb_row_mi + blk_row);
 

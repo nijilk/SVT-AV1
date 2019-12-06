@@ -121,7 +121,8 @@ static EbErrorType eb_dec_handle_ctor(
     EbErrorType return_error = EB_ErrorNone;
 
     // Allocate Memory
-    EbDecHandle   *dec_handle_ptr = (EbDecHandle  *)malloc(sizeof(EbDecHandle  ));
+    EbDecHandle   *dec_handle_ptr =
+        (EbDecHandle  *)malloc(sizeof(EbDecHandle));
     *decHandleDblPtr = dec_handle_ptr;
     if (dec_handle_ptr == (EbDecHandle  *)EB_NULL)
         return EB_ErrorInsufficientResources;
@@ -135,7 +136,7 @@ static EbErrorType eb_dec_handle_ctor(
     svt_dec_memory_map_index = &dec_handle_ptr->memory_map_index;
     svt_dec_lib_malloc_count = 0;
 
-    dec_handle_ptr->start_thread_process = FALSE;
+    dec_handle_ptr->start_thread_process = EB_FALSE;
 
     return return_error;
 }
@@ -558,7 +559,8 @@ EB_API EbErrorType eb_svt_decode_frame(
     {
         /*TODO : Remove or move. For Test purpose only */
         dec_handle_ptr->dec_cnt++;
-        printf("\n SVT-AV1 Dec : Decoding Pic #%d", dec_handle_ptr->dec_cnt);
+        printf("\n SVT-AV1 Dec : Decoding Pic #%d \n",
+            dec_handle_ptr->dec_cnt);
 
         uint64_t frame_size = 0;
         /*if (ctx->is_annexb) {

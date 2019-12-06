@@ -7,6 +7,7 @@
 
 #include "EbSystemResourceManager.h"
 
+#define MUTEX_CHANGE 1
 void EbFifoDctor(EbPtr p)
 {
     EbFifo *obj = (EbFifo*)p;
@@ -287,7 +288,8 @@ static EbErrorType EbMuxingQueueAssignationNonBlocking(
 
     // while loop
     while ((EbCircularBufferEmptyCheck(queue_ptr->object_queue) == EB_FALSE) &&
-        (EbCircularBufferEmptyCheck(queue_ptr->process_queue) == EB_FALSE)) {
+        (EbCircularBufferEmptyCheck(queue_ptr->process_queue) == EB_FALSE))
+    {
         // Get the next process
         EbCircularBufferPopFront(
             queue_ptr->process_queue,
@@ -768,8 +770,12 @@ EbErrorType eb_get_non_blocking_full_object(
     EbReleaseProcessNonBlocking(full_fifo_ptr);
 
     // Block on the counting Semaphore until an empty buffer is available
-    eb_block_on_semaphore(full_fifo_ptr->counting_semaphore);
-
+#if MUTEX_CHANGE
+    //Test:Nijil eb_block_on_semaphore(full_fifo_ptr->counting_semaphore);
+    if (full_fifo_ptr->first_ptr == NULL)
+        *wrapper_dbl_ptr = NULL;
+    else
+#endif
     EbFifoPopFront(
         full_fifo_ptr,
         wrapper_dbl_ptr);
@@ -806,6 +812,11 @@ EbErrorType eb_get_full_object_non_blocking(
     fifoEmpty = EbFifoPeakFront(
         full_fifo_ptr);
 
+#if MUTEX_CHANGE
+    // Release Mutex
+    eb_release_mutex(full_fifo_ptr->lockout_mutex);
+#endif
+
     if (fifoEmpty == EB_FALSE)
         eb_get_non_blocking_full_object(
             full_fifo_ptr,
@@ -813,9 +824,10 @@ EbErrorType eb_get_full_object_non_blocking(
     else
         *wrapper_dbl_ptr = (EbObjectWrapper*)EB_NULL;
 
+#if !MUTEX_CHANGE
     // Release Mutex
     eb_release_mutex(full_fifo_ptr->lockout_mutex);
-
+#endif
     return return_error;
 }
 #else

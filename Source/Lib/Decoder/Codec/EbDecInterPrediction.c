@@ -538,7 +538,8 @@ void svtav1_predict_inter_block(DecModCtxt *dec_mod_ctxt,
 #endif //comp_interitra
     }
     if (part_info->mi->motion_mode == OBMC_CAUSAL) {
-        dec_build_obmc_inter_predictors_sb(dec_mod_ctxt, dec_hdl, part_info, mi_row, mi_col);
+        dec_build_obmc_inter_predictors_sb((void *)dec_mod_ctxt,
+        dec_hdl, part_info, mi_row, mi_col);
     }
 
     return;

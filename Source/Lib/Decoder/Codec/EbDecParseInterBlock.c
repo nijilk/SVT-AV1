@@ -1521,7 +1521,6 @@ void assign_intrabc_mv(ParseCtxt *parse_ctxt,
     IntMv ref_mvs[INTRA_FRAME + 1][MAX_MV_REF_CANDIDATES],
     PartitionInfo_t *pi, int mi_row, int mi_col)
 {
-    SvtReader *r = &parse_ctxt->r;
     BlockModeInfo *mbmi = pi->mi;
     IntMv nearestmv, nearmv;
     svt_find_best_ref_mvs(0, ref_mvs[INTRA_FRAME], &nearestmv, &nearmv, 0);
@@ -1829,7 +1828,8 @@ static INLINE int get_comp_group_idx_context(ParseCtxt *parse_ctxt,
     if (above_mi) {
         if (has_second_ref(above_mi)) {
             above_ctx = parse_ctxt->parse_above_nbr4x4_ctxt->
-                above_comp_grp_idx[xd->mi_col];
+                above_comp_grp_idx[xd->mi_col -
+                parse_ctxt->cur_tile_info.mi_col_start];
         }
         else if (above_mi->ref_frame[0] == ALTREF_FRAME)
             above_ctx = 3;
@@ -1898,7 +1898,8 @@ void update_compound_ctx(ParseCtxt *parse_ctxt, PartitionInfo_t *pi,
     const uint32_t bw = mi_size_wide[pi->mi->sb_type];
     const uint32_t bh = mi_size_high[pi->mi->sb_type];
 
-    int8_t *above_ctx = above_parse_ctx->above_comp_grp_idx + blk_col;
+    int8_t *above_ctx = above_parse_ctx->above_comp_grp_idx +
+        blk_col - parse_ctxt->cur_tile_info.mi_col_start;
     int8_t *left_ctx = left_parse_ctx->left_comp_grp_idx +
         ((blk_row - parse_ctxt->sb_row_mi) & MAX_MIB_MASK);
 

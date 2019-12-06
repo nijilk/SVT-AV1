@@ -9,7 +9,6 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-#define TEMP_TEST_MT 1
 #include "EbDefinitions.h"
 #include "EbSystemResourceManager.h"
 
@@ -33,7 +32,7 @@ typedef struct DecMTParseReconTileInfo {
     /* Latest SB Recon row picked up for processing in the Tile. This will be
        used for deciding which tile to be picked up for processing. */
     uint32_t    sb_recon_row_started;
-    
+
     /* Array to store SBs completed in every SB row of Recon stage.
        Used for top-right sync */
     uint32_t    *sb_recon_completed_in_row;
@@ -47,28 +46,20 @@ typedef struct DecMTLFFrameInfo {
     /* EbFifo at Frame Row level */
     EbFifo              **lf_row_producer_fifo_ptr;
     EbFifo              **lf_row_consumer_fifo_ptr;
-    
+
     /* Array to store SBs completed in every SB row of LF stage.
        Used for top sync */
-    uint32_t    *sb_lf_completed_in_row;
+    int32_t    *sb_lf_completed_in_row;
 
 } DecMTLFFrameInfo;
 
 /* MT State information for each frame in parallel */
 typedef struct DecMTFrameData {
-    //EbDctor             dctor;
-#if TEMP_TEST_MT
+    uint32_t            num_threads_lfed;
     EbBool              start_parse_frame;
-    uint32_t            num_tiles_parsed;
-    uint32_t            num_tiles_total;
     EbBool              start_decode_frame;
-    uint32_t            num_tiles_decoded;
     EbBool              start_lf_frame;
-    uint32_t            num_rows_lfed;
-    uint32_t            num_rows_total;
     EbHandle            temp_mutex;
-#endif
-    //eb_create_mutex, eb_block_on_mutex, eb_release_mutex
 
     TilesInfo           *tiles_info;
 
@@ -90,15 +81,19 @@ typedef struct DecMTFrameData {
     /* Parse-Recon Stage structure */
     DecMTParseReconTileInfo *parse_recon_tile_info_array;
 
+    uint32_t    *sb_recon_row_map;
+
     /* LF Stage structure */
     DecMTLFFrameInfo        lf_frame_info;
 
     /* EbFifo at Frame Row level : CDEF Stage */
     EbFifo                  *cdef_fifo_ptr;
+
     /* EbFifo at Frame Row level : SR Stage */
     EbFifo                  *sr_fifo_ptr;
     /* EbFifo at Frame Row level : LR Stage */
     EbFifo                  *lr_fifo_ptr;
+
     /* EbFifo at Frame Row level : Pad Stage */
     EbFifo                  *pad_fifo_ptr;
 

@@ -47,7 +47,7 @@ extern "C" {
 #define OBMC_FLAG            1 // OBMC motion mode flag
 #define OBMC_CONVOLVE        1 // to track convolve kernels changes
 
-#define INJECT_NEW_NEAR_NEAR_NEW   1   // Inject NEW_NEAR / NEAR_NEW inter prediction 
+#define INJECT_NEW_NEAR_NEAR_NEW   1   // Inject NEW_NEAR / NEAR_NEW inter prediction
 #define FILTER_INTRA_FLAG    1 // Filter intra prediction
 
 
@@ -65,9 +65,7 @@ extern "C" {
 #define NON_AVX512_SUPPORT
 #endif
 
-#define INTRINSIC_FIX                     1
 #define MR_MODE                           0
-#define MT_SUPPORT                        1
 #define WARP_UPDATE                       1 // Modified Warp settings: ON for MR mode. ON for ref frames in M0
 #define EIGTH_PEL_MV                      1
 #define EIGHT_PEL_PREDICTIVE_ME           1

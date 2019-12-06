@@ -153,8 +153,6 @@ void decode_super_block(DecModCtxt *dec_mod_ctxt,
         dec_mod_ctxt->seq_header->sb_size, sb_info);
 }
 
-#if MT_SUPPORT
-
 EbErrorType decode_tile_row(DecModCtxt *dec_mod_ctxt,
     TilesInfo *tile_info, int32_t tile_col, int32_t mi_row)
 {
@@ -180,6 +178,11 @@ EbErrorType decode_tile_row(DecModCtxt *dec_mod_ctxt,
 
         decode_super_block(dec_mod_ctxt, mi_row, mi_col, sb_info);
     }
+
+    DecMTFrameData *mt_frame_data = &frame_buf->dec_mt_frame_data;
+    int index = mi_row / dec_mod_ctxt->seq_header->sb_mi_size;
+    mt_frame_data->sb_recon_row_map[(index *
+        tile_info->tile_cols) + tile_col] = 1;
     return status;
 }
 
@@ -212,4 +215,3 @@ EbErrorType start_decode_tile(EbDecHandle *dec_handle_ptr,
     status = decode_tile(dec_mod_ctxt, tiles_info, tile_row, tile_col);
     return status;
 }
-#endif

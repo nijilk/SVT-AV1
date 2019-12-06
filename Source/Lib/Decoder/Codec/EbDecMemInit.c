@@ -159,12 +159,8 @@ static EbErrorType init_master_frame_ctxt(EbDecHandle  *dec_handle_ptr) {
         EB_MALLOC_DEC(BlockModeInfo*, cur_frame_buf->mode_info,
                     (num_sb * num_mis_in_sb * sizeof(BlockModeInfo)), EB_N_PTR);
 
-#if MT_SUPPORT
-        /* TransformInfo str allocation at 4x4 level 
+        /* TransformInfo str allocation at 4x4 level
            TO-DO optimize memory based on the chroma subsampling.*/
-#else
-        /* TransformInfo str allocation at 4x4 level */
-#endif
         EB_MALLOC_DEC(TransformInfo_t*, cur_frame_buf->trans_info[AOM_PLANE_Y],
             (num_sb * num_mis_in_sb * sizeof(TransformInfo_t)), EB_N_PTR);
 
@@ -326,20 +322,11 @@ static EbErrorType init_master_frame_ctxt(EbDecHandle  *dec_handle_ptr) {
 static EbErrorType init_parse_context (EbDecHandle  *dec_handle_ptr) {
     EbErrorType return_error = EB_ErrorNone;
 
-#if MT_SUPPORT
     EB_MALLOC_DEC(void *, dec_handle_ptr->pv_master_parse_ctxt,
         sizeof(MasterParseCtxt), EB_N_PTR);
-
     MasterParseCtxt *master_parse_ctx =
         (MasterParseCtxt*)dec_handle_ptr->pv_master_parse_ctxt;
-#else
-    EB_MALLOC_DEC(void *, dec_handle_ptr->pv_parse_ctxt, sizeof(ParseCtxt), EB_N_PTR);
 
-    ParseCtxt *parse_ctx = (ParseCtxt*)dec_handle_ptr->pv_parse_ctxt;
-
-#endif
-
-#if MT_SUPPORT
     master_parse_ctx->context_count = 0;
     master_parse_ctx->tile_parse_ctxt = NULL;
 
@@ -349,9 +336,6 @@ static EbErrorType init_parse_context (EbDecHandle  *dec_handle_ptr) {
     master_parse_ctx->num_tiles = 0;
     master_parse_ctx->parse_tile_data = NULL;
 
-#else
-    ParseNbr4x4Ctxt *neigh_ctx = &parse_ctx->parse_nbr4x4_ctxt;
-#endif
     return return_error;
 }
 

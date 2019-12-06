@@ -71,56 +71,37 @@ EbErrorType init_svt_reader(SvtReader   *r,
 }
 
 void clear_above_context(ParseCtxt *parse_ctxt, int mi_col_start,
-    int mi_col_end, const int tile_row)
+    int mi_col_end, int num_threads)
 {
-    assert(0 == tile_row);
-
     SeqHeader   *seq_params = parse_ctxt->seq_header;
-
-    int num_planes  = av1_num_planes(&seq_params->color_config);
-    const int width = mi_col_end - mi_col_start;
-
-    const int offset_y  = mi_col_start;
-    const int width_y   = width;
-
-    const int offset_uv = offset_y >> seq_params->color_config.subsampling_x;
-    const int width_uv  = width_y >> seq_params->color_config.subsampling_x;
+    int num_planes = av1_num_planes(&seq_params->color_config);
+    int width = mi_col_end - mi_col_start;
+    if (num_threads == 1) {
+        int32_t num_mi_sb = seq_params->sb_mi_size;
+        int32_t sb_size_log2 = seq_params->sb_size_log2;
+        int32_t sb_aligned_width = ALIGN_POWER_OF_TWO(
+            seq_params->max_frame_width, sb_size_log2);
+        int32_t sb_cols = sb_aligned_width >> sb_size_log2;
+        width = sb_cols * num_mi_sb;
+    }
 
     int8_t num4_64x64 = mi_size_wide[BLOCK_64X64];
 
-    ZERO_ARRAY((&parse_ctxt->parse_above_nbr4x4_ctxt->above_level_ctx[0][tile_row]) +
-        offset_y, width_y);
-    ZERO_ARRAY((&parse_ctxt->parse_above_nbr4x4_ctxt->above_dc_ctx[0][tile_row]) +
-        offset_y, width_y);
-    ZERO_ARRAY((&parse_ctxt->parse_above_nbr4x4_ctxt->above_palette_colors[0][tile_row]),
-        num4_64x64 * PALETTE_MAX_SIZE);
-
-    if (num_planes > 1) {
-        ZERO_ARRAY((&parse_ctxt->parse_above_nbr4x4_ctxt->above_level_ctx[1][tile_row]) +
-            offset_uv, width_uv);
-        ZERO_ARRAY((&parse_ctxt->parse_above_nbr4x4_ctxt->above_dc_ctx[1][tile_row]) +
-            offset_uv, width_uv);
-        ZERO_ARRAY((&parse_ctxt->parse_above_nbr4x4_ctxt->above_palette_colors[1][tile_row]),
-            num4_64x64 * PALETTE_MAX_SIZE);
-        ZERO_ARRAY((&parse_ctxt->parse_above_nbr4x4_ctxt->above_level_ctx[2][tile_row]) +
-            offset_uv, width_uv);
-        ZERO_ARRAY((&parse_ctxt->parse_above_nbr4x4_ctxt->above_dc_ctx[2][tile_row]) +
-            offset_uv, width_uv);
-        ZERO_ARRAY((&parse_ctxt->parse_above_nbr4x4_ctxt->above_palette_colors[2][tile_row]),
+    for (int i = 0; i < num_planes; i++) {
+        ZERO_ARRAY(parse_ctxt->parse_above_nbr4x4_ctxt->above_level_ctx[i], width);
+        ZERO_ARRAY(parse_ctxt->parse_above_nbr4x4_ctxt->above_dc_ctx[i], width);
+        ZERO_ARRAY((parse_ctxt->parse_above_nbr4x4_ctxt->above_palette_colors[i]),
             num4_64x64 * PALETTE_MAX_SIZE);
     }
 
-    ZERO_ARRAY((&parse_ctxt->parse_above_nbr4x4_ctxt->above_seg_pred_ctx[tile_row]) +
-        mi_col_start, width_y);
+    ZERO_ARRAY(parse_ctxt->parse_above_nbr4x4_ctxt->above_seg_pred_ctx, width);
 
-    ZERO_ARRAY((&parse_ctxt->parse_above_nbr4x4_ctxt->above_part_wd[tile_row]) +
-        mi_col_start, width_y);
+    ZERO_ARRAY(parse_ctxt->parse_above_nbr4x4_ctxt->above_part_wd, width);
 
-    ZERO_ARRAY((&parse_ctxt->parse_above_nbr4x4_ctxt->above_comp_grp_idx[tile_row]) +
-        mi_col_start, width_y);
+    ZERO_ARRAY(parse_ctxt->parse_above_nbr4x4_ctxt->above_comp_grp_idx, width);
 
-    memset((&parse_ctxt->parse_above_nbr4x4_ctxt->above_tx_wd[tile_row]) + mi_col_start,
-        tx_size_wide[TX_SIZES_LARGEST], width_y * sizeof(uint8_t));
+    memset(parse_ctxt->parse_above_nbr4x4_ctxt->above_tx_wd,
+        tx_size_wide[TX_SIZES_LARGEST], width * sizeof(uint8_t));
 }
 
 void clear_left_context(ParseCtxt *parse_ctxt){
@@ -189,11 +170,7 @@ EbErrorType start_parse_tile(EbDecHandle *dec_handle_ptr, ParseCtxt *parse_ctxt,
     parse_ctxt->cur_tile_ctx = master_parse_ctxt->init_frm_ctx;
 
     /* Parse Tile */
-#if MT_SUPPORT
     status = parse_tile(dec_handle_ptr, parse_ctxt, tiles_info, tile_row, tile_col, is_mt);
-#else
-    status = parse_tile(dec_handle_ptr, tiles_info, tile_row, tile_col);
-#endif
 
     /* Save CDF */
     if (!frame_header->disable_frame_end_update_cdf &&
@@ -206,13 +183,8 @@ EbErrorType start_parse_tile(EbDecHandle *dec_handle_ptr, ParseCtxt *parse_ctxt,
     return status;
 }
 
-#if MT_SUPPORT
 EbErrorType parse_tile(EbDecHandle *dec_handle_ptr, ParseCtxt *parse_ctx,
     TilesInfo *tile_info, int32_t tile_row, int32_t tile_col, int32_t is_mt)
-#else
-EbErrorType parse_tile(EbDecHandle *dec_handle_ptr,
-    TilesInfo *tile_info, int32_t tile_row, int32_t tile_col)
-#endif
 {
     EbErrorType status = EB_ErrorNone;
 
@@ -220,7 +192,8 @@ EbErrorType parse_tile(EbDecHandle *dec_handle_ptr,
     int num_planes = av1_num_planes(color_config);
 
     clear_above_context(parse_ctx, tile_info->tile_col_start_mi[tile_col],
-                        tile_info->tile_col_start_mi[tile_col + 1], 0 /*TODO: For MultiThread*/);
+        tile_info->tile_col_start_mi[tile_col + 1],
+        dec_handle_ptr->dec_config.threads);
     clear_loop_filter_delta(parse_ctx);
 
     /* Init ParseCtxt */
@@ -241,13 +214,17 @@ EbErrorType parse_tile(EbDecHandle *dec_handle_ptr,
          mi_row < tile_info->tile_row_start_mi[tile_row + 1];
          mi_row += dec_handle_ptr->seq_header.sb_mi_size)
     {
-        int32_t sb_row = (mi_row << 2) >> dec_handle_ptr->seq_header.sb_size_log2;
+        int32_t sb_row = (mi_row << 2) >>
+            dec_handle_ptr->seq_header.sb_size_log2;
 
         clear_left_context(parse_ctx);
 
-        /*TODO: Move CFL to thread ctxt! We need to access DecModCtxt from parse_tile function */
-        /*add tile level cfl init */
-        cfl_init(&((DecModCtxt*)dec_handle_ptr->pv_dec_mod_ctxt)->cfl_ctx, color_config);
+        /*TODO: Move CFL to thread ctxt! We need to access DecModCtxt
+          from parse_tile function . Add tile level cfl init */
+        if (!is_mt) {
+            cfl_init(&((DecModCtxt*)dec_handle_ptr->pv_dec_mod_ctxt)->
+                cfl_ctx, color_config);
+        }
 
         for (uint32_t mi_col = tile_info->tile_col_start_mi[tile_col];
             mi_col < tile_info->tile_col_start_mi[tile_col + 1];
@@ -287,15 +264,9 @@ EbErrorType parse_tile(EbDecHandle *dec_handle_ptr,
                 (sb_row * num_mis_in_sb * master_frame_buf->sb_cols) +
                  sb_col * num_mis_in_sb;
 
-#if MT_SUPPORT
             sb_info->sb_trans_info[AOM_PLANE_U] = frame_buf->trans_info[AOM_PLANE_U] +
                 ((sb_row * num_mis_in_sb * master_frame_buf->sb_cols >> sy) +
                 (sb_col * num_mis_in_sb >> sx)) * 2;
-#else
-            sb_info->sb_trans_info[AOM_PLANE_U] = frame_buf->trans_info[AOM_PLANE_U] +
-                (sb_row * num_mis_in_sb * master_frame_buf->sb_cols >> sy) +
-                (sb_col * num_mis_in_sb >> sx);
-#endif
 #if SINGLE_THRD_COEFF_BUF_OPT
             /*TODO : Change to macro */
             sb_info->sb_coeff[AOM_PLANE_Y] = frame_buf->coeff[AOM_PLANE_Y];
@@ -351,30 +322,26 @@ EbErrorType parse_tile(EbDecHandle *dec_handle_ptr,
             // Bit-stream parsing of the superblock
             parse_super_block(dec_handle_ptr, parse_ctx, mi_row, mi_col, sb_info);
 
-#if MT_SUPPORT
             if (!is_mt) {
-#endif //MT_SUPPORT
-            /* Init DecModCtxt */
-            DecModCtxt *dec_mod_ctxt = (DecModCtxt*)dec_handle_ptr->pv_dec_mod_ctxt;
-#if !FRAME_MI_MAP
-            dec_mod_ctxt->sb_row_mi = mi_row;
-            dec_mod_ctxt->sb_col_mi = mi_col;
+                /* Init DecModCtxt */
+                DecModCtxt *dec_mod_ctxt = (DecModCtxt*)dec_handle_ptr->pv_dec_mod_ctxt;
+    #if !FRAME_MI_MAP
+                dec_mod_ctxt->sb_row_mi = mi_row;
+                dec_mod_ctxt->sb_col_mi = mi_col;
 
-            dec_mod_ctxt->left_sb_info = left_sb_info;
-            dec_mod_ctxt->above_sb_info = above_sb_info;
-#endif
-            dec_mod_ctxt->cur_coeff[AOM_PLANE_Y] = sb_info->sb_coeff[AOM_PLANE_Y];
-            dec_mod_ctxt->cur_coeff[AOM_PLANE_U] = sb_info->sb_coeff[AOM_PLANE_U];
-            dec_mod_ctxt->cur_coeff[AOM_PLANE_V] = sb_info->sb_coeff[AOM_PLANE_V];
+                dec_mod_ctxt->left_sb_info = left_sb_info;
+                dec_mod_ctxt->above_sb_info = above_sb_info;
+    #endif
+                dec_mod_ctxt->cur_coeff[AOM_PLANE_Y] = sb_info->sb_coeff[AOM_PLANE_Y];
+                dec_mod_ctxt->cur_coeff[AOM_PLANE_U] = sb_info->sb_coeff[AOM_PLANE_U];
+                dec_mod_ctxt->cur_coeff[AOM_PLANE_V] = sb_info->sb_coeff[AOM_PLANE_V];
 
-            dec_mod_ctxt->cur_tile_info = parse_ctx->cur_tile_info;
+                dec_mod_ctxt->cur_tile_info = parse_ctx->cur_tile_info;
 
-            /* TO DO : Will move later */
-            // decoding of the superblock
-            decode_super_block(dec_mod_ctxt, mi_row, mi_col, sb_info);
-#if MT_SUPPORT
+                /* TO DO : Will move later */
+                // decoding of the superblock
+                decode_super_block(dec_mod_ctxt, mi_row, mi_col, sb_info);
             }
-#endif //MT_SUPPORT
 #if !FRAME_MI_MAP
             /* nbr updates at SB level */
             update_nbrs_after_sb(&master_frame_buf->frame_mi_map, sb_col);

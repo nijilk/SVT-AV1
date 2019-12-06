@@ -769,13 +769,14 @@ static INLINE int get_pred_context_seg_id(const PartitionInfo_t *xd) {
     return above_sip + left_sip;
 }
 
-void INLINE update_seg_ctx(ParseCtxt *parse_ctxt, int blk_col,
+static INLINE void update_seg_ctx(ParseCtxt *parse_ctxt, int blk_col,
     int w4, int h4, int seg_id_predicted)
 {
     ParseAboveNbr4x4Ctxt *above_ctx = parse_ctxt->parse_above_nbr4x4_ctxt;
     ParseLeftNbr4x4Ctxt *left_ctx = parse_ctxt->parse_left_nbr4x4_ctxt;
 
-    uint8_t *const above_seg_ctx = above_ctx->above_seg_pred_ctx + blk_col;
+    uint8_t *const above_seg_ctx = above_ctx->above_seg_pred_ctx +
+        (blk_col - parse_ctxt->cur_tile_info.mi_col_start);
     uint8_t *const left_seg_ctx = left_ctx->left_seg_pred_ctx;
 
     memset(above_seg_ctx, seg_id_predicted, w4);
@@ -1333,7 +1334,7 @@ void update_chroma_trans_info(ParseCtxt *parse_ctx,
     parse_ctx->first_chroma_tu_offset += 2 * total_chroma_tus;
 }
 
-TxSize INLINE find_tx_size(int w, int h) {
+static INLINE TxSize find_tx_size(int w, int h) {
     int tx_sz;
     for (tx_sz = 0; tx_sz < TX_SIZES_ALL; tx_sz++)
         if (tx_size_wide[tx_sz] == w && tx_size_high[tx_sz] == h)
@@ -1345,9 +1346,10 @@ int get_txfm_split_ctx(PartitionInfo_t *pi, ParseCtxt *parse_ctx,
     TxSize tx_size, int blk_row, int blk_col)
 {
     int above = parse_ctx->parse_above_nbr4x4_ctxt->
-        above_tx_wd[pi->mi_col + blk_col] < tx_size_wide[tx_size];
-    int left = parse_ctx->parse_left_nbr4x4_ctxt->
-        left_tx_ht[pi->mi_row - parse_ctx->sb_row_mi + blk_row] < tx_size_high[tx_size];
+        above_tx_wd[pi->mi_col - parse_ctx->cur_tile_info.
+        mi_col_start + blk_col] < tx_size_wide[tx_size];
+    int left = parse_ctx->parse_left_nbr4x4_ctxt->left_tx_ht
+        [pi->mi_row - parse_ctx->sb_row_mi + blk_row] < tx_size_high[tx_size];
     int size = MIN(64, MAX(block_size_wide[pi->mi->sb_type],
                            block_size_high[pi->mi->sb_type]));
 
@@ -1516,7 +1518,8 @@ static INLINE void set_txfm_ctxs(ParseCtxt *parse_ctx, TxSize tx_size,
     int mi_col = pi->mi_col;
     uint8_t tx_wide = tx_size_wide[tx_size];
     uint8_t tx_high = tx_size_high[tx_size];
-    uint8_t *const above_ctx = above_parse_ctx->above_tx_wd + mi_col ;
+    uint8_t *const above_ctx = above_parse_ctx->above_tx_wd +
+        (mi_col - parse_ctx->cur_tile_info.mi_col_start);
     uint8_t *const left_ctx = left_parse_ctx->left_tx_ht + (mi_row - parse_ctx->sb_row_mi);
     if (skip) {
         tx_wide = n4_w * MI_SIZE;
@@ -1665,11 +1668,13 @@ void update_coeff_ctx(ParseCtxt *parse_ctxt, int plane, PartitionInfo_t *pi,
     uint8_t suby = plane ? parse_ctxt->seq_header->color_config.subsampling_y : 0;
     uint8_t subx = plane ? parse_ctxt->seq_header->color_config.subsampling_x : 0;
 
-    uint8_t *const above_dc_ctx = above_parse_ctx->above_dc_ctx[plane] + blk_col;
+    uint8_t *const above_dc_ctx = above_parse_ctx->above_dc_ctx[plane] +
+        blk_col - (parse_ctxt->cur_tile_info.mi_col_start >> subx);
     uint8_t *const left_dc_ctx = left_parse_ctx->left_dc_ctx[plane] +
         (blk_row - (parse_ctxt->sb_row_mi >> suby));
 
-    uint8_t *const above_level_ctx = above_parse_ctx->above_level_ctx[plane] + blk_col;
+    uint8_t *const above_level_ctx = above_parse_ctx->above_level_ctx[plane] +
+        blk_col - (parse_ctxt->cur_tile_info.mi_col_start >> subx);
     uint8_t *const left_level_ctx = left_parse_ctx->left_level_ctx[plane] +
         (blk_row - (parse_ctxt->sb_row_mi >> suby));
 
@@ -2011,7 +2016,8 @@ uint16_t parse_coeffs(ParseCtxt *parse_ctxt, PartitionInfo_t *xd,
 static INLINE int partition_plane_context(int mi_row,
     int mi_col, BlockSize bsize, ParseCtxt *parse_ctxt)
 {
-    const uint8_t *above_ctx = parse_ctxt->parse_above_nbr4x4_ctxt->above_part_wd + mi_col;
+    const uint8_t *above_ctx = parse_ctxt->parse_above_nbr4x4_ctxt->above_part_wd +
+        mi_col - parse_ctxt->cur_tile_info.mi_col_start;
     const uint8_t *left_ctx =
         parse_ctxt->parse_left_nbr4x4_ctxt->left_part_ht +
         ((mi_row- parse_ctxt->sb_row_mi) & MAX_MIB_MASK);
@@ -2073,9 +2079,11 @@ static INLINE void dec_get_txb_ctx(ParseCtxt *parse_ctx,
     EbColorConfig *clr_cfg = &parse_ctx->seq_header->color_config;
 
     int suby = plane ? clr_cfg->subsampling_y : 0;
+    int subx = plane ? clr_cfg->subsampling_x : 0;
     int dc_sign = 0;
     int k = 0;
-    uint8_t *above_dc_ctx = above_parse_ctx->above_dc_ctx[plane] + blk_col;
+    uint8_t *above_dc_ctx = above_parse_ctx->above_dc_ctx[plane] +
+        blk_col - (parse_ctx->cur_tile_info.mi_col_start >> subx);
     uint8_t *left_dc_ctx = left_parse_ctx->left_dc_ctx[plane] +
         (blk_row - (parse_ctx->sb_row_mi>> suby));
 
@@ -2103,7 +2111,8 @@ static INLINE void dec_get_txb_ctx(ParseCtxt *parse_ctx,
     else
         txb_ctx->dc_sign_ctx = 0;
 
-    uint8_t *above_level_ctx = above_parse_ctx->above_level_ctx[plane] + blk_col;
+    uint8_t *above_level_ctx = above_parse_ctx->above_level_ctx[plane] +
+        blk_col - (parse_ctx->cur_tile_info.mi_col_start >> subx);
     uint8_t *left_level_ctx = left_parse_ctx->left_level_ctx[plane] +
         (blk_row - (parse_ctx->sb_row_mi >> suby));
 
@@ -2461,7 +2470,8 @@ static INLINE void update_partition_context(ParseCtxt *parse_ctx,
 {
     ParseAboveNbr4x4Ctxt *above_parse_ctx = parse_ctx->parse_above_nbr4x4_ctxt;
     ParseLeftNbr4x4Ctxt *left_parse_ctx = parse_ctx->parse_left_nbr4x4_ctxt;
-    uint8_t *const above_ctx = above_parse_ctx->above_part_wd + mi_col;
+    uint8_t *const above_ctx = above_parse_ctx->above_part_wd +
+        mi_col - parse_ctx->cur_tile_info.mi_col_start;
     uint8_t *const left_ctx = left_parse_ctx->left_part_ht +
         ((mi_row- parse_ctx->sb_row_mi) & MAX_MIB_MASK);
 

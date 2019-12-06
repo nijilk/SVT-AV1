@@ -20,15 +20,16 @@ typedef struct ParseAboveNbr4x4Ctxt {
     /* Buffer holding the partition context of the previous 4x4 block row. */
     uint8_t *above_part_wd;
 
-    /* Buffer holding the sign of the DC coefficients of the previous 4x4 block row. */
+    /* Buffer holding the sign of the DC coefficients of the previous
+     4x4 block row. */
     uint8_t *above_dc_ctx[MAX_MB_PLANE];
 
     /* Buffer holding the cumulative sum of the coefficient levels of the
      previous 4x4 block row. */
     uint8_t *above_level_ctx[MAX_MB_PLANE];
 
-    /* Buffer holding the seg_id_predicted of the left 4x4 blocks corresponding
-       to the current super block row. */
+    /* Buffer holding the seg_id_predicted of the left 4x4 blocks
+       corresponding to the current super block row. */
     uint8_t *above_seg_pred_ctx;
 
     /* Value of base colors for Y, U, and V */
@@ -36,16 +37,6 @@ typedef struct ParseAboveNbr4x4Ctxt {
 
     int8_t *above_comp_grp_idx;
 
-#if !MT_SUPPORT
-    /* Buffer holding the delta LF values*/
-    int32_t delta_lf[FRAME_LF_COUNT];
-
-    /* Place holder for the current q index*/
-    int32_t cur_q_ind;
-
-    /* Place holder for palette color information */
-    uint16_t palette_colors[MAX_MB_PLANE * PALETTE_MAX_SIZE];
-#endif
 }ParseAboveNbr4x4Ctxt;
 
 typedef struct ParseLeftNbr4x4Ctxt {
@@ -54,12 +45,12 @@ typedef struct ParseLeftNbr4x4Ctxt {
      to the current super block row. */
     uint8_t *left_tx_ht;
 
-    /* Buffer holding the partition context of the left 4x4 blocks corresponding
-     to the current super block row. */
+    /* Buffer holding the partition context of the left 4x4 blocks
+     corresponding to the current super block row. */
     uint8_t *left_part_ht;
 
     /* Buffer holding the sign of the DC coefficients of the left 4x4 blocks
-       corresponding to the current super block row. */
+     corresponding to the current super block row. */
     uint8_t *left_dc_ctx[MAX_MB_PLANE];
 
     /* Buffer holding the cumulative sum of the coefficient levels of the
@@ -75,36 +66,26 @@ typedef struct ParseLeftNbr4x4Ctxt {
     int8_t *left_comp_grp_idx;
 }ParseLeftNbr4x4Ctxt;
 
-#if MT_SUPPORT
-/* Bhavna : Add comment */
+/* Pointer to bitstream location
+   corresponding to the tile. */
 typedef struct ParseTileData {
     uint8_t *data;
     uint8_t *data_end;
     size_t  tile_size;
 } ParseTileData;
-#endif
-typedef struct ParseCtxt {
-    /** Decoder Handle */
-    void *dec_handle_ptr;
 
+typedef struct ParseCtxt {
     /** symbol decoder Handle */
     SvtReader   r;
 
-#if !MT_SUPPORT
-    ParseNbr4x4Ctxt parse_nbr4x4_ctxt;
-#else
     SeqHeader       *seq_header;
     FrameHeader     *frame_header;
 
     ParseAboveNbr4x4Ctxt *parse_above_nbr4x4_ctxt;
     ParseLeftNbr4x4Ctxt *parse_left_nbr4x4_ctxt;
-#endif
 
     //FRAME_CONTEXT   frm_ctx[DEC_MAX_NUM_FRM_PRLL];
     FRAME_CONTEXT   cur_tile_ctx;
-#if !MT_SUPPORT
-    FRAME_CONTEXT   init_frm_ctx;
-#endif
 
     TileInfo        cur_tile_info;
 
@@ -150,7 +131,6 @@ typedef struct ParseCtxt {
 
     EbBool  read_deltas;
 
-#if MT_SUPPORT
     /* Buffer holding the delta LF values*/
     int32_t delta_lf[FRAME_LF_COUNT];
 
@@ -159,11 +139,8 @@ typedef struct ParseCtxt {
 
     /* Place holder for the current q index*/
     int32_t cur_q_ind;
-#endif
 } ParseCtxt;
 
-
-#if MT_SUPPORT
 typedef struct MasterParseCtxt {
 
     /* Array holding the context for each of the tile.*/
@@ -187,7 +164,6 @@ typedef struct MasterParseCtxt {
     /* Array of ParseTileData for each Tile */
     ParseTileData   *parse_tile_data;
 }MasterParseCtxt;
-#endif
 
 void parse_super_block(EbDecHandle *dec_handle, ParseCtxt *parse_ctxt, uint32_t blk_row,
     uint32_t blk_col, SBInfo *sbInfo);
@@ -203,13 +179,8 @@ EbErrorType init_svt_reader(SvtReader   *r,
 EbErrorType start_parse_tile(EbDecHandle *dec_handle_ptr,
     ParseCtxt *parse_ctxt, TilesInfo *tiles_info, int tile_num, int is_mt);
 
-#if MT_SUPPORT
 EbErrorType parse_tile(EbDecHandle *dec_handle_ptr, ParseCtxt *parse_ctx,
     TilesInfo *tile_info, int32_t tile_row, int32_t tile_col, int32_t is_mt);
-#else
-EbErrorType parse_tile(EbDecHandle *dec_handle_ptr,
-    TilesInfo *tile_info, int32_t tile_row, int32_t tile_col);
-#endif
 
 #ifdef __cplusplus
 }
