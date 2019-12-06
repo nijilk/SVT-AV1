@@ -61,7 +61,7 @@ extern void av1_init_wedge_masks(void);
 EbErrorType decode_multiple_obu(EbDecHandle *dec_handle_ptr,
                                 uint8_t **data, size_t data_size, uint32_t is_annexb);
 
-void SwitchToRealTime(){
+void DecSwitchToRealTime(){
 #ifndef _WIN32
 
     struct sched_param schedParam = {
@@ -396,7 +396,7 @@ static EbErrorType init_svt_av1_decoder_handle(
     printf("LIB Build date: %s %s\n", __DATE__, __TIME__);
     printf("-------------------------------------------\n");
 
-    SwitchToRealTime();
+    DecSwitchToRealTime();
 
     // Set Component Size & Version
     svt_dec_component->size = sizeof(EbComponentType);

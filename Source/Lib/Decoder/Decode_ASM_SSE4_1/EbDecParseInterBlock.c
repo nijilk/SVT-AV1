@@ -1330,9 +1330,13 @@ int read_mv_component(SvtReader *r, NmvComponent *mvcomp, int use_subpel, int us
             d |= svt_read_symbol(r, mvcomp->bits_cdf[i], 2, ACCT_STR) << i;
         mag = CLASS0_SIZE << (mv_class + 2);
     }
-
+#if DEC_CABAC_SIMD
+    fr = use_subpel ? svt_read_symbol_4_sse4(r, class0 ? mvcomp->class0_fp_cdf[d] :
+        mvcomp->fp_cdf, MV_FP_SIZE, ACCT_STR) : 3;
+#else
     fr = use_subpel ? svt_read_symbol(r, class0 ? mvcomp->class0_fp_cdf[d] :
         mvcomp->fp_cdf, MV_FP_SIZE, ACCT_STR) : 3;
+#endif
 
     hp = usehp ? svt_read_symbol(r, class0 ? mvcomp->class0_hp_cdf :
         mvcomp->hp_cdf, 2, ACCT_STR) : 1;
@@ -1345,9 +1349,13 @@ int read_mv_component(SvtReader *r, NmvComponent *mvcomp, int use_subpel, int us
 static INLINE void read_mv(SvtReader *r, MV *mv, MV *ref,
     NmvContext *ctx, MvSubpelPrecision precision) {
     MV diff = kZeroMv;
-
+#if DEC_CABAC_SIMD
+    const MvJointType joint_type =
+        (MvJointType)svt_read_symbol_4_sse4(r, ctx->joints_cdf, MV_JOINTS, ACCT_STR);
+#else
     const MvJointType joint_type =
         (MvJointType)svt_read_symbol(r, ctx->joints_cdf, MV_JOINTS, ACCT_STR);
+#endif
 
     if (mv_joint_vertical(joint_type))
         diff.row = read_mv_component(r, &ctx->comps[0], precision > MV_SUBPEL_NONE,
@@ -1569,9 +1577,17 @@ void read_interintra_mode(EbDecHandle *dec_handle,
             svt_read_symbol(r, frm_ctx->interintra_cdf[bsize_group], 2, ACCT_STR);
         assert(mbmi->ref_frame[1] == NONE_FRAME);
         if (mbmi->is_inter_intra) {
+#if DEC_CABAC_SIMD
+            mbmi->interintra_mode_params.interintra_mode = (InterIntraMode)
+                svt_read_symbol_4_sse4(
+                r, frm_ctx->interintra_mode_cdf[bsize_group], INTERINTRA_MODES,
+                ACCT_STR);
+#else
             mbmi->interintra_mode_params.interintra_mode = (InterIntraMode)svt_read_symbol(
                 r, frm_ctx->interintra_mode_cdf[bsize_group], INTERINTRA_MODES,
                 ACCT_STR);
+#endif
+
             mbmi->ref_frame[1] = INTRA_FRAME;
             mbmi->angle_delta[PLANE_TYPE_Y] = 0;
             mbmi->angle_delta[PLANE_TYPE_UV] = 0;

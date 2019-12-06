@@ -19,7 +19,8 @@ include_directories(${PROJECT_SOURCE_DIR}/Source/API/
     ${PROJECT_SOURCE_DIR}/Source/Lib/Common/ASM_SSE4_1/
     ${PROJECT_SOURCE_DIR}/Source/Lib/Common/ASM_AVX2/
     ${PROJECT_SOURCE_DIR}/Source/Lib/Common/ASM_AVX512/
-    ${PROJECT_SOURCE_DIR}/Source/Lib/Decoder/Codec/)
+    ${PROJECT_SOURCE_DIR}/Source/Lib/Decoder/Codec/
+    ${PROJECT_SOURCE_DIR}/Source/Lib/Decoder/Decode_ASM_SSE4_1/)
 
 link_directories(${PROJECT_SOURCE_DIR}/Source/Lib/Common/ASM_SSE2/
     ${PROJECT_SOURCE_DIR}/Source/Lib/Common/C_DEFAULT/
@@ -27,14 +28,25 @@ link_directories(${PROJECT_SOURCE_DIR}/Source/Lib/Common/ASM_SSE2/
     ${PROJECT_SOURCE_DIR}/Source/Lib/Common/ASM_SSE4_1/
     ${PROJECT_SOURCE_DIR}/Source/Lib/Common/ASM_AVX2/
     ${PROJECT_SOURCE_DIR}/Source/Lib/Common/ASM_AVX512/
-    ${PROJECT_SOURCE_DIR}/Source/Lib/Decoder/Codec/)
+    ${PROJECT_SOURCE_DIR}/Source/Lib/Decoder/Codec/
+    ${PROJECT_SOURCE_DIR}/Source/Lib/Decoder/Decode_ASM_SSE4_1/)
 
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/Bin/${CMAKE_BUILD_TYPE}/)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/Bin/${CMAKE_BUILD_TYPE}/)
 
+set(flags_to_test -msse4.1)
+
+if(CMAKE_C_COMPILER_ID STREQUAL "Intel" AND NOT WIN32)
+    list(APPEND flags_to_test -static-intel -w)
+endif()
+
+test_apply_compiler_flags(${flags_to_test})
+
 file(GLOB all_files
     "Codec/*.h"
-    "Codec/*.c")
+    "Codec/*.c"
+    "Decode_ASM_SSE4_1/*.h"
+    "Decode_ASM_SSE4_1/*.c")
 
 if(UNIX)
     if(NOT APPLE)

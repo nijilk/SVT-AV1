@@ -383,9 +383,13 @@ void read_delta_qindex(EbDecHandle *dec_handle, SvtReader *r,
 
     if ((bsize != dec_handle->seq_header.sb_size || mbmi->skip == 0)) {
         ParseCtxt *parse_ctxt = (ParseCtxt *)dec_handle->pv_parse_ctxt;
+#if DEC_CABAC_SIMD
+        abs = svt_read_symbol_4_sse4(r, parse_ctxt->cur_tile_ctx.delta_q_cdf,
+            DELTA_Q_PROBS + 1, ACCT_STR);
+#else
         abs = svt_read_symbol(r, parse_ctxt->cur_tile_ctx.delta_q_cdf,
             DELTA_Q_PROBS + 1, ACCT_STR);
-
+#endif
         if (abs == DELTA_Q_SMALL) {
             const int rem_bits = svt_read_literal(r, 3, ACCT_STR) + 1;
             const int thr = (1 << rem_bits) + 1;
@@ -414,8 +418,11 @@ int read_delta_lflevel(EbDecHandle *dec_handle, SvtReader *r,
         return delta_lf;
 
     DeltaLFParams *delta_lf_params = &dec_handle->frame_header.delta_lf_params;
-
+#if DEC_CABAC_SIMD
+    int abs = svt_read_symbol_4_sse4(r, cdf, DELTA_LF_PROBS + 1, ACCT_STR);
+#else
     int abs = svt_read_symbol(r, cdf, DELTA_LF_PROBS + 1, ACCT_STR);
+#endif
     if (abs == DELTA_LF_SMALL) {
         const int rem_bits = svt_read_literal(r, 3, ACCT_STR) + 1;
         const int thr = (1 << rem_bits) + 1;
@@ -1799,12 +1806,20 @@ static INLINE void read_coeffs_reverse_2d(SvtReader *r, TxSize tx_size,
         const int pos = scan[c];
         const int coeff_ctx = get_lower_levels_ctx_2d(levels, pos, bwl, tx_size);
         const int nsymbs = 4;
+#if DEC_CABAC_SIMD
+        int level = svt_read_symbol_4_sse4(r, base_cdf[coeff_ctx], nsymbs, ACCT_STR);
+#else
         int level = svt_read_symbol(r, base_cdf[coeff_ctx], nsymbs, ACCT_STR);
+#endif
         if (level > NUM_BASE_LEVELS) {
             const int br_ctx = get_br_ctx_2d(levels, pos, bwl);
             AomCdfProb *cdf = br_cdf[br_ctx];
             for (int idx = 0; idx < COEFF_BASE_RANGE; idx += BR_CDF_SIZE - 1) {
+#if DEC_CABAC_SIMD
+                const int k = svt_read_symbol_4_sse4(r, cdf, BR_CDF_SIZE, ACCT_STR);
+#else
                 const int k = svt_read_symbol(r, cdf, BR_CDF_SIZE, ACCT_STR);
+#endif
                 level += k;
                 if (k < BR_CDF_SIZE - 1) break;
             }
@@ -1823,12 +1838,20 @@ static INLINE void read_coeffs_reverse(SvtReader *r, TxSize tx_size,
         const int coeff_ctx =
             get_lower_levels_ctx(levels, pos, bwl, tx_size, tx_class);
         const int nsymbs = 4;
+#if DEC_CABAC_SIMD
+        int level = svt_read_symbol_4_sse4(r, base_cdf[coeff_ctx], nsymbs, ACCT_STR);
+#else
         int level = svt_read_symbol(r, base_cdf[coeff_ctx], nsymbs, ACCT_STR);
+#endif
         if (level > NUM_BASE_LEVELS) {
             const int br_ctx = get_br_ctx(levels, pos, bwl, tx_type);
             AomCdfProb *cdf = br_cdf[br_ctx];
             for (int idx = 0; idx < COEFF_BASE_RANGE; idx += BR_CDF_SIZE - 1) {
+#if DEC_CABAC_SIMD
+                const int k = svt_read_symbol_4_sse4(r, cdf, BR_CDF_SIZE, ACCT_STR);
+#else
                 const int k = svt_read_symbol(r, cdf, BR_CDF_SIZE, ACCT_STR);
+#endif
                 level += k;
                 if (k < BR_CDF_SIZE - 1) break;
             }
@@ -1971,7 +1994,11 @@ uint16_t parse_coeffs(EbDecHandle *dec_handle, PartitionInfo_t *xd, SvtReader *r
         const int br_ctx = get_br_ctx_eob(pos, bwl, tx_class);
         cdf = frm_ctx->coeff_br_cdf[AOMMIN(txs_ctx, TX_32X32)][plane_type][br_ctx];
         for (int idx = 0; idx < COEFF_BASE_RANGE/ (BR_CDF_SIZE - 1); idx ++) {
+#if DEC_CABAC_SIMD
+            int coeff_br = svt_read_symbol_4_sse4(r, cdf, BR_CDF_SIZE, ACCT_STR);
+#else
             int coeff_br = svt_read_symbol(r, cdf, BR_CDF_SIZE, ACCT_STR);
+#endif
             level += coeff_br;
             if (coeff_br < BR_CDF_SIZE - 1) break;
         }

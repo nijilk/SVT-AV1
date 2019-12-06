@@ -42,10 +42,20 @@ extern "C" {
   aom_read_cdf_(r, cdf, nsymbs ACCT_STR_ARG(ACCT_STR_NAME))
 #define svt_read_symbol(r, cdf, nsymbs, ACCT_STR_NAME) \
   aom_read_symbol_(r, cdf, nsymbs ACCT_STR_ARG(ACCT_STR_NAME))
+#if DEC_CABAC_SIMD
+#define svt_read_cdf_4(r, cdf, nsymbs, ACCT_STR_NAME) \
+  aom_read_cdf_4_(r, cdf, nsymbs ACCT_STR_ARG(ACCT_STR_NAME))
+#define svt_read_symbol_4_sse4(r, cdf, nsymbs, ACCT_STR_NAME) \
+  aom_read_symbol_4_sse4_(r, cdf, nsymbs ACCT_STR_ARG(ACCT_STR_NAME))
+#endif
 #define svt_read_ns_ae(r, nsymbs, ACCT_STR_NAME)\
   aom_read_ns_ae_(r, nsymbs ACCT_STR_ARG(ACCT_STR_NAME))
 
 typedef DaalaReader_t SvtReader;
+
+#if DEC_CABAC_SIMD
+void dec_update_cdf_sse4(AomCdfProb *cdf, int8_t val, int nsymbs);
+#endif
 
 static INLINE int svt_reader_init(SvtReader   *r,
     const uint8_t   *buffer,
@@ -90,7 +100,17 @@ static INLINE int aom_read_cdf_(SvtReader *r,
 
     return ret;
 }
+#if DEC_CABAC_SIMD
+static AOM_FORCE_INLINE int aom_read_cdf_4_(SvtReader *r,
+    const AomCdfProb *cdf,
+    int                 nsymbs ACCT_STR_PARAM)
+{
+    int ret;
+    ret = daala_read_symbol_4(r, cdf, nsymbs);
 
+    return ret;
+}
+#endif
 static INLINE int aom_read_symbol_(SvtReader   *r,
     AomCdfProb *cdf,
     int          nsymbs ACCT_STR_PARAM)
@@ -100,7 +120,17 @@ static INLINE int aom_read_symbol_(SvtReader   *r,
     if (r->allow_update_cdf) dec_update_cdf(cdf, ret, nsymbs);
     return ret;
 }
-
+#if DEC_CABAC_SIMD
+static AOM_FORCE_INLINE int aom_read_symbol_4_sse4_(SvtReader   *r,
+    AomCdfProb *cdf,
+    int          nsymbs ACCT_STR_PARAM)
+{
+    int ret;
+    ret = svt_read_cdf_4(r, cdf, nsymbs, ACCT_STR_NAME);
+    if (r->allow_update_cdf) dec_update_cdf_sse4(cdf, ret, nsymbs);
+    return ret;
+}
+#endif
 static INLINE int aom_read_ns_ae_(SvtReader   *r, int nsymbs ACCT_STR_PARAM) {
     int w = get_msb(nsymbs) + 1; //w = FloorLog2(n) + 1
     int m = (1 << w) - nsymbs;

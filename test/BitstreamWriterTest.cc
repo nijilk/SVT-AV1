@@ -21,6 +21,9 @@
 #include "EbDecBitReader.h"
 #include "gtest/gtest.h"
 #include "random.h"
+
+#define TEST_DEC_CABAC_SIMD 1
+
 /**
  * @brief Unit test for bitstream writer functions:
  * - aom_write
@@ -233,7 +236,7 @@ TEST(Entropy_BitstreamWriter, write_symbol_no_update) {
                   rnd(gen));
     }
 }
-
+#if !DEC_CABAC_SIMD
 TEST(Entropy_BitstreamWriter, write_symbol_with_update) {
     AomWriter bw;
     memset(&bw, 0, sizeof(bw));
@@ -276,4 +279,171 @@ TEST(Entropy_BitstreamWriter, write_symbol_with_update) {
                   rnd(gen));
     }
 }
+#else
+#include <inttypes.h>
+TEST(Entropy_BitstreamWriter, write_symbol_with_update) {
+    AomWriter bw;
+    memset(&bw, 0, sizeof(bw));
+
+    const int buffer_size = 1024;
+    uint8_t stream_buffer[buffer_size];
+    bw.allow_update_cdf = 1;
+
+    // get default cdf
+    const int base_qindex = 20;
+    FRAME_CONTEXT fc;
+    memset(&fc, 0, sizeof(fc));
+
+    eb_av1_default_coef_probs(&fc, base_qindex);
+
+    AomCdfProb *cdf[5] = {NULL,
+                          NULL,
+                          fc.txb_skip_cdf[0][0],
+                          fc.coeff_base_eob_cdf[0][0][0],
+                          fc.coeff_base_cdf[0][0][0]};
+
+    for (int nsymbol = 4; nsymbol >= 2; nsymbol--) {
+        // write random bit sequences and expect read out
+        // the same random sequences.
+        std::bernoulli_distribution rnd(0.5);
+        std::mt19937 gen(deterministic_seeds);
+
+        aom_start_encode(&bw, stream_buffer);
+        for (int i = 0; i < 500; ++i) {
+            aom_write_symbol(&bw, rnd(gen), cdf[nsymbol], nsymbol);
+            aom_write_symbol(&bw, rnd(gen), cdf[nsymbol], nsymbol);
+        }
+        aom_stop_encode(&bw);
+
+        // reset random generator
+        rnd.reset();
+        gen.seed(deterministic_seeds);
+
+        SvtReader br;
+        svt_reader_init(&br, stream_buffer, bw.pos);
+        br.allow_update_cdf = 1;
+        eb_av1_default_coef_probs(&fc, base_qindex);  // reset cdf
+        for (int i = 0; i < 500; i++) {
+#if TEST_DEC_CABAC_SIMD
+            ASSERT_EQ(
+                svt_read_symbol_4_sse4(&br, cdf[nsymbol], nsymbol, nullptr),
+                rnd(gen));
+#else
+            ASSERT_EQ(
+                svt_read_symbol(&br, cdf[nsymbol], nsymbol, nullptr),
+                rnd(gen));
+#endif
+#if 0
+            printf("\ncdf[%d]:%" PRIu16, i, (uint16_t)*cdf[nsymbol]);
+            printf(" %" PRIu16 " %" PRIu16,
+                   (uint16_t)cdf[nsymbol][1],
+                   (uint16_t)cdf[nsymbol][2]);
+#endif
+
+#if TEST_DEC_CABAC_SIMD
+            ASSERT_EQ(
+                svt_read_symbol_4_sse4(&br, cdf[nsymbol], nsymbol, nullptr),
+                rnd(gen));
+#else
+            ASSERT_EQ(
+                svt_read_symbol(&br, cdf[nsymbol], nsymbol, nullptr),
+                rnd(gen));
+#endif
+
+#if 0
+            printf("\ncdf[%d]:%" PRIu16, i, (uint16_t)*cdf[nsymbol]);
+            printf(" %" PRIu16 " %" PRIu16 "\n",
+                   (uint16_t)cdf[nsymbol][1],
+                   (uint16_t)cdf[nsymbol][2]);
+#endif
+        }
+        printf(
+            "\nSuccessfully PASSED:: "
+            "CABAC_write_and_read_matches_for_nsymbol=%d\n\n",
+            nsymbol);
+    }
+}
+
+#include "EbTime.h"
+TEST(Entropy_BitstreamWriter, write_symbol_with_update_profile_opt) {
+    AomWriter bw;
+    memset(&bw, 0, sizeof(bw));
+
+    const int buffer_size = 1024;
+    uint8_t stream_buffer[buffer_size];
+    bw.allow_update_cdf = 1;
+
+    // get default cdf
+    const int base_qindex = 20;
+    FRAME_CONTEXT fc;
+    memset(&fc, 0, sizeof(fc));
+
+    eb_av1_default_coef_probs(&fc, base_qindex);
+
+    AomCdfProb *cdf[5] = {NULL,
+                          NULL,
+                          fc.txb_skip_cdf[0][0],
+                          fc.coeff_base_eob_cdf[0][0][0],
+                          fc.coeff_base_cdf[0][0][0]};
+#if 1
+    for (int nsymbol = 4; nsymbol >= 2; nsymbol--) {
+#else
+    for (int nsymbol = 2; nsymbol <= 4; nsymbol++) {
+#endif
+        // write random bit sequences and expect read out
+        // the same random sequences.
+        std::bernoulli_distribution rnd(0.5);
+        std::mt19937 gen(deterministic_seeds);
+
+        aom_start_encode(&bw, stream_buffer);
+        for (int i = 0; i < 500; ++i) {
+            aom_write_symbol(&bw, rnd(gen), cdf[nsymbol], nsymbol);
+            aom_write_symbol(&bw, rnd(gen), cdf[nsymbol], nsymbol);
+        }
+        aom_stop_encode(&bw);
+
+        // reset random generator
+        rnd.reset();
+        gen.seed(deterministic_seeds);
+
+        SvtReader br;
+        svt_reader_init(&br, stream_buffer, bw.pos);
+        br.allow_update_cdf = 1;
+        eb_av1_default_coef_probs(&fc, base_qindex);  // reset cdf
+        double time_o;
+        uint64_t start_time_seconds, start_time_useconds;
+        uint64_t finish_time_seconds, finish_time_useconds;
+
+        const uint64_t num_loop = 100000000;
+
+        EbStartTime(&start_time_seconds, &start_time_useconds);
+
+        for (uint64_t i = 0; i < num_loop; i++) {
+#if 0
+            if (i > 2600 && i < 2706) {
+                printf("\nBefore Iteration:%d", i);
+                printf("\ncdf[%d]:%" PRIu16, i, (uint16_t)*cdf[nsymbol]);
+                printf(" %" PRIu16 " %" PRIu16 "\n",
+                       (uint16_t)cdf[nsymbol][1],
+                       (uint16_t)cdf[nsymbol][2]);
+            }
+#endif
+#if TEST_DEC_CABAC_SIMD
+            svt_read_symbol_4_sse4(&br, cdf[nsymbol], nsymbol, nullptr);
+#else
+            svt_read_symbol(&br, cdf[nsymbol], nsymbol, nullptr);
+#endif
+        }
+        EbStartTime(&finish_time_seconds, &finish_time_useconds);
+
+        EbComputeOverallElapsedTimeMs(start_time_seconds,
+                                      start_time_useconds,
+                                      finish_time_seconds,
+                                      finish_time_useconds,
+                                      &time_o);
+
+        printf("Opt Update_CDF time taken[%d]: %6.2f\n", nsymbol, time_o);
+    }
+}
+#endif
 }  // namespace
