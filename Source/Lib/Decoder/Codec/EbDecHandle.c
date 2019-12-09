@@ -72,6 +72,7 @@ void asmSetConvolveHbdAsmTable(void);
 void init_intra_predictors_internal(void);
 void dec_init_intra_predictors_internal(void);
 extern void av1_init_wedge_masks(void);
+void dec_sync_all_threads(EbDecHandle *dec_handle_ptr);
 
 EbErrorType decode_multiple_obu(EbDecHandle *dec_handle_ptr,
                                 uint8_t **data, size_t data_size);
@@ -559,8 +560,8 @@ EB_API EbErrorType eb_svt_decode_frame(
     {
         /*TODO : Remove or move. For Test purpose only */
         dec_handle_ptr->dec_cnt++;
-        printf("\n SVT-AV1 Dec : Decoding Pic #%d \n",
-            dec_handle_ptr->dec_cnt);
+        /*printf("\n SVT-AV1 Dec : Decoding Pic #%d \n",
+            dec_handle_ptr->dec_cnt);*/
 
         uint64_t frame_size = 0;
         /*if (ctx->is_annexb) {
@@ -627,6 +628,7 @@ EB_API EbErrorType eb_deinit_decoder(
     EbErrorType return_error    = EB_ErrorNone;
 
     if (dec_handle_ptr) {
+        dec_sync_all_threads(dec_handle_ptr);
         if (svt_dec_memory_map) {
             // Loop through the ptr table and free all malloc'd pointers per channel
             EbMemoryMapEntry*    memory_entry = svt_dec_memory_map;

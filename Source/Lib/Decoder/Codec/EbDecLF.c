@@ -579,7 +579,6 @@ void dec_loop_filter_row(
     uint32_t sb_origin_y = y_lcu_index << sb_size_Log2;
 
     volatile int32_t *sb_lf_completed_in_prev_row;
-    //int32_t nsync = 1;
     DecMTLFFrameInfo *lf_frame_info = &dec_handle_ptr->
         master_frame_buf.cur_frame_bufs[0].dec_mt_frame_data.lf_frame_info;
     if (y_lcu_index) {
@@ -599,11 +598,8 @@ void dec_loop_filter_row(
 
         /* Top-Right Sync*/
         if (y_lcu_index) {
-            /*if (x_lcu_index == picture_width_in_sb - 1)
-                nsync = 0;*/
             while (*sb_lf_completed_in_prev_row <
                 MIN((x_lcu_index + 2), picture_width_in_sb - 1));
-                //Sleep(5); /* ToDo : Change */
         }
         /*LF function for a SB*/
         dec_loop_filter_sb(frm_hdr, seq_header, recon_picture_buf,
@@ -619,8 +615,11 @@ void dec_loop_filter_row(
 void dec_av1_loop_filter_frame(
     EbDecHandle *dec_handle_ptr,
     EbPictureBufferDesc *recon_picture_buf, LFCtxt *lf_ctxt,
-    int32_t plane_start, int32_t plane_end, int32_t is_mt)
+    int32_t plane_start, int32_t plane_end, int32_t is_mt,
+    int enable_flag)
 {
+    if (!enable_flag) return;
+
     FrameHeader *frm_hdr = &dec_handle_ptr->frame_header;
     SeqHeader *seq_header = &dec_handle_ptr->seq_header;
     uint8_t     sb_size_Log2 = seq_header->sb_size_log2;

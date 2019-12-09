@@ -220,7 +220,7 @@ EbErrorType parse_tile(EbDecHandle *dec_handle_ptr, ParseCtxt *parse_ctx,
         clear_left_context(parse_ctx);
 
         /*TODO: Move CFL to thread ctxt! We need to access DecModCtxt
-          from parse_tile function . Add tile level cfl init */
+          from parse_tile function . Add tile level cfl init. */
         if (!is_mt) {
             cfl_init(&((DecModCtxt*)dec_handle_ptr->pv_dec_mod_ctxt)->
                 cfl_ctx, color_config);
@@ -325,13 +325,13 @@ EbErrorType parse_tile(EbDecHandle *dec_handle_ptr, ParseCtxt *parse_ctx,
             if (!is_mt) {
                 /* Init DecModCtxt */
                 DecModCtxt *dec_mod_ctxt = (DecModCtxt*)dec_handle_ptr->pv_dec_mod_ctxt;
-    #if !FRAME_MI_MAP
+#if !FRAME_MI_MAP
                 dec_mod_ctxt->sb_row_mi = mi_row;
                 dec_mod_ctxt->sb_col_mi = mi_col;
 
                 dec_mod_ctxt->left_sb_info = left_sb_info;
                 dec_mod_ctxt->above_sb_info = above_sb_info;
-    #endif
+#endif
                 dec_mod_ctxt->cur_coeff[AOM_PLANE_Y] = sb_info->sb_coeff[AOM_PLANE_Y];
                 dec_mod_ctxt->cur_coeff[AOM_PLANE_U] = sb_info->sb_coeff[AOM_PLANE_U];
                 dec_mod_ctxt->cur_coeff[AOM_PLANE_V] = sb_info->sb_coeff[AOM_PLANE_V];

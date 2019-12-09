@@ -12,6 +12,9 @@ extern "C" {
 #include "EbDefinitions.h"
 #include "EbSystemResourceManager.h"
 
+#define SEM_CHANGE      1
+#define TILE_GROUP      1
+
 /* Node structure used in Decoder Queues. Can be used for tile/row idx */
 typedef struct DecMTNode {
     EbDctor     dctor;
@@ -55,10 +58,13 @@ typedef struct DecMTLFFrameInfo {
 
 /* MT State information for each frame in parallel */
 typedef struct DecMTFrameData {
-    uint32_t            num_threads_lfed;
+    uint32_t            num_threads_cdefed;
+    uint32_t            num_threads_exited;
+    EbBool              end_flag;
     EbBool              start_parse_frame;
     EbBool              start_decode_frame;
     EbBool              start_lf_frame;
+    EbBool              start_cdef_frame;
     EbHandle            temp_mutex;
 
     TilesInfo           *tiles_info;
@@ -81,12 +87,31 @@ typedef struct DecMTFrameData {
     /* Parse-Recon Stage structure */
     DecMTParseReconTileInfo *parse_recon_tile_info_array;
 
+    /*Bhavna: Comment*/
     uint32_t    *sb_recon_row_map;
+
+    /*Bhavna: Comment*/
+    uint32_t    *lf_row_map;
 
     /* LF Stage structure */
     DecMTLFFrameInfo        lf_frame_info;
 
     /* EbFifo at Frame Row level : CDEF Stage */
+    // System Resource Managers
+    EbSystemResource        *cdef_resource_ptr;
+    /* EbFifo at Frame Row level */
+    EbFifo                  **cdef_row_producer_fifo_ptr;
+    EbFifo                  **cdef_row_consumer_fifo_ptr;
+    /* Array to store 64x64s completed in every 64x64 row of CDEF stage.
+       Used for top-right sync */
+    uint32_t                *cdef_completed_in_row;
+    /* line buffers for every 64x64 row, to store lf o/p*/
+    uint16_t                ***cdef_linebuf;
+    int32_t                 cdef_linebuf_stride;
+    /* cdef map for every 64x64row+1 to track whether cdef is performed or not */
+    uint8_t                 *row_cdef_map;
+    /*Siva:*/
+    uint32_t                cdef_map_stride;
     EbFifo                  *cdef_fifo_ptr;
 
     /* EbFifo at Frame Row level : SR Stage */

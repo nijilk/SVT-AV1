@@ -85,8 +85,11 @@ void dec_av1_loop_restoration_filter_row(EbDecHandle *dec_handle, int32_t plane,
     }
 }
 
-void dec_av1_loop_restoration_filter_frame(EbDecHandle *dec_handle, int optimized_lr)
+void dec_av1_loop_restoration_filter_frame(EbDecHandle *dec_handle,
+    int optimized_lr, int enable_flag)
 {
+    if (!enable_flag) return;
+
     assert(!dec_handle->frame_header.all_lossless);
 
     FrameHeader *frame_header = &dec_handle->frame_header;
@@ -146,8 +149,10 @@ void dec_av1_loop_restoration_filter_frame(EbDecHandle *dec_handle, int optimize
 }
 
 void dec_av1_loop_restoration_save_boundary_lines(EbDecHandle *dec_handle,
-    int after_cdef)
+        int after_cdef, int enable_flag)
 {
+    if (!enable_flag) return;
+
     const int num_planes = av1_num_planes(&dec_handle->seq_header.color_config);
     const int use_highbd = (dec_handle->seq_header.color_config.bit_depth > 8);
 

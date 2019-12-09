@@ -241,7 +241,10 @@ typedef struct EbDecHandle {
     // Thread Handles
     EbHandle                    *decode_thread_handle_array;
     EbBool                      start_thread_process;
-
+#if SEM_CHANGE
+    EbHandle        thread_semaphore;
+    struct DecThreadCtxt   *thread_ctxt_pa;
+#endif
 }EbDecHandle;
 
 /* Thread level context data */
@@ -249,7 +252,9 @@ typedef struct DecThreadCtxt {
 
     /* Unique ID for the thread */
     uint32_t        thread_cnt;
-
+#if SEM_CHANGE
+    EbHandle    thread_semaphore;
+#endif
     /* Pointer to the decode handle */
     EbDecHandle     *dec_handle_ptr;
 
