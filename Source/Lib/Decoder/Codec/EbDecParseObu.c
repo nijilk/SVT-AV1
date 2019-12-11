@@ -85,6 +85,21 @@ void svt_cdef_frame_mt(EbDecHandle *dec_handle_ptr, DecThreadCtxt *thread_ctxt);
 #else
 void svt_cdef_frame_mt(EbDecHandle *dec_handle_ptr);
 #endif
+#if LR_PAD_MT
+void svt_av1_queue_lr_jobs(EbDecHandle *dec_handle_ptr);
+void dec_av1_loop_restoration_filter_frame_mt(EbDecHandle *dec_handle
+#if SEM_CHANGE
+    , DecThreadCtxt *thread_ctxt
+#endif
+);
+void svt_av1_queue_pad_jobs(EbDecHandle *dec_handle_ptr);
+void dec_pad_frame_mt(EbDecHandle *dec_handle
+#if SEM_CHANGE
+    , DecThreadCtxt *thread_ctxt
+#endif
+);
+#endif
+
 #define CONFIG_MAX_DECODE_PROFILE 2
 #define INT_MAX       2147483647    // maximum (signed) int value
 
@@ -2281,6 +2296,9 @@ EbErrorType read_tile_group_obu(bitstrm_t *bs, EbDecHandle *dec_handle_ptr,
 
     FrameHeader *frame_header = &dec_handle_ptr->frame_header;
 
+    DecMTFrameData *dec_mt_frame_data = &dec_handle_ptr->
+        master_frame_buf.cur_frame_bufs[0].dec_mt_frame_data;
+
     int num_tiles, tg_start, tg_end, tile_bits, tile_start_and_end_present_flag = 0;
     size_t tile_size;
     uint32_t start_position, end_position, header_bytes;
@@ -2345,12 +2363,32 @@ EbErrorType read_tile_group_obu(bitstrm_t *bs, EbDecHandle *dec_handle_ptr,
         svt_av1_queue_parse_jobs(dec_handle_ptr, tiles_info,
             obu_header, bs, tg_start, tg_end);
 #endif
-        DecMTFrameData *dec_mt_frame_data = &dec_handle_ptr->
-            master_frame_buf.cur_frame_bufs[0].dec_mt_frame_data;
+
+#if ENABLE_ROW_MT_DECODE
+        {
+            int32_t tiles_ctr;
+
+            for (tiles_ctr = 0; tiles_ctr < num_tiles; tiles_ctr++) {
+                uint32_t *sb_recon_completed_in_row,*sb_recon_row_started;
+                uint32_t tile_num_sb_rows;
+
+                sb_recon_completed_in_row = dec_mt_frame_data->parse_recon_tile_info_array[tiles_ctr].sb_recon_completed_in_row;
+                sb_recon_row_started = dec_mt_frame_data->parse_recon_tile_info_array[tiles_ctr].sb_recon_row_started;
+                tile_num_sb_rows = dec_mt_frame_data->parse_recon_tile_info_array[tiles_ctr].tile_num_sb_rows;
+
+                memset(sb_recon_completed_in_row, 0, tile_num_sb_rows * sizeof(uint32_t));
+                memset(sb_recon_row_started, 0, tile_num_sb_rows * sizeof(uint32_t));                
+            }
+        }
+#endif
 
         eb_block_on_mutex(dec_mt_frame_data->temp_mutex);
         dec_mt_frame_data->start_parse_frame    = EB_TRUE;
+#if LR_PAD_MT
+        dec_mt_frame_data->num_threads_paded    = 0;
+#else
         dec_mt_frame_data->num_threads_cdefed   = 0;
+#endif
         eb_release_mutex(dec_mt_frame_data->temp_mutex);
 
 #if SEM_CHANGE
@@ -2366,7 +2404,9 @@ EbErrorType read_tile_group_obu(bitstrm_t *bs, EbDecHandle *dec_handle_ptr,
             svt_av1_queue_lf_jobs(dec_handle_ptr);
 
             svt_av1_queue_cdef_jobs(dec_handle_ptr);
-
+#if 0//LR_PAD_MT
+            svt_av1_queue_lr_jobs(dec_handle_ptr);
+#endif
             eb_block_on_mutex(dec_mt_frame_data->temp_mutex);
             
             dec_mt_frame_data->start_lf_frame       = EB_TRUE;
@@ -2381,6 +2421,14 @@ EbErrorType read_tile_group_obu(bitstrm_t *bs, EbDecHandle *dec_handle_ptr,
             eb_post_semaphore(dec_handle_ptr->thread_semaphore);
             for (uint32_t lib_thrd = 0; lib_thrd < dec_handle_ptr->dec_config.threads - 1; lib_thrd++)
                 eb_post_semaphore(dec_handle_ptr->thread_ctxt_pa[lib_thrd].thread_semaphore);
+#endif
+#if 0//LR_PAD_MT
+            dec_mt_frame_data->start_lr_frame = EB_TRUE;
+#if SEM_CHANGE
+            eb_post_semaphore(dec_handle_ptr->thread_semaphore);
+            for (uint32_t lib_thrd = 0; lib_thrd < dec_handle_ptr->dec_config.threads - 1; lib_thrd++)
+                eb_post_semaphore(dec_handle_ptr->thread_ctxt_pa[lib_thrd].thread_semaphore);
+#endif
 #endif
             eb_release_mutex(dec_mt_frame_data->temp_mutex);
         }
@@ -2504,6 +2552,21 @@ EbErrorType read_tile_group_obu(bitstrm_t *bs, EbDecHandle *dec_handle_ptr,
     dec_av1_loop_restoration_filter_frame(dec_handle_ptr,
         opt_lr, do_lr);
 
+#if LR_PAD_MT //Should move above after cdef Q
+    if (is_mt) {
+        svt_av1_queue_lr_jobs(dec_handle_ptr);
+        DecMTFrameData *dec_mt_frame_data = &dec_handle_ptr->
+            master_frame_buf.cur_frame_bufs[0].dec_mt_frame_data;
+        dec_mt_frame_data->start_lr_frame = EB_TRUE;
+#if SEM_CHANGE
+        eb_post_semaphore(dec_handle_ptr->thread_semaphore);
+        for (uint32_t lib_thrd = 0; lib_thrd < dec_handle_ptr->dec_config.threads - 1; lib_thrd++)
+            eb_post_semaphore(dec_handle_ptr->thread_ctxt_pa[lib_thrd].thread_semaphore);
+#endif
+        dec_av1_loop_restoration_filter_frame_mt(dec_handle_ptr, NULL);
+    }
+#endif
+
     /* Save CDF */
     if (frame_header->disable_frame_end_update_cdf)
         dec_handle_ptr->cur_pic_buf[0]->final_frm_ctx = master_parse_ctxt->init_frm_ctx;
@@ -2511,6 +2574,20 @@ EbErrorType read_tile_group_obu(bitstrm_t *bs, EbDecHandle *dec_handle_ptr,
     pad_pic(dec_handle_ptr->cur_pic_buf[0]->ps_pic_buf,
         &dec_handle_ptr->frame_header, 1);
 
+#if LR_PAD_MT //Should move above after cdef Q
+    if (is_mt) {
+        svt_av1_queue_pad_jobs(dec_handle_ptr);
+        DecMTFrameData *dec_mt_frame_data = &dec_handle_ptr->
+            master_frame_buf.cur_frame_bufs[0].dec_mt_frame_data;
+        dec_mt_frame_data->start_pad_frame = EB_TRUE;
+#if SEM_CHANGE
+        eb_post_semaphore(dec_handle_ptr->thread_semaphore);
+        for (uint32_t lib_thrd = 0; lib_thrd < dec_handle_ptr->dec_config.threads - 1; lib_thrd++)
+            eb_post_semaphore(dec_handle_ptr->thread_ctxt_pa[lib_thrd].thread_semaphore);
+#endif
+        dec_pad_frame_mt(dec_handle_ptr, NULL);
+    }
+#endif
     return status;
 }
 

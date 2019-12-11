@@ -9,11 +9,13 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+#define ENABLE_ROW_MT_DECODE 1
 #include "EbDefinitions.h"
 #include "EbSystemResourceManager.h"
 
 #define SEM_CHANGE      1
 #define TILE_GROUP      1
+#define LR_PAD_MT       0
 
 /* Node structure used in Decoder Queues. Can be used for tile/row idx */
 typedef struct DecMTNode {
@@ -27,18 +29,25 @@ typedef struct DecMTNode {
    Parse and Recon for a Tile */
 typedef struct DecMTParseReconTileInfo {
     /* Tile info for the current Tile */
-    TileInfo    *tile_info;
+    TileInfo    tile_info;
 
-    /* EbFifo at Tile Row level */
-    EbFifo      *parse_recon_sbrow_fifo;
+    /* System Resource Managers at Tile Row level */ 
+    EbSystemResource    *recon_tile_sbrow_resource_ptr;
 
-    /* Latest SB Recon row picked up for processing in the Tile. This will be
+    /* EbFifo at SB row level : Recon Stage */
+    EbFifo      **recon_tile_sbrow_producer_fifo_ptr;
+    EbFifo      **recon_tile_sbrow_consumer_fifo_ptr;    
+
+    /* Array to store SB Recon rows picked up for processing in the Tile. This will be
        used for deciding which tile to be picked up for processing. */
-    uint32_t    sb_recon_row_started;
+    uint32_t    *sb_recon_row_started;
 
     /* Array to store SBs completed in every SB row of Recon stage.
        Used for top-right sync */
     uint32_t    *sb_recon_completed_in_row;
+
+    /* Number of SB rows in tile */
+    int32_t tile_num_sb_rows;
 
 } DecMTParseReconTileInfo;
 
@@ -58,13 +67,21 @@ typedef struct DecMTLFFrameInfo {
 
 /* MT State information for each frame in parallel */
 typedef struct DecMTFrameData {
+#if LR_PAD_MT
+    uint32_t            num_threads_paded;
+#else
     uint32_t            num_threads_cdefed;
+#endif
     uint32_t            num_threads_exited;
     EbBool              end_flag;
     EbBool              start_parse_frame;
     EbBool              start_decode_frame;
     EbBool              start_lf_frame;
     EbBool              start_cdef_frame;
+#if LR_PAD_MT
+    EbBool              start_lr_frame;
+    EbBool              start_pad_frame;
+#endif
     EbHandle            temp_mutex;
 
     TilesInfo           *tiles_info;
@@ -86,6 +103,7 @@ typedef struct DecMTFrameData {
     EbHandle                recon_mutex;
     /* Parse-Recon Stage structure */
     DecMTParseReconTileInfo *parse_recon_tile_info_array;
+    EbHandle                tile_switch_mutex;
 
     /*Bhavna: Comment*/
     uint32_t    *sb_recon_row_map;
@@ -116,9 +134,28 @@ typedef struct DecMTFrameData {
 
     /* EbFifo at Frame Row level : SR Stage */
     EbFifo                  *sr_fifo_ptr;
+#if LR_PAD_MT
+    // System Resource Managers
+    EbSystemResource        *lr_resource_ptr;
+    /* EbFifo at Frame Row level */
+    EbFifo                  **lr_row_producer_fifo_ptr;
+    EbFifo                  **lr_row_consumer_fifo_ptr;
+    /* Array to store SBs completed in every SB row of LR stage.
+       Used for top sync */
+    int32_t                 *sb_lr_completed_in_row;
+    /* LR SB row level map for rows finished LR */
+    uint32_t                *lr_row_map;
+#endif
     /* EbFifo at Frame Row level : LR Stage */
     EbFifo                  *lr_fifo_ptr;
 
+#if LR_PAD_MT
+    // System Resource Managers
+    EbSystemResource        *pad_resource_ptr;
+    /* EbFifo at Frame Row level */
+    EbFifo                  **pad_row_producer_fifo_ptr;
+    EbFifo                  **pad_row_consumer_fifo_ptr;
+#endif
     /* EbFifo at Frame Row level : Pad Stage */
     EbFifo                  *pad_fifo_ptr;
 

@@ -628,7 +628,8 @@ EB_API EbErrorType eb_deinit_decoder(
     EbErrorType return_error    = EB_ErrorNone;
 
     if (dec_handle_ptr) {
-        dec_sync_all_threads(dec_handle_ptr);
+        if(dec_handle_ptr->dec_config.threads > 1)
+            dec_sync_all_threads(dec_handle_ptr);
         if (svt_dec_memory_map) {
             // Loop through the ptr table and free all malloc'd pointers per channel
             EbMemoryMapEntry*    memory_entry = svt_dec_memory_map;

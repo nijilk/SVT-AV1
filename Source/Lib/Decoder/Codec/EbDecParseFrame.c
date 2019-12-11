@@ -170,7 +170,7 @@ EbErrorType start_parse_tile(EbDecHandle *dec_handle_ptr, ParseCtxt *parse_ctxt,
     parse_ctxt->cur_tile_ctx = master_parse_ctxt->init_frm_ctx;
 
     /* Parse Tile */
-    status = parse_tile(dec_handle_ptr, parse_ctxt, tiles_info, tile_row, tile_col, is_mt);
+    status = parse_tile(dec_handle_ptr, parse_ctxt, tiles_info, tile_num, tile_row, tile_col, is_mt);
 
     /* Save CDF */
     if (!frame_header->disable_frame_end_update_cdf &&
@@ -184,7 +184,7 @@ EbErrorType start_parse_tile(EbDecHandle *dec_handle_ptr, ParseCtxt *parse_ctxt,
 }
 
 EbErrorType parse_tile(EbDecHandle *dec_handle_ptr, ParseCtxt *parse_ctx,
-    TilesInfo *tile_info, int32_t tile_row, int32_t tile_col, int32_t is_mt)
+    TilesInfo *tile_info, int tile_num, int32_t tile_row, int32_t tile_col, int32_t is_mt)
 {
     EbErrorType status = EB_ErrorNone;
 
@@ -214,7 +214,7 @@ EbErrorType parse_tile(EbDecHandle *dec_handle_ptr, ParseCtxt *parse_ctx,
          mi_row < tile_info->tile_row_start_mi[tile_row + 1];
          mi_row += dec_handle_ptr->seq_header.sb_mi_size)
     {
-        int32_t sb_row = (mi_row << 2) >>
+        int32_t sb_row = (mi_row << MI_SIZE_LOG2) >>
             dec_handle_ptr->seq_header.sb_size_log2;
 
         clear_left_context(parse_ctx);
@@ -347,6 +347,25 @@ EbErrorType parse_tile(EbDecHandle *dec_handle_ptr, ParseCtxt *parse_ctx,
             update_nbrs_after_sb(&master_frame_buf->frame_mi_map, sb_col);
 #endif
         }
+
+#if ENABLE_ROW_MT_DECODE // post after finish of tile sb_row parsing
+        if(is_mt)
+        {  
+            EbObjectWrapper *recon_sbrow_wrapper_ptr;
+            DecMTFrameData  *dec_mt_frame_data =
+                  &dec_handle_ptr->master_frame_buf.cur_frame_bufs[0].dec_mt_frame_data;   //multi frame Parallel 0 -> idx         
+            // Get Empty Recon Tile SB row Job
+            eb_get_empty_object(dec_mt_frame_data->parse_recon_tile_info_array[tile_num].
+                recon_tile_sbrow_producer_fifo_ptr[0], &recon_sbrow_wrapper_ptr);
+
+            DecMTNode *recon_sbrow_context_ptr =
+                (DecMTNode*)recon_sbrow_wrapper_ptr->object_ptr;
+            recon_sbrow_context_ptr->node_index = sb_row;
+            
+            // Post Recon SB row Tile Job
+            eb_post_full_object(recon_sbrow_wrapper_ptr);
+        }
+#endif
     }
 
     return status;

@@ -180,7 +180,7 @@ EbErrorType start_parse_tile(EbDecHandle *dec_handle_ptr,
     ParseCtxt *parse_ctxt, TilesInfo *tiles_info, int tile_num, int is_mt);
 
 EbErrorType parse_tile(EbDecHandle *dec_handle_ptr, ParseCtxt *parse_ctx,
-    TilesInfo *tile_info, int32_t tile_row, int32_t tile_col, int32_t is_mt);
+    TilesInfo *tile_info, int tile_num, int32_t tile_row, int32_t tile_col, int32_t is_mt);
 
 #ifdef __cplusplus
 }

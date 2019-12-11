@@ -97,6 +97,7 @@ EbErrorType start_decode_tile(EbDecHandle *dec_handle_ptr,
 
 EbErrorType decode_tile(
     DecModCtxt *dec_mod_ctxt, TilesInfo *tile_info,
+    DecMTParseReconTileInfo *parse_recon_tile_info_array,
     int32_t tile_row, int32_t tile_col);
 
 /* TODO: Should be moved out once decode tile is moved out from parse_tile */

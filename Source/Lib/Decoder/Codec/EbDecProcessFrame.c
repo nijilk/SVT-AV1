@@ -154,13 +154,42 @@ void decode_super_block(DecModCtxt *dec_mod_ctxt,
 }
 
 EbErrorType decode_tile_row(DecModCtxt *dec_mod_ctxt,
-    TilesInfo *tile_info, int32_t tile_col, int32_t mi_row)
+    TilesInfo *tile_info, DecMTParseReconTileInfo *parse_recon_tile_info_array,
+    int32_t tile_col, int32_t mi_row,int32_t sb_row)
 {
     EbErrorType status = EB_ErrorNone;
     EbDecHandle *dec_handle_ptr = (EbDecHandle*)(dec_mod_ctxt->dec_handle_ptr);
     MasterFrameBuf *master_frame_buf = &dec_handle_ptr->master_frame_buf;
     CurFrameBuf    *frame_buf = &master_frame_buf->cur_frame_bufs[0];
-    int32_t sb_row = (mi_row << 2) >> dec_mod_ctxt->seq_header->sb_size_log2;
+
+#if ENABLE_ROW_MT_DECODE
+    volatile int32_t *sb_completed_in_prev_row = NULL;
+    int32_t *sb_completed_in_row;
+    int32_t tile_wd_in_sb;
+    int32_t sb_mi_size_log2 = dec_mod_ctxt->seq_header->sb_size_log2 -
+        MI_SIZE_LOG2;
+
+    int32_t sb_row_tile_start = 
+        (parse_recon_tile_info_array->tile_info.mi_row_start << MI_SIZE_LOG2) >>
+              dec_mod_ctxt->seq_header->sb_size_log2;
+
+    int32_t sb_row_in_tile = sb_row - sb_row_tile_start;
+
+    if (0 != sb_row_in_tile)
+    {
+        sb_completed_in_prev_row = (volatile int32_t *)&parse_recon_tile_info_array->sb_recon_completed_in_row[sb_row_in_tile - 1];
+    }
+
+    sb_completed_in_row = &parse_recon_tile_info_array->sb_recon_completed_in_row[sb_row_in_tile];
+
+    tile_wd_in_sb = (AOMMIN(tile_info->tile_col_start_mi[tile_col + 1],
+        dec_handle_ptr->frame_header.mi_cols) + ((1 << sb_mi_size_log2) - 1))
+        >> sb_mi_size_log2;
+
+    //tile_wd_in_sb = ( (tile_info->tile_col_start_mi[tile_col + 1] << MI_SIZE_LOG2) ) >>
+     //   dec_mod_ctxt->seq_header->sb_size_log2;
+#endif
+
     for (uint32_t mi_col = tile_info->tile_col_start_mi[tile_col];
         mi_col < tile_info->tile_col_start_mi[tile_col + 1];
         mi_col += dec_mod_ctxt->seq_header->sb_mi_size)
@@ -176,7 +205,21 @@ EbErrorType decode_tile_row(DecModCtxt *dec_mod_ctxt,
         dec_mod_ctxt->cur_coeff[AOM_PLANE_U] = sb_info->sb_coeff[AOM_PLANE_U];
         dec_mod_ctxt->cur_coeff[AOM_PLANE_V] = sb_info->sb_coeff[AOM_PLANE_V];
 
+#if ENABLE_ROW_MT_DECODE
+        /* Top-Right Sync*/
+        if (sb_row_in_tile) {
+           
+            while (*sb_completed_in_prev_row <
+                MIN((sb_col + 2), tile_wd_in_sb));
+            //Sleep(5); /* ToDo : Change */
+        }
+#endif
+
         decode_super_block(dec_mod_ctxt, mi_row, mi_col, sb_info);
+
+#if ENABLE_ROW_MT_DECODE // udpate fpor top right sync
+        *sb_completed_in_row = (sb_col + 1);
+#endif
     }
 
     DecMTFrameData *mt_frame_data = &frame_buf->dec_mt_frame_data;
@@ -186,8 +229,10 @@ EbErrorType decode_tile_row(DecModCtxt *dec_mod_ctxt,
     return status;
 }
 
+#if !ENABLE_ROW_MT_DECODE
 EbErrorType decode_tile(DecModCtxt *dec_mod_ctxt,
-    TilesInfo *tile_info, int32_t tile_row, int32_t tile_col)
+    TilesInfo *tile_info, DecMTParseReconTileInfo *parse_recon_tile_info_array,
+    int32_t tile_row, int32_t tile_col)
 {
     EbErrorType status = EB_ErrorNone;
     for (uint32_t mi_row = tile_info->tile_row_start_mi[tile_row];
@@ -196,15 +241,76 @@ EbErrorType decode_tile(DecModCtxt *dec_mod_ctxt,
     {
         EbColorConfig *color_config = &dec_mod_ctxt->seq_header->color_config;
         cfl_init(&dec_mod_ctxt->cfl_ctx, color_config);
-        status = decode_tile_row(dec_mod_ctxt, tile_info, tile_col, mi_row);
+        int32_t sb_row = (mi_row << MI_SIZE_LOG2) >> dec_mod_ctxt->seq_header->sb_size_log2;
+        status = decode_tile_row(dec_mod_ctxt, tile_info, parse_recon_tile_info_array, tile_col, mi_row, sb_row);
     }
     return status;
 }
+#else
+EbErrorType decode_tile(DecModCtxt *dec_mod_ctxt,
+    TilesInfo *tile_info, DecMTParseReconTileInfo *parse_recon_tile_info_array,
+    int32_t tile_row, int32_t tile_col)
+{
+    EbErrorType status = EB_ErrorNone;
+
+    while (1) {
+        EbObjectWrapper *recon_sbrow_wrapper_ptr;
+
+        eb_get_full_object_non_blocking(parse_recon_tile_info_array->
+            recon_tile_sbrow_consumer_fifo_ptr[0],
+            &recon_sbrow_wrapper_ptr);
+
+        if (NULL != recon_sbrow_wrapper_ptr)
+        {
+            EbColorConfig *color_config;
+            DecMTNode *context_ptr;
+            int32_t sb_row, mi_row;
+            int32_t sb_row_in_tile;
+
+            int32_t sb_row_tile_start =
+                (parse_recon_tile_info_array->tile_info.mi_row_start << MI_SIZE_LOG2) >>
+                dec_mod_ctxt->seq_header->sb_size_log2;
+
+            context_ptr = (DecMTNode*)recon_sbrow_wrapper_ptr->object_ptr;
+            sb_row = context_ptr->node_index;
+
+            sb_row_in_tile = sb_row - sb_row_tile_start;
+
+            mi_row = (sb_row << dec_mod_ctxt->seq_header->sb_size_log2) >> MI_SIZE_LOG2;
+
+            color_config = &dec_mod_ctxt->seq_header->color_config;
+            cfl_init(&dec_mod_ctxt->cfl_ctx, color_config);
+
+            //update the row started status
+            parse_recon_tile_info_array->sb_recon_row_started[sb_row_in_tile] = 1;
+
+            status = decode_tile_row(dec_mod_ctxt, tile_info, parse_recon_tile_info_array,tile_col, mi_row, sb_row);
+
+            eb_release_object(recon_sbrow_wrapper_ptr);
+        }
+        else
+        {
+            /*if all tiles have been picked up for processing then break the while loop */
+            if (1 == parse_recon_tile_info_array->sb_recon_row_started[parse_recon_tile_info_array->tile_num_sb_rows -1])
+            {
+                break;
+            }
+        }
+    }
+    return status;
+}
+
+#endif
 
 EbErrorType start_decode_tile(EbDecHandle *dec_handle_ptr,
     DecModCtxt *dec_mod_ctxt, TilesInfo *tiles_info, int32_t tile_num)
 {
     EbErrorType status = EB_ErrorNone;
+    DecMTFrameData *dec_mt_frame_data = &dec_handle_ptr->
+        master_frame_buf.cur_frame_bufs[0].dec_mt_frame_data;
+
+    DecMTParseReconTileInfo *parse_recon_tile_info_array;
+
     dec_mod_ctxt->frame_header = &dec_handle_ptr->frame_header;
     dec_mod_ctxt->seq_header = &dec_handle_ptr->seq_header;
     FrameHeader *frame_header = &dec_handle_ptr->frame_header;
@@ -212,6 +318,10 @@ EbErrorType start_decode_tile(EbDecHandle *dec_handle_ptr,
     int32_t tile_col = tile_num % tiles_info->tile_cols;
     svt_tile_init(&dec_mod_ctxt->cur_tile_info, frame_header,
         tile_row, tile_col);
-    status = decode_tile(dec_mod_ctxt, tiles_info, tile_row, tile_col);
+
+    parse_recon_tile_info_array = &dec_mt_frame_data->parse_recon_tile_info_array[tile_num];
+
+    status = decode_tile(dec_mod_ctxt, tiles_info, parse_recon_tile_info_array,tile_row, tile_col);
+
     return status;
 }
