@@ -107,6 +107,7 @@ static AOM_FORCE_INLINE int od_ec_decode_cdf_q15_sse4_1(od_ec_dec *dec,
     u = r;
     v = val[0];
 
+#if 1 // State transition check in C version
     for (int i = 0; i < 4; i++) {
         if (cmp[i] == 0) {
             if (i != 0) {
@@ -117,6 +118,16 @@ static AOM_FORCE_INLINE int od_ec_decode_cdf_q15_sse4_1(od_ec_dec *dec,
             break;
         }
     }
+#else // State transition check in Intrinsic version
+     // Verified for nsymbol=3,4
+    m2 = _mm_sign_epi32(m2, m2);
+    __m128i m5 = _mm_hadd_epi32(m2, m2);
+    ret = _mm_cvtsi128_si32(_mm_hadd_epi32(m5, m5));
+    if (ret != 0) {
+        u = val[ret - 1];
+        v = val[ret];
+    }
+#endif
 
     assert(v < u);
     assert(u <= r);
