@@ -23,7 +23,13 @@
 static const int nsymbs2speed[17] = { 0, 0, 1, 1, 2, 2, 2, 2, 2,
                                       2, 2, 2, 2, 2, 2, 2, 2 };
 
-static int16_t num_array[8] = { 0, 1, 2, 3, 4, 5, 6, 7 };
+static const int16_t vmask_16b[5/*nsymbol + 1*/][4] = {
+                                          { 0, 0, 0, 0 },
+                                          { -1, 0, 0, 0 },
+                                          { -1, -1, 0, 0  },
+                                          { -1, -1, -1, 0 },
+                                          { -1, -1, -1, -1  }
+};
 DECLARE_ALIGNED(16, static int8_t, b_mask[5][16]) = {
                          { 0, 0, 0, 0 , 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
                          { 0, 0, 0, 0 , 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
@@ -38,14 +44,13 @@ static AOM_FORCE_INLINE void dec_update_cdf_sse4(AomCdfProb *cdf, int8_t val, in
     // load cdf
     __m128i cdf_1 = _mm_loadl_epi64((__m128i *)cdf);
     __m128i cdf_2 = cdf_1;
-    __m128i num = _mm_load_si128((__m128i *)num_array);
     __m128i round = _mm_set1_epi16((int16_t)(1 << rate) - 1);
 
     // mask computation
     __m128i m2, m3;
-    m3 = _mm_set1_epi16((int16_t)val); // val val val val  val val val val
+
+    m3 = _mm_loadl_epi64((__m128i *)vmask_16b[val]); // mask based on 'val'
     m2 = _mm_xor_si128(m3, m3); // 0 0 0 0  0 0 0 0
-    m3 = _mm_cmpgt_epi16(m3, num); // -1 -1 0 0  0 0 0 0
     m2 = _mm_avg_epu16(m3, m2); // -32768 -32768 0  0 0 0 0
     round = _mm_and_si128(round, m3); // round round 0 0  0 0 0 0
 
