@@ -20,17 +20,35 @@
 #include <assert.h>
 #include "smmintrin.h"
 
-static const int nsymbs2speed[17] = { 0, 0, 1, 1, 2, 2, 2, 2, 2,
+DECLARE_ALIGNED(16, static const int32_t, nsymbs2speed[17]) = { 0, 0, 1, 1, 2, 2, 2, 2, 2,
                                       2, 2, 2, 2, 2, 2, 2, 2 };
 
-static const int16_t vmask_16b[5/*nsymbol + 1*/][4] = {
+DECLARE_ALIGNED(16, static const int16_t, num_array[8]) = { 0, 1, 2, 3, 4, 5, 6, 7 };
+
+DECLARE_ALIGNED(16, static const int32_t, nsymbol_32b[5/*nsymbol + 1*/][4]) = {
                                           { 0, 0, 0, 0 },
                                           { -1, 0, 0, 0 },
                                           { -1, -1, 0, 0  },
                                           { -1, -1, -1, 0 },
                                           { -1, -1, -1, -1  }
 };
-DECLARE_ALIGNED(16, static int8_t, b_mask[5][16]) = {
+DECLARE_ALIGNED(16, static const int16_t, nsymbol_16b[5/*nsymbol + 1*/][4]) = {
+                                          { 0, 0, 0, 0 },
+                                          { -1, 0, 0, 0 },
+                                          { -1, -1, 0, 0  },
+                                          { -1, -1, -1, 0 },
+                                          { -1, -1, -1, -1  }
+};
+
+DECLARE_ALIGNED(16, static const int32_t, n_ret[5/*nsymbol + 1*/][4]) = {
+                                          { 0, 0, 0, 0 },
+                                          { 0, -4, -8, -12 },
+                                          { 4, 0, -4, -8 },
+                                          { 8, 4, 0, -4 },
+                                          { 12, 8, 4, 0 }
+};
+
+DECLARE_ALIGNED(16, static const int8_t, b_mask[5][16]) = {
                          { 0, 0, 0, 0 , 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
                          { 0, 0, 0, 0 , 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
                          { 1, 1, 0, 0 , 0, 0, 0, 0, 0, 0, 0, 0 , 0, 0, 0, 0},
@@ -49,7 +67,7 @@ static AOM_FORCE_INLINE void dec_update_cdf_sse4(AomCdfProb *cdf, int8_t val, in
     // mask computation
     __m128i m2, m3;
 
-    m3 = _mm_loadl_epi64((__m128i *)vmask_16b[val]); // mask based on 'val'
+    m3 = _mm_loadl_epi64((__m128i *)nsymbol_16b[val]); // mask based on 'val'
     m2 = _mm_xor_si128(m3, m3); // 0 0 0 0  0 0 0 0
     m2 = _mm_avg_epu16(m3, m2); // -32768 -32768 0  0 0 0 0
     round = _mm_and_si128(round, m3); // round round 0 0  0 0 0 0
@@ -67,13 +85,6 @@ static AOM_FORCE_INLINE void dec_update_cdf_sse4(AomCdfProb *cdf, int8_t val, in
     _mm_storel_epi64((__m128i *)cdf, cdf_2);
     cdf[nsymbs] = count + (count < 32);
 }
-
-static int32_t n_ret[5/*nsymbol*/][4] = { { 0, 0, 0, 0 },
-                                          { 0, -4, -8, -12 },
-                                          { 4, 0, -4, -8 },
-                                          { 8, 4, 0, -4 },
-                                          { 12, 8, 4, 0 }
-                                        };
 
 static AOM_FORCE_INLINE int od_ec_decode_cdf_q15_sse4_1(od_ec_dec *dec,
     const uint16_t *icdf, int nsyms)
@@ -94,9 +105,9 @@ static AOM_FORCE_INLINE int od_ec_decode_cdf_q15_sse4_1(od_ec_dec *dec,
     assert(7 - EC_PROB_SHIFT - CDF_SHIFT >= 0);
     c = (unsigned)(dif >> (OD_EC_WINDOW_SIZE - 16));
 
-    int cmp[4], val[4];
     __m128i m0 = _mm_set1_epi32(r >> 8);
-    __m128i m1 = _mm_loadl_epi64((__m128i *)icdf); // cdf[0] cdf[1] cdf[2] cdf[3]
+    __m128i m1 = _mm_lddqu_si128((__m128i *)icdf); // cdf[0] cdf[1] cdf[2] cdf[3]
+    // __m128i m1 = _mm_load_si128((__m128i *)icdf); // cdf[0] cdf[1] cdf[2] cdf[3]
     m1 = _mm_cvtepu16_epi32(m1);
     m1 = _mm_srai_epi32(m1, 6); // (icdf[++ret] >> EC_PROB_SHIFT)
     m1 = _mm_mullo_epi32(m1, m0); // partial v - first line done
@@ -107,12 +118,16 @@ static AOM_FORCE_INLINE int od_ec_decode_cdf_q15_sse4_1(od_ec_dec *dec,
 
     m0 = _mm_set1_epi32(c);
     __m128i m2 = _mm_cmplt_epi32(m0, m1);
+
+#if 1 // State transition check in C version - performs better than intrinsic
+/* With aligned load for nsymbol=4 in Windows alone performing better(C: 1137 ms , Intrinsic: 794 ms)
+       since making all cdf to aligned will cost huge amount memory so droping plan on aligning cdf.
+   With unaligned load for nsymbol=4 is not performing better(C: 1137 ms , Intrinsic: 1322 ms) */
+    int cmp[4], val[4];
     _mm_store_si128((__m128i *)cmp, m2);
     _mm_store_si128((__m128i *)val, m1);
     u = r;
     v = val[0];
-
-#if 1 // State transition check in C version
     for (int i = 0; i < 4; i++) {
         if (cmp[i] == 0) {
             if (i != 0) {
@@ -124,14 +139,16 @@ static AOM_FORCE_INLINE int od_ec_decode_cdf_q15_sse4_1(od_ec_dec *dec,
         }
     }
 #else // State transition check in Intrinsic version
-     // Verified for nsymbol=3,4
-    m2 = _mm_sign_epi32(m2, m2);
-    __m128i m5 = _mm_hadd_epi32(m2, m2);
-    ret = _mm_cvtsi128_si32(_mm_hadd_epi32(m5, m5));
-    if (ret != 0) {
-        u = val[ret - 1];
-        v = val[ret];
-    }
+    m0 = _mm_load_si128((__m128i *)nsymbol_32b[nsyms]); // Mask based on nsymbol
+    m2 = _mm_and_si128(m2, m0);
+
+    ret = _mm_movemask_epi8(m2);
+    ret = POPCNT_U32(ret) >> 2;
+
+    DECLARE_ALIGNED(16, int, val[4]);
+    _mm_store_si128((__m128i *)val, m1);
+    u = ret ? val[ret - 1] : r;
+    v = val[ret];
 #endif
 
     assert(v < u);

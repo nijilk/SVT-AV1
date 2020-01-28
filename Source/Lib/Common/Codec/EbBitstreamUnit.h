@@ -25,6 +25,9 @@ extern "C" {
 #define EB_BITSTREAM_SLICE_BUFFER_SIZE          0x300000
 #define SLICE_HEADER_COUNT                         256
 
+/* Enables svt_read_symbol_4_sse4 function in parse. Can disable to test C path*/
+#define DEC_CABAC_SIMD 1
+
 /**********************************
  * Bitstream Unit Types
  **********************************/
@@ -70,6 +73,9 @@ extern "C" {
         assert(n != 0);
         return 31 ^ __builtin_clz(n);
     }
+#if DEC_CABAC_SIMD
+#define POPCNT_U32(x)       __builtin_popcount(x)
+#endif // DEC_CABAC_SIMD
 #elif defined(USE_MSC_INTRINSICS)
 #pragma intrinsic(_BitScanReverse)
 
@@ -79,6 +85,9 @@ extern "C" {
         _BitScanReverse(&first_set_bit, n);
         return first_set_bit;
     }
+#if DEC_CABAC_SIMD
+#define POPCNT_U32(x)       _mm_popcnt_u32(x)
+#endif // DEC_CABAC_SIMD
 #undef USE_MSC_INTRINSICS
 #else
 // Returns (int32_t)floor(log2(n)). n must be > 0.

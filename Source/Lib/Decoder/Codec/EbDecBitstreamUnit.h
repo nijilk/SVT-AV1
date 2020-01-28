@@ -19,8 +19,6 @@
 
 #include "EbCabacContextModel.h"
 #include "EbBitstreamUnit.h"
-/*Enables svt_read_symbol_4_sse4 function in parse. Can disable to test C path*/
-#define DEC_CABAC_SIMD 1
 
 //Added this EbBitstreamUnit.h because od_ec_window is defined in it, but
 //we also defining it, so it leads to warning,  so i commented our defination & added EbBitstreamUnit.h file.
