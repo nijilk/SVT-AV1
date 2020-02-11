@@ -1079,7 +1079,8 @@ void svt_setup_motion_field(EbDecHandle *dec_handle, DecThreadCtxt *thread_ctxt)
         eb_release_mutex(dec_mt_frame_data->temp_mutex);
 
         volatile uint32_t *num_threads_header = &dec_mt_frame_data->num_threads_header;
-        while (*num_threads_header != dec_handle->dec_config.threads)
+        while (*num_threads_header != dec_handle->dec_config.threads &&
+               (EB_FALSE == dec_mt_frame_data->end_flag))
             ;
     }
 }
