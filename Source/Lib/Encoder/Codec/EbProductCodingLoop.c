@@ -4409,10 +4409,16 @@ void read_refine_me_mvs(PictureControlSet *pcs_ptr, ModeDecisionContext *context
 void    predictive_me_search(PictureControlSet *pcs_ptr, ModeDecisionContext *context_ptr,
                              EbPictureBufferDesc *input_picture_ptr, uint32_t input_origin_index,
                              uint32_t blk_origin_index) {
-#if !ENHANCED_ME_MV
+#if !ENHANCED_ME_MV || M0_FEB22_ADOPTIONS
     const SequenceControlSet *scs_ptr = (SequenceControlSet *)pcs_ptr->scs_wrapper_ptr->object_ptr;
 #endif
     EbBool                    use_ssd           = EB_TRUE;
+#if M0_FEB22_ADOPTIONS
+#if !MR_MODE
+    if (pcs_ptr->parent_pcs_ptr->sc_content_detected)
+        use_ssd = EB_FALSE;
+#endif
+#endif
     uint8_t                   hbd_mode_decision = context_ptr->hbd_mode_decision == EB_DUAL_BIT_MD
                                     ? EB_8_BIT_MD
                                     : context_ptr->hbd_mode_decision;
