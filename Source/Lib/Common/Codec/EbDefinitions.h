@@ -609,7 +609,11 @@ typedef enum MdStagingMode {
 #define INTER_NEW_NFL 16
 #define INTER_PRED_NFL 16
 #endif
+#if MR_MODE
+#define BEST_CANDIDATE_COUNT 23
+#else
 #define BEST_CANDIDATE_COUNT 4
+#endif
 #define MAX_REF_TYPE_CAND 30
 #define PRUNE_REC_TH 5
 #define PRUNE_REF_ME_TH 2
