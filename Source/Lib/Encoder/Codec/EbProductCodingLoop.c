@@ -9358,6 +9358,13 @@ uint8_t update_skip_nsq_shapes(SequenceControlSet *scs_ptr, PictureControlSet *p
     if (context_ptr->blk_geom->shape == PART_H4 || context_ptr->blk_geom->shape == PART_V4)
         sq_weight += CONSERVATIVE_OFFSET_0;
 
+
+
+#if NSQ_HV
+    uint32_t sqi = context_ptr->blk_geom->sqi_mds;
+    MdBlkStruct *local_cu_unit = context_ptr->md_local_blk_unit;
+#endif
+
     if (context_ptr->blk_geom->shape == PART_HA || context_ptr->blk_geom->shape == PART_HB || context_ptr->blk_geom->shape == PART_H4) {
         if (context_ptr->md_local_blk_unit[context_ptr->blk_geom->sqi_mds].avail_blk_flag &&
             context_ptr->md_local_blk_unit[context_ptr->blk_geom->sqi_mds + 1].avail_blk_flag &&
@@ -9394,6 +9401,24 @@ uint8_t update_skip_nsq_shapes(SequenceControlSet *scs_ptr, PictureControlSet *p
 
             // Determine if nsq shapes can be skipped based on the relative cost of SQ and H blocks
             skip_nsq = (h_cost > ((sq_cost * sq_weight) / 100));
+
+
+#if NSQ_HV
+            if (!skip_nsq && context_ptr->nsq_hv_level > 0) {
+                if (local_cu_unit[sqi + 3].avail_blk_flag && local_cu_unit[sqi + 4].avail_blk_flag) {
+                    uint64_t v_cost = local_cu_unit[sqi + 3].default_cost + local_cu_unit[sqi + 4].default_cost;
+                    uint32_t offset = 10;
+                    if (context_ptr->nsq_hv_level == 2 && context_ptr->blk_geom->shape == PART_H4)
+                        offset = 5;
+                    if (offset >= 5 && scs_ptr->static_config.qp <= 20)
+                        offset -= 5;
+                    uint32_t v_weight = 100 + offset;
+                    skip_nsq = (h_cost > ((v_cost * v_weight) / 100));
+                }
+            }
+#endif
+
+
         }
     }
     if (context_ptr->blk_geom->shape == PART_VA || context_ptr->blk_geom->shape == PART_VB || context_ptr->blk_geom->shape == PART_V4) {
@@ -9432,6 +9457,24 @@ uint8_t update_skip_nsq_shapes(SequenceControlSet *scs_ptr, PictureControlSet *p
 
             // Determine if nsq shapes can be skipped based on the relative cost of SQ and V blocks
             skip_nsq = (v_cost > ((sq_cost * sq_weight) / 100));
+#if NSQ_HV
+            if (!skip_nsq  && context_ptr->nsq_hv_level > 0) {
+                if (local_cu_unit[sqi + 1].avail_blk_flag && local_cu_unit[sqi + 2].avail_blk_flag) {
+                    uint64_t h_cost = local_cu_unit[sqi + 1].default_cost + local_cu_unit[sqi + 2].default_cost;
+                    uint32_t offset = 10;
+
+                    if (context_ptr->nsq_hv_level == 2 && context_ptr->blk_geom->shape == PART_V4)
+                        offset = 5;
+                    if (offset >= 5 && scs_ptr->static_config.qp <= 20)
+                        offset -= 5;
+
+                    uint32_t h_weight = 100 + offset;
+                    skip_nsq = (v_cost > ((h_cost * h_weight) / 100));
+                }
+            }
+#endif
+
+
         }
     }
 

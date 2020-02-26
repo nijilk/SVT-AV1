@@ -33,6 +33,10 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+
+#define NSQ_HV                          1 // skip NSQ partitions based on H vs V costs
+
 #define JAN6_PRESETS                        1
 #if 1
 #define M0_FEB23_ADOPTIONS                  1
