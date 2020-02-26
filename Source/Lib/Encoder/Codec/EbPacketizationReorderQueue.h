@@ -10,7 +10,6 @@
 #include "EbSystemResourceManager.h"
 #include "EbPredictionStructure.h"
 #include "EbObject.h"
-#include "EbEntropyCodingObject.h"
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -38,10 +37,6 @@ typedef struct PacketizationReorderEntry {
     EbBool     show_frame;
     EbBool     has_show_existing;
     uint8_t    show_existing_frame;
-    //small size bitstream for show existing frame
-    Bitstream *bitstream_ptr;
-    //valid when has_show_existing is true
-    int64_t    next_pts;
     uint8_t    is_alt_ref;
 } PacketizationReorderEntry;
 
