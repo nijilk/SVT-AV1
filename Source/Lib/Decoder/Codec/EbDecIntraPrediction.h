@@ -20,14 +20,29 @@ void svt_av1_predict_intra(DecModCtxt *dec_mod_ctxt, PartitionInfo *part_info, i
                            int32_t recon_stride, EbBitDepthEnum bit_depth, int32_t blk_mi_col_off,
                            int32_t blk_mi_row_off);
 
+#if DEC_16BIT_PIPELINE
+void svtav1_predict_intra_block(PartitionInfo *xd, int32_t plane, TxSize tx_size, TileInfo *td,
+                                void *pv_pred_buf, int32_t pred_stride, void *top_neigh_array,
+                                void *left_neigh_array, int32_t ref_stride, SeqHeader *seq_header,
+                                const PredictionMode mode, int32_t blk_mi_col_off,
+                                int32_t blk_mi_row_off, EbBitDepthEnum bit_depth, EbBool is16b);
+#else
 void svtav1_predict_intra_block(PartitionInfo *xd, int32_t plane, TxSize tx_size, TileInfo *td,
                                 void *pv_pred_buf, int32_t pred_stride, void *top_neigh_array,
                                 void *left_neigh_array, int32_t ref_stride, SeqHeader *seq_header,
                                 const PredictionMode mode, int32_t blk_mi_col_off,
                                 int32_t blk_mi_row_off, EbBitDepthEnum bit_depth);
+#endif
 
+#if DEC_16BIT_PIPELINE
 void cfl_store_tx(PartitionInfo *xd, CflCtx *cfl_ctx, int row, int col, TxSize tx_size,
-                  BlockSize bsize, EbColorConfig *cc, uint8_t *dst_buff, uint32_t dst_stride);
+                  BlockSize bsize, EbColorConfig *cc, uint8_t *dst_buff,
+                  uint32_t dst_stride, EbBool is16b);
+#else
+void cfl_store_tx(PartitionInfo *xd, CflCtx *cfl_ctx, int row, int col, TxSize tx_size,
+                  BlockSize bsize, EbColorConfig *cc, uint8_t *dst_buff,
+                  uint32_t dst_stride);
+#endif
 
 #ifdef __cplusplus
 }

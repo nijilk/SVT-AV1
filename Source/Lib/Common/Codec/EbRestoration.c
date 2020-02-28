@@ -17,8 +17,14 @@
 #include "EbUtility.h"
 #include "EbLog.h"
 
+#if COMMON_16BIT
+void av1_upscale_normative_rows(const Av1Common *cm, const uint8_t *src, int src_stride,
+                                uint8_t *dst, int dst_stride, int rows, int sub_x,
+                                int bd, EbBool use_16bit_pipeline);
+#else
 void av1_upscale_normative_rows(const Av1Common *cm, const uint8_t *src, int src_stride,
                                 uint8_t *dst, int dst_stride, int rows, int sub_x, int bd);
+#endif
 
 void av1_foreach_rest_unit_in_frame(Av1Common *cm, int32_t plane, RestTileStartVisitor on_tile,
                                     RestUnitVisitor on_rest_unit, void *priv);
@@ -1632,11 +1638,17 @@ void extend_lines(uint8_t *buf, int32_t width, int32_t height, int32_t stride, i
         buf += stride;
     }
 }
-
+#if COMMON_16BIT
+void save_deblock_boundary_lines(uint8_t *src_buf, int32_t src_stride, int32_t src_width,
+                                 int32_t src_height, const Av1Common *cm, int32_t plane,
+                                 int32_t row, int32_t stripe, int32_t use_highbd, int32_t is_above,
+                                 RestorationStripeBoundaries *boundaries, EbBool use_16bit_pipeline){
+#else
 void save_deblock_boundary_lines(uint8_t *src_buf, int32_t src_stride, int32_t src_width,
                                  int32_t src_height, const Av1Common *cm, int32_t plane,
                                  int32_t row, int32_t stripe, int32_t use_highbd, int32_t is_above,
                                  RestorationStripeBoundaries *boundaries) {
+#endif
     const int32_t is_uv     = plane > 0;
     src_stride              = src_stride << use_highbd;
     const uint8_t *src_rows = src_buf + row * src_stride;
@@ -1664,6 +1676,17 @@ void save_deblock_boundary_lines(uint8_t *src_buf, int32_t src_stride, int32_t s
         upscaled_width = (cm->frm_size.superres_upscaled_width + sx) >> sx;
         line_bytes     = upscaled_width << use_highbd;
 
+#if COMMON_16BIT
+        av1_upscale_normative_rows(cm,
+                                   (src_rows),
+                                   src_stride >> use_highbd,
+                                   (bdry_rows),
+                                   boundaries->stripe_boundary_stride,
+                                   lines_to_save,
+                                   sx,
+                                   cm->bit_depth,
+                                   use_16bit_pipeline);
+#else
         av1_upscale_normative_rows(cm,
                                    (src_rows),
                                    src_stride >> use_highbd,
@@ -1672,6 +1695,7 @@ void save_deblock_boundary_lines(uint8_t *src_buf, int32_t src_stride, int32_t s
                                    lines_to_save,
                                    sx,
                                    cm->bit_depth);
+#endif
     } else {
         upscaled_width = src_width;
         line_bytes     = upscaled_width << use_highbd;
@@ -1726,11 +1750,18 @@ void save_cdef_boundary_lines(uint8_t *src_buf, int32_t src_stride, int32_t src_
                  RESTORATION_EXTRA_HORZ,
                  use_highbd);
 }
-
+#if COMMON_16BIT
+void save_tile_row_boundary_lines(uint8_t *src, int32_t src_stride, int32_t src_width,
+                                  int32_t src_height, int32_t use_highbd, int32_t plane,
+                                  Av1Common *cm, int32_t after_cdef,
+                                  RestorationStripeBoundaries *boundaries,
+                                  EbBool use_16bit_pipeline) {
+#else
 void save_tile_row_boundary_lines(uint8_t *src, int32_t src_stride, int32_t src_width,
                                   int32_t src_height, int32_t use_highbd, int32_t plane,
                                   Av1Common *cm, int32_t after_cdef,
                                   RestorationStripeBoundaries *boundaries) {
+#endif
     const int32_t is_uv         = plane > 0;
     const int32_t ss_y          = is_uv && cm->subsampling_y;
     const int32_t stripe_height = RESTORATION_PROC_UNIT_SIZE >> ss_y;
@@ -1765,6 +1796,20 @@ void save_tile_row_boundary_lines(uint8_t *src, int32_t src_stride, int32_t src_
         if (!after_cdef) {
             // Save deblocked context where needed.
             if (use_deblock_above) {
+#if COMMON_16BIT
+                save_deblock_boundary_lines(src,
+                                            src_stride,
+                                            src_width,
+                                            src_height,
+                                            cm,
+                                            plane,
+                                            y0 - RESTORATION_CTX_VERT,
+                                            frame_stripe,
+                                            use_highbd,
+                                            1,
+                                            boundaries,
+                                            use_16bit_pipeline);
+#else
                 save_deblock_boundary_lines(src,
                                             src_stride,
                                             src_width,
@@ -1776,8 +1821,23 @@ void save_tile_row_boundary_lines(uint8_t *src, int32_t src_stride, int32_t src_
                                             use_highbd,
                                             1,
                                             boundaries);
+#endif
             }
             if (use_deblock_below) {
+#if COMMON_16BIT
+                save_deblock_boundary_lines(src,
+                                            src_stride,
+                                            src_width,
+                                            src_height,
+                                            cm,
+                                            plane,
+                                            y1,
+                                            frame_stripe,
+                                            use_highbd,
+                                            0,
+                                            boundaries,
+                                            use_16bit_pipeline);
+#else
                 save_deblock_boundary_lines(src,
                                             src_stride,
                                             src_width,
@@ -1789,6 +1849,7 @@ void save_tile_row_boundary_lines(uint8_t *src, int32_t src_stride, int32_t src_
                                             use_highbd,
                                             0,
                                             boundaries);
+#endif
             }
         } else {
             // Save CDEF context where needed. Note that we need to save the CDEF
@@ -1840,7 +1901,19 @@ void eb_av1_loop_restoration_save_boundary_lines(const Yv12BufferConfig *frame, 
         uint8_t *                    src_buf     = REAL_PTR(use_highbd, frame->buffers[p]);
         int32_t                      src_stride  = frame->strides[is_uv];
         RestorationStripeBoundaries *boundaries  = &cm->rst_info[p].boundaries;
-
+#if COMMON_16BIT
+        save_tile_row_boundary_lines(src_buf,
+                                     src_stride,
+                                     crop_width,
+                                     crop_height,
+                                     use_highbd,
+                                     p,
+                                     cm,
+                                     after_cdef,
+                                     boundaries,
+                                     0 /* Can be modified once encoder adds support for 16bit pipeline*/
+                                     );
+#else
         save_tile_row_boundary_lines(src_buf,
                                      src_stride,
                                      crop_width,
@@ -1850,6 +1923,7 @@ void eb_av1_loop_restoration_save_boundary_lines(const Yv12BufferConfig *frame, 
                                      cm,
                                      after_cdef,
                                      boundaries);
+#endif
     }
 }
 

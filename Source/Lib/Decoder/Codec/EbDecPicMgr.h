@@ -29,9 +29,12 @@ typedef struct RefFrameInfo {
 
 EbErrorType dec_pic_mgr_init(EbDecHandle *dec_handle_ptr);
 
+#if DEC_16BIT_PIPELINE
+EbDecPicBuf *dec_pic_mgr_get_cur_pic(EbDecHandle *dec_handle_ptr);
+#else
 EbDecPicBuf *dec_pic_mgr_get_cur_pic(EbDecPicMgr *ps_pic_mgr, SeqHeader *seq_header,
                                      FrameHeader *frame_info, EbColorFormat color_format);
-
+#endif
 void dec_pic_mgr_update_ref_pic(EbDecHandle *dec_handle_ptr, int32_t frame_decoded,
                                 int32_t refresh_frame_flags);
 

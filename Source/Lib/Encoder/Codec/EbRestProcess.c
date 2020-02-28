@@ -63,8 +63,14 @@ void restoration_seg_search(int32_t *rst_tmpbuf, Yv12BufferConfig *org_fts,
                             PictureControlSet *pcs_ptr, uint32_t segment_index);
 void rest_finish_search(PictureParentControlSet *p_pcs_ptr, Macroblock *x, Av1Common *const cm);
 
+#if COMMON_16BIT
+void av1_upscale_normative_rows(const Av1Common *cm, const uint8_t *src,
+                                int src_stride, uint8_t *dst, int dst_stride, int rows, int sub_x,
+                                int bd, EbBool use_16bit_pipeline);
+#else
 void av1_upscale_normative_rows(const Av1Common *cm, const uint8_t *src,
                                 int src_stride, uint8_t *dst, int dst_stride, int rows, int sub_x, int bd);
+#endif
 
 #if DEBUG_UPSCALING
 void save_YUV_to_file(char *filename, EbByte buffer_y, EbByte buffer_u, EbByte buffer_v,
@@ -448,10 +454,17 @@ void eb_av1_superres_upscale_frame(struct Av1Common *cm,
                                 sub_x, sub_y);
         derive_blk_pointers_enc(dst, plane, 0, 0, (void *) &dst_buf, &dst_stride,
                                 sub_x, sub_y);
-
+#if COMMON_16BIT
+        av1_upscale_normative_rows(cm, (const uint8_t *) src_buf, src_stride, dst_buf,
+                                   dst_stride, src->height >> sub_x,
+                                   sub_x, src->bit_depth,
+                                    0 /* Can be modified once encoder adds support for 16bit pipeline*/
+                                   );
+#else
         av1_upscale_normative_rows(cm, (const uint8_t *) src_buf, src_stride, dst_buf,
                                    dst_stride, src->height >> sub_x,
                                    sub_x, src->bit_depth);
+#endif
     }
 
     // free the memory

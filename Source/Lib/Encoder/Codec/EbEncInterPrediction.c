@@ -116,6 +116,24 @@ void av1_make_masked_inter_predictor(uint8_t *src_ptr, uint32_t src_stride, uint
                                             bitdepth);
     }
 
+#if COMMON_16BIT
+    build_masked_compound_no_round(dst_ptr,
+                                   dst_stride,
+                                   org_dst,
+                                   org_dst_stride,
+                                   tmp_buf16,
+                                   tmp_buf_stride,
+                                   comp_data,
+                                   seg_mask,
+                                   blk_geom->bsize,
+                                   bheight,
+                                   bwidth,
+                                   conv_params,
+                                   bitdepth,
+                                   0 /* Can be modified once encoder adds support for 16bit pipeline
+                                     Or can be merged with av1_make_masked_inter_predictor_hbd once ENCDEC_16BIT is enabled*/
+                                   );
+#else
     build_masked_compound_no_round(dst_ptr,
                                    dst_stride,
                                    org_dst,
@@ -129,6 +147,8 @@ void av1_make_masked_inter_predictor(uint8_t *src_ptr, uint32_t src_stride, uint
                                    bwidth,
                                    conv_params,
                                    bitdepth);
+#endif
+
 }
 #if ENCDEC_16BIT
 void av1_make_masked_inter_predictor_hbd(uint8_t *src_ptr, uint32_t src_stride, uint8_t *dst_ptr,
@@ -2491,6 +2511,24 @@ void av1_make_masked_warp_inter_predictor(uint8_t *src_ptr, uint32_t src_stride,
                                        conv_params,
                                        bitdepth);
 #else
+#if COMMON_16BIT
+    build_masked_compound_no_round(dst_ptr,
+                                   dst_stride,
+                                   org_dst,
+                                   org_dst_stride,
+                                   tmp_buf16,
+                                   tmp_buf_stride,
+                                   comp_data,
+                                   seg_mask,
+                                   blk_geom->bsize,
+                                   bheight,
+                                   bwidth,
+                                   conv_params,
+                                   bitdepth,
+                                   0 /* Can be modified once encoder adds support for 16bit pipeline
+                                     Or can be merged with av1_make_masked_inter_predictor_hbd once ENCDEC_16BIT is enabled*/
+                                   );
+#else
     build_masked_compound_no_round(dst_ptr,
                                    dst_stride,
                                    org_dst,
@@ -2504,6 +2542,7 @@ void av1_make_masked_warp_inter_predictor(uint8_t *src_ptr, uint32_t src_stride,
                                    bwidth,
                                    conv_params,
                                    bitdepth);
+#endif
 #endif
 }
 

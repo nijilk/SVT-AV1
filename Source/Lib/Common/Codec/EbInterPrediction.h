@@ -130,13 +130,21 @@ typedef struct WedgeParamsType
         int *fwd_offset, int *bck_offset,
         int *use_dist_wtd_comp_avg,
         int is_compound);
-
+#if COMMON_16BIT
+    void build_masked_compound_no_round(uint8_t *dst, int dst_stride, const CONV_BUF_TYPE *src0,
+                                        int src0_stride, const CONV_BUF_TYPE *src1, int src1_stride,
+                                        const InterInterCompoundData *const comp_data,
+                                        uint8_t *seg_mask, BlockSize sb_type, int h, int w,
+                                        ConvolveParams *conv_params, uint8_t bd,
+                                        EbBool use_16bit_pipeline);
+#else
     void build_masked_compound_no_round(uint8_t *dst, int dst_stride,
         const CONV_BUF_TYPE *src0, int src0_stride,
         const CONV_BUF_TYPE *src1, int src1_stride,
         const InterInterCompoundData *const comp_data, uint8_t *seg_mask,
         BlockSize sb_type, int h, int w, ConvolveParams *conv_params,
         uint8_t bd);
+#endif
 #if ENCDEC_16BIT
     void build_masked_compound_no_round_hbd(uint8_t *dst, int dst_stride,
         const CONV_BUF_TYPE *src0, int src0_stride,

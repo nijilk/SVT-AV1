@@ -7564,7 +7564,7 @@ EB_EXTERN void av1_encode_pass_16bit(SequenceControlSet *scs_ptr, PictureControl
                         dst_stride = recon_buffer_8bit->stride_y;
 
                         convert_16bit_to_8bit(dst_16bit,
-                            dst_stride_16bit, 
+                            dst_stride_16bit,
                             dst,
                             dst_stride,
                             context_ptr->blk_geom->bwidth,

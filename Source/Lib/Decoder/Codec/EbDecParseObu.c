@@ -2032,13 +2032,16 @@ void read_uncompressed_header(Bitstrm *bs, EbDecHandle *dec_handle_ptr, ObuHeade
         dec_handle_ptr->dec_config.max_color_format = EB_YUV444;
 
     dec_handle_ptr->cur_pic_buf[0] =
+#if DEC_16BIT_PIPELINE
+        dec_pic_mgr_get_cur_pic(dec_handle_ptr);
+#else
         dec_pic_mgr_get_cur_pic(dec_handle_ptr->pv_pic_mgr,
                                 &dec_handle_ptr->seq_header,
                                 &dec_handle_ptr->frame_header,
                                 dec_handle_ptr->seq_header.color_config.mono_chrome
                                     ? EB_YUV400
                                     : dec_handle_ptr->dec_config.max_color_format);
-
+#endif
     svt_setup_frame_buf_refs(dec_handle_ptr);
     /*Temporal MVs allocation */
     check_add_tplmv_buf(dec_handle_ptr);

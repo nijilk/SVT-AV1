@@ -78,9 +78,14 @@ extern EbMemoryMapEntry                 *memory_map_end_address;
                 (((n_elements) + (8 - ((n_elements) % 8))) + sizeof(EbMemoryMapEntry)); \
         svt_dec_lib_malloc_count++;                                                     \
     }
-
+#if DEC_16BIT_PIPELINE
+EbErrorType dec_eb_recon_picture_buffer_desc_ctor(EbPtr *object_dbl_ptr,
+                                                  EbPtr  object_init_data_ptr,
+                                                  EbBool is_16bit_pipeline);
+#else
 EbErrorType dec_eb_recon_picture_buffer_desc_ctor(EbPtr *object_dbl_ptr,
                                                   EbPtr  object_init_data_ptr);
+#endif
 
 EbErrorType dec_mem_init(EbDecHandle *dec_handle_ptr);
 

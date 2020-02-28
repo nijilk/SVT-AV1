@@ -39,14 +39,25 @@
  *****************************************/
 EbErrorType dec_eb_recon_picture_buffer_desc_ctor(
     EbPtr  *object_dbl_ptr,
-    EbPtr   object_init_data_ptr)
-{
+#if DEC_16BIT_PIPELINE
+    EbPtr   object_init_data_ptr,
+    EbBool is_16bit_pipeline /* can be removed as an extra argument once
+                                EbPictureBufferDescInitData adds the support for this */
+    ) {
+#else
+    EbPtr   object_init_data_ptr) {
+#endif
     EbPictureBufferDesc          *picture_buffer_desc_ptr;
     EbPictureBufferDescInitData  *picture_buffer_desc_init_data_ptr = (EbPictureBufferDescInitData*)object_init_data_ptr;
 
-    uint32_t bytes_per_pixel = (picture_buffer_desc_init_data_ptr->bit_depth == EB_8BIT) ? 1 : 2;
-
     EB_MALLOC_DEC(EbPictureBufferDesc*, picture_buffer_desc_ptr, sizeof(EbPictureBufferDesc), EB_N_PTR);
+#if DEC_16BIT_PIPELINE
+    uint32_t bytes_per_pixel = (picture_buffer_desc_init_data_ptr->bit_depth > EB_8BIT ||
+                                is_16bit_pipeline) ? 2 : 1;
+    picture_buffer_desc_ptr->use_16bit_pipeline = is_16bit_pipeline;
+#else
+    uint32_t bytes_per_pixel = (picture_buffer_desc_init_data_ptr->bit_depth == EB_8BIT) ? 1 : 2;
+#endif
 
     // Allocate the PictureBufferDesc Object
     *object_dbl_ptr = (EbPtr)picture_buffer_desc_ptr;
@@ -358,7 +369,12 @@ EbErrorType init_dec_mod_ctxt(EbDecHandle  *dec_handle_ptr,
 
 #if MC_DYNAMIC_PAD
     EbColorConfig *cc = &dec_handle_ptr->seq_header.color_config;
+#if DEC_16BIT_PIPELINE
+    uint32_t use_highbd = (cc->bit_depth > EB_8BIT ||
+                           dec_handle_ptr->decoder_16bit_pipeline);
+#else
     uint32_t use_highbd = cc->bit_depth > EB_8BIT;
+#endif
     int32_t sb_size = 1 << sb_size_log2;
     uint16_t *hbd_mc_buf[2];
     for (int ref = 0; ref < 2; ref++) {
@@ -463,7 +479,13 @@ static EbErrorType init_lr_ctxt(EbDecHandle  *dec_handle_ptr)
     // Allocate memory for Deblocked line buffer around stripe(64) boundary for a frame
     const int ext_h = RESTORATION_UNIT_OFFSET + frame_height;
     const int num_stripes = (ext_h + 63) / 64;
-    int use_highbd = (dec_handle_ptr->seq_header.color_config.bit_depth > 8);
+
+#if DEC_16BIT_PIPELINE
+    int use_highbd = (dec_handle_ptr->seq_header.color_config.bit_depth > EB_8BIT ||
+                      dec_handle_ptr->decoder_16bit_pipeline);
+#else
+    int use_highbd = (dec_handle_ptr->seq_header.color_config.bit_depth > EB_8BIT);
+#endif
 
     for (int plane = 0; plane < num_planes; plane++)
     {

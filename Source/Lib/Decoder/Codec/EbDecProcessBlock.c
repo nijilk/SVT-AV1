@@ -148,14 +148,21 @@ void decode_block(DecModCtxt *dec_mod_ctxt, BlockModeInfo *mode_info, int32_t mi
 
     bool inter_block = is_inter_block(mode_info);
 
+#if DEC_16BIT_PIPELINE
+    EbBool is16b = dec_handle->decoder_16bit_pipeline;
+#endif
+
 #if MODE_INFO_DBG
     assert(mode_info->mi_row == mi_row);
     assert(mode_info->mi_col == mi_col);
 #endif
     int32_t bw4 = mi_size_wide[bsize];
     int32_t bh4 = mi_size_high[bsize];
-
+#if DEC_16BIT_PIPELINE
+    int hbd = (recon_picture_buf->bit_depth > EB_8BIT) || is16b;
+#else
     int hbd = (recon_picture_buf->bit_depth > EB_8BIT);
+#endif
 
     int sub_x, sub_y, n_coeffs;
     sub_x                 = color_config->subsampling_x;
@@ -441,7 +448,11 @@ void decode_block(DecModCtxt *dec_mod_ctxt, BlockModeInfo *mode_info, int32_t mi
                 if (n_coeffs != 0) {
                     dec_mod_ctxt->cur_coeff[plane] += (n_coeffs + 1);
 
+#if DEC_16BIT_PIPELINE
+                    if (recon_picture_buf->bit_depth == EB_8BIT && !is16b)
+#else
                     if (recon_picture_buf->bit_depth == EB_8BIT)
+#endif
                         av1_inv_transform_recon8bit(qcoeffs,
                                                     (uint8_t *)txb_recon_buf,
                                                     recon_stride,
@@ -478,7 +489,11 @@ void decode_block(DecModCtxt *dec_mod_ctxt, BlockModeInfo *mode_info, int32_t mi
                              bsize,
                              color_config,
                              txb_recon_buf,
+#if DEC_16BIT_PIPELINE
+                             recon_stride,is16b);
+#else
                              recon_stride);
+#endif
             }
 
             // increment transform pointer

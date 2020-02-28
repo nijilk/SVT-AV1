@@ -401,17 +401,30 @@ static INLINE void extend_mc_border(void *src, int32_t *src_stride,
 }
 #endif //MC_DYNAMIC_PAD
 
+#if DEC_16BIT_PIPELINE
 void svt_make_inter_predictor(PartitionInfo *part_info, int32_t ref, void *src, int32_t src_stride,
                               void *dst_mod, int32_t dst_stride, EbDecPicBuf *ref_buf,
                               int32_t pre_x, int32_t pre_y, int32_t bw, int32_t bh,
-                              ConvolveParams *conv_params, int32_t plane, int32_t do_warp) {
+                              ConvolveParams *conv_params, int32_t plane,
+                              int32_t do_warp, EbBool is16b){
+#else
+void svt_make_inter_predictor(PartitionInfo *part_info, int32_t ref, void *src, int32_t src_stride,
+                              void *dst_mod, int32_t dst_stride, EbDecPicBuf *ref_buf,
+                              int32_t pre_x, int32_t pre_y, int32_t bw, int32_t bh,
+                              ConvolveParams *conv_params, int32_t plane,
+                              int32_t do_warp){
+#endif
     const BlockModeInfo *mi         = part_info->mi;
     const int32_t        is_intrabc = is_intrabc_block(mi);
 
     const int32_t ss_x      = plane ? part_info->subsampling_x : 0;
     const int32_t ss_y      = plane ? part_info->subsampling_y : 0;
     int32_t       bit_depth = ref_buf->ps_pic_buf->bit_depth;
+#if DEC_16BIT_PIPELINE
+    int32_t       highbd    = bit_depth > EB_8BIT || is16b;
+#else
     int32_t       highbd    = bit_depth > EB_8BIT;
+#endif
 
     /*ScaleFactor*/
     const struct ScaleFactors *const sf =
@@ -592,12 +605,19 @@ void svt_make_inter_predictor(PartitionInfo *part_info, int32_t ref, void *src, 
                             is_intrabc);
     }
 }
-
+#if DEC_16BIT_PIPELINE
+void svt_make_masked_inter_predictor(PartitionInfo *part_info, int32_t ref, void *src,
+                                     int32_t src_stride, void *dst_ptr, int32_t dst_stride,
+                                     EbDecPicBuf *ref_buf, int32_t pre_x, int32_t pre_y, int32_t bw,
+                                     int32_t bh, ConvolveParams *conv_params, int32_t plane,
+                                     uint8_t *seg_mask, int32_t do_warp , EbBool is16b) {
+#else
 void svt_make_masked_inter_predictor(PartitionInfo *part_info, int32_t ref, void *src,
                                      int32_t src_stride, void *dst_ptr, int32_t dst_stride,
                                      EbDecPicBuf *ref_buf, int32_t pre_x, int32_t pre_y, int32_t bw,
                                      int32_t bh, ConvolveParams *conv_params, int32_t plane,
                                      uint8_t *seg_mask, int32_t do_warp) {
+#endif
     InterInterCompoundData *comp_data = &part_info->mi->inter_inter_compound;
     const BlockSize         bsize     = part_info->mi->sb_type;
     int32_t                 bit_depth = ref_buf->ps_pic_buf->bit_depth;
@@ -619,6 +639,23 @@ void svt_make_masked_inter_predictor(PartitionInfo *part_info, int32_t ref, void
     assert(conv_params->do_average == 0);
     assert(conv_params->is_compound == 1);
 
+#if DEC_16BIT_PIPELINE
+    svt_make_inter_predictor(part_info,
+                             ref,
+                             src,
+                             src_stride,
+                             dst_ptr,
+                             dst_stride,
+                             ref_buf,
+                             pre_x,
+                             pre_y,
+                             bw,
+                             bh,
+                             conv_params,
+                             plane,
+                             do_warp,
+                             is16b);
+#else
     svt_make_inter_predictor(part_info,
                              ref,
                              src,
@@ -633,6 +670,7 @@ void svt_make_masked_inter_predictor(PartitionInfo *part_info, int32_t ref, void
                              conv_params,
                              plane,
                              do_warp);
+#endif
 
     if (!plane && comp_data->type == COMPOUND_DIFFWTD) {
         //CHKN  for DIFF: need to compute the mask  comp_data->seg_mask is
@@ -650,6 +688,23 @@ void svt_make_masked_inter_predictor(PartitionInfo *part_info, int32_t ref, void
                                             bit_depth);
     }
 
+#if COMMON_16BIT && DEC_16BIT_PIPELINE
+    build_masked_compound_no_round((uint8_t *)dst_ptr,
+                                   dst_stride,
+                                   org_dst,
+                                   org_dst_stride,
+                                   tmp_buf16,
+                                   tmp_buf_stride,
+                                   comp_data,
+                                   seg_mask,
+                                   bsize,
+                                   bh,
+                                   bw,
+                                   conv_params,
+                                   (uint8_t)bit_depth,
+                                   is16b
+                                  );
+#else
     build_masked_compound_no_round((uint8_t *)dst_ptr,
                                    dst_stride,
                                    org_dst,
@@ -663,17 +718,27 @@ void svt_make_masked_inter_predictor(PartitionInfo *part_info, int32_t ref, void
                                    bw,
                                    conv_params,
                                    (uint8_t)bit_depth);
+#endif
 }
 
+#if DEC_16BIT_PIPELINE
+void av1_combine_interintra(PartitionInfo *part_info, BlockSize bsize, int plane,
+                            uint8_t *inter_pred, int inter_stride, uint8_t *intra_pred,
+                            int intra_stride, EbBitDepthEnum bit_depth, EbBool is16b) {
+#else
 void av1_combine_interintra(PartitionInfo *part_info, BlockSize bsize, int plane,
                             uint8_t *inter_pred, int inter_stride, uint8_t *intra_pred,
                             int intra_stride, EbBitDepthEnum bit_depth) {
+#endif
     BlockModeInfo * mi          = part_info->mi;
     int32_t         sub_x       = (plane > 0) ? part_info->subsampling_x : 0;
     int32_t         sub_y       = (plane > 0) ? part_info->subsampling_y : 0;
     const BlockSize plane_bsize = get_plane_block_size(bsize, sub_x, sub_y);
-
+#if DEC_16BIT_PIPELINE
+    if (bit_depth > EB_8BIT || is16b) {
+#else
     if (bit_depth > EB_8BIT) {
+#endif
         /*As per spec we r considering interitra_wedge_sign is always "zero"*/
         /*Check buffers, Aom  2nd time inter_pred buffer plane is plane independent */
         combine_interintra_highbd(mi->interintra_mode_params.interintra_mode,
@@ -711,6 +776,10 @@ void av1_build_intra_predictors_for_interintra(DecModCtxt *dec_mod_ctxt, Partiti
                                                void *pv_blk_recon_buf, int32_t recon_stride,
                                                BlockSize bsize, int32_t plane, uint8_t *dst,
                                                int dst_stride, EbBitDepthEnum bit_depth) {
+#if DEC_16BIT_PIPELINE
+    EbDecHandle *dec_handle = (EbDecHandle *)dec_mod_ctxt->dec_handle_ptr;
+    EbBool is16b = dec_handle->decoder_16bit_pipeline;
+#endif
     BlockModeInfo *mi          = part_info->mi;
     int32_t        sub_x       = (plane > 0) ? part_info->subsampling_x : 0;
     int32_t        sub_y       = (plane > 0) ? part_info->subsampling_y : 0;
@@ -724,7 +793,11 @@ void av1_build_intra_predictors_for_interintra(DecModCtxt *dec_mod_ctxt, Partiti
 
     void *pv_top_neighbor_array, *pv_left_neighbor_array;
 
+#if DEC_16BIT_PIPELINE
+    if (bit_depth == EB_8BIT && !is16b) {
+#else
     if (bit_depth == EB_8BIT) {
+#endif
         EbByte buf = (EbByte)pv_blk_recon_buf;
 
         pv_top_neighbor_array  = (void *)(buf - recon_stride);
@@ -736,6 +809,23 @@ void av1_build_intra_predictors_for_interintra(DecModCtxt *dec_mod_ctxt, Partiti
     }
 
     /*Calling Intra prediction */
+#if DEC_16BIT_PIPELINE
+    svtav1_predict_intra_block(part_info,
+                               plane,
+                               max_txsize_rect_lookup[plane_bsize],
+                               &dec_mod_ctxt->cur_tile_info,
+                               (void *)dst,
+                               dst_stride,
+                               pv_top_neighbor_array,
+                               pv_left_neighbor_array,
+                               recon_stride,
+                               dec_mod_ctxt->seq_header,
+                               mode,
+                               0,
+                               0,
+                               bit_depth,
+                               is16b);
+#else
     svtav1_predict_intra_block(part_info,
                                plane,
                                max_txsize_rect_lookup[plane_bsize],
@@ -750,13 +840,23 @@ void av1_build_intra_predictors_for_interintra(DecModCtxt *dec_mod_ctxt, Partiti
                                0,
                                0,
                                bit_depth);
+#endif
 }
 
 /* Build interintra_predictors */
 void av1_build_interintra_predictors(DecModCtxt *dec_mod_ctxt, PartitionInfo *part_info, void *pred,
                                      int32_t stride, int plane, BlockSize bsize,
+#if DEC_16BIT_PIPELINE
+                                     EbBitDepthEnum bit_depth, EbBool is16b) {
+#else
                                      EbBitDepthEnum bit_depth) {
+#endif
+
+#if DEC_16BIT_PIPELINE
+    if (bit_depth > EB_8BIT || is16b) {
+#else
     if (bit_depth > EB_8BIT) {
+#endif
         DECLARE_ALIGNED(16, uint16_t, intrapredictor[MAX_SB_SQUARE]);
         av1_build_intra_predictors_for_interintra(dec_mod_ctxt,
                                                   part_info,
@@ -774,7 +874,12 @@ void av1_build_interintra_predictors(DecModCtxt *dec_mod_ctxt, PartitionInfo *pa
                                stride,
                                (uint8_t *)intrapredictor,
                                MAX_SB_SIZE,
+#if DEC_16BIT_PIPELINE
+                               bit_depth,
+                               is16b);
+#else
                                bit_depth);
+#endif
     } else {
         DECLARE_ALIGNED(16, uint8_t, intrapredictor[MAX_SB_SQUARE]);
         av1_build_intra_predictors_for_interintra(dec_mod_ctxt,
@@ -786,8 +891,13 @@ void av1_build_interintra_predictors(DecModCtxt *dec_mod_ctxt, PartitionInfo *pa
                                                   intrapredictor,
                                                   MAX_SB_SIZE,
                                                   bit_depth);
+#if DEC_16BIT_PIPELINE
+        av1_combine_interintra(
+            part_info, bsize, plane, pred, stride, intrapredictor, MAX_SB_SIZE, bit_depth, is16b);
+#else
         av1_combine_interintra(
             part_info, bsize, plane, pred, stride, intrapredictor, MAX_SB_SIZE, bit_depth);
+#endif
     }
 }
 
@@ -806,7 +916,12 @@ void svtav1_predict_inter_block_plane(DecModCtxt *dec_mod_ctx, EbDecHandle *dec_
     //temporary buffer for joint compound, move this to context if stack does not hold.
     DECLARE_ALIGNED(32, uint16_t, tmp_dst[128 * 128]);
 
+#if DEC_16BIT_PIPELINE
+    EbBool is16b = dec_hdl->decoder_16bit_pipeline;
+    int32_t highbd = bit_depth > EB_8BIT || is16b;
+#else
     int32_t highbd = bit_depth > EB_8BIT;
+#endif
 
     const BlockSize bsize     = mi->sb_type;
     const int32_t   ss_x      = plane ? part_info->subsampling_x : 0;
@@ -915,7 +1030,12 @@ void svtav1_predict_inter_block_plane(DecModCtxt *dec_mod_ctx, EbDecHandle *dec_
                                                 &conv_params,
                                                 plane,
                                                 dec_mod_ctx->seg_mask,
+#if DEC_16BIT_PIPELINE
+                                                do_warp,
+                                                is16b);
+#else
                                                 do_warp);
+#endif
             } else {
                 svt_make_inter_predictor(part_info,
                                          ref,
@@ -930,7 +1050,12 @@ void svtav1_predict_inter_block_plane(DecModCtxt *dec_mod_ctx, EbDecHandle *dec_
                                          bh,
                                          &conv_params,
                                          plane,
+#if DEC_16BIT_PIPELINE
+                                         do_warp,
+                                         is16b);
+#else
                                          do_warp);
+#endif
             }
         }
     }
@@ -1002,7 +1127,12 @@ void svtav1_predict_inter_block(DecModCtxt *dec_mod_ctxt, EbDecHandle *dec_hdl,
                                             recon_stride,
                                             plane,
                                             bsize,
+#if DEC_16BIT_PIPELINE
+                                            recon_picture_buf->bit_depth,
+                                            dec_hdl->decoder_16bit_pipeline);
+#else
                                             recon_picture_buf->bit_depth);
+#endif
         }
     }
     if (part_info->mi->motion_mode == OBMC_CAUSAL) {

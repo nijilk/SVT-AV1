@@ -216,9 +216,19 @@ void highbd_upscale_normative_rect(const uint8_t *const input, int height, int w
     }
 }
 
+#if COMMON_16BIT
+void av1_upscale_normative_rows(const Av1Common *cm, const uint8_t *src, int src_stride,
+                                uint8_t *dst, int dst_stride, int rows, int sub_x, int bd,
+                                EbBool use_16bit_pipeline) {
+#else
 void av1_upscale_normative_rows(const Av1Common *cm, const uint8_t *src, int src_stride,
                                 uint8_t *dst, int dst_stride, int rows, int sub_x, int bd) {
+#endif
+#if COMMON_16BIT
+    int       high_bd                = bd > EB_8BIT || use_16bit_pipeline;
+#else
     int       high_bd                = bd > 8;
+#endif
     const int downscaled_plane_width = ROUND_POWER_OF_TWO(cm->frm_size.frame_width, sub_x);
     const int upscaled_plane_width =
         ROUND_POWER_OF_TWO(cm->frm_size.superres_upscaled_width, sub_x);

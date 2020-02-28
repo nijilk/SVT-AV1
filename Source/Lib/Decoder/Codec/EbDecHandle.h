@@ -38,6 +38,8 @@ extern "C" {
 #define DEC_PAD_VALUE    (128+32)
 #endif
 
+#define DEC_16BIT_PIPELINE  1 // 16Bit pipeline support for dec
+
 /* Maximum number of frames in parallel */
 #define DEC_MAX_NUM_FRM_PRLL 1
 /** Maximum picture buffers needed **/
@@ -247,6 +249,10 @@ typedef struct EbDecHandle {
     EbBool                start_thread_process;
     EbHandle              thread_semaphore;
     struct DecThreadCtxt *thread_ctxt_pa;
+#if DEC_16BIT_PIPELINE
+    /* Decoder internal bit-depth is set to 16b even if the bitstream is 8b */
+    EbBool decoder_16bit_pipeline;
+#endif
 } EbDecHandle;
 
 /* Thread level context data */
